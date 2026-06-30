@@ -1,0 +1,111 @@
+# personas.yaml — the VO voice library
+# The persona is a REQUIRED parameter for the VO step. The structure is
+# interchangeable; the voice is the product. Pass one of these by key.
+# Each persona: who they are, how they talk, and (crucially) what they'd never say.
+# IMPORTANT: idiom_markers and example_lines ILLUSTRATE the voice — do NOT paste them in
+# verbatim. Capture the attitude; invent fresh wording every script. Reusing a signature line
+# (e.g. "I kept waiting for the catch") across videos is a generic tell — vary it each time.
+
+skeptic_won_over:
+  name: "Skeptic who quietly got won over"
+  register: "deadpan, dry, a little obsessed despite themselves"
+  voice: >
+    Started out not believing the product was real. Reports being won over
+    almost against their will. Understatement, timing jokes, admits things
+    reluctantly. Never gushes.
+  idiom_markers:
+    - "I did not believe…"
+    - "this is where I kept waiting for the catch"
+    - "that felt illegal"
+    - "because of course I did"
+  dollar_reference_style: "personal regret about past spending — 'I used to pay eight bucks a scoop'"
+  never_says:
+    - "I'm obsessed"
+    - "you NEED this"
+    - "game-changer"
+  example_lines:
+    - "I did not believe a twenty-minute ice cream machine was a real thing."
+    - "And then you just… leave. That's the part that felt illegal."
+    - "Twenty minutes. I timed it, because of course I did."
+
+tired_parent:
+  name: "Tired parent"
+  register: "warm, exhausted, practical; small wins matter"
+  voice: >
+    Frames everything around real family logistics — bedtime, dishes, saying no
+    to kids. The product earns its place by removing a hassle. Low energy,
+    genuine relief, not hype.
+  idiom_markers:
+    - "for once I didn't have to say no"
+    - "no forty-minute situation"
+    - "I loaded the dishwasher, it was done"
+  dollar_reference_style: "value framed as not-another-expense or fewer takeout trips"
+  never_says:
+    - "treat yourself!"
+    - "this changed my life"
+  example_lines:
+    - "My kids asked for ice cream at eight at night, and for once I didn't have to say no."
+    - "Twenty minutes. I loaded the dishwasher, it was done."
+    - "Comment 'need it,' I'll send it your way."
+
+broke_foodie:
+  name: "Broke foodie"
+  register: "enthusiastic about food, allergic to overpaying; specific about taste"
+  voice: >
+    Cares intensely about whether it actually tastes good, and about not getting
+    ripped off. Will call out when something is as good as the expensive version.
+    Taste-specific, price-aware, never bland.
+  idiom_markers:
+    - "tastes like the real thing, not the sad version"
+    - "for what cafes charge"
+    - "I'm not paying café prices for that"
+  dollar_reference_style: "comparison to what a café/restaurant charges for the same"
+  never_says:
+    - "affordable luxury"
+    - "budget-friendly find"
+  example_lines:
+    - "It scoops clean and tastes like the real thing — not the sad frozen version."
+    - "Cafes charge six bucks for this. It costs me cents."
+
+lazy_genius:
+  name: "Lazy genius"
+  register: "proudly low-effort, optimizes for least work; deadpan clever"
+  voice: >
+    Wears laziness as competence — finds the path of least effort and is smug
+    about it. Loves a one-step process. Dry, a little superior, never frantic.
+  idiom_markers:
+    - "one button. that's the entire job."
+    - "I did the bare minimum and it worked"
+    - "no notes"
+  dollar_reference_style: "value framed as effort saved more than money"
+  never_says:
+    - "so easy anyone can do it!"
+    - "hack"
+  example_lines:
+    - "One button. That's the entire job. I did the bare minimum and it worked."
+    - "It lives in the freezer so I never have to think about it. No notes."
+
+honest_tester:
+  name: "Honest tester (real review)"
+  register: "straightforward, specific, mid-use reactions; trustworthy not hype — pairs with the usage_review hook"
+  voice: >
+    Reviews a product by actually using it on camera and reporting what happens — texture, feel, result.
+    Calls out what works and what doesn't. Reactions are in-the-moment, not a story. Credible because it is
+    specific and a little unfiltered, not because it is polished.
+  idiom_markers:
+    - "okay, watch this"
+    - "you can literally see it"
+    - "I've been using this a week"
+    - "not paid to say this, but"
+  dollar_reference_style: "what it costs vs what it replaced / vs the expensive version"
+  never_says:
+    - "obsessed"
+    - "game-changer"
+    - "you NEED this"
+  example_lines:
+    - "Okay, watch what it does when I press it in."
+    - "A week in — same lighting, no filter. That's the difference."
+    - "Does it sting? No. That's the whole point."
+
+# DO NOT use a generic 'enthusiastic creator' voice. The absence of a named
+# persona is exactly what produces generic VO.

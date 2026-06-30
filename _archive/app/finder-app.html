@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shopping Shorts Finder — 발굴·분석 (MVP)</title>
+<style>
+  :root{--bg:#0d0e12;--panel:#15171e;--card:#1a1d26;--line:#272b36;--txt:#e8eaf0;--mut:#9aa0ad;--acc:#ff5c8a;--blue:#4cc2ff;--gold:#ffce4d;--green:#7ee787;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  header{padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(13,14,18,.95);backdrop-filter:blur(8px);z-index:30}
+  h1{margin:0;font-size:17px}
+  h1 small{color:var(--mut);font-size:12px;font-weight:400;margin-left:8px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+  input,select,button{background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:9px;font-size:13px;padding:8px 11px}
+  input{min-width:200px}
+  button{cursor:pointer}
+  button.active{border-color:var(--acc);color:var(--acc)}
+  button:hover{border-color:var(--blue)}
+  .layout{display:grid;grid-template-columns:1fr 360px;gap:0;height:calc(100vh - 86px)}
+  @media(max-width:880px){.layout{grid-template-columns:1fr}.detail{display:none}}
+  .gallery{overflow:auto;padding:18px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;cursor:pointer;transition:border-color .12s,transform .08s}
+  .card:hover{border-color:var(--blue)}
+  .card.sel{border-color:var(--gold);box-shadow:0 0 0 2px rgba(255,206,77,.25)}
+  .card .top{display:flex;justify-content:space-between;align-items:center;padding:10px 12px 4px}
+  .rank{font-weight:800;font-size:12px;color:#111;background:var(--gold);border-radius:6px;padding:1px 7px}
+  .score{font-size:11px;color:var(--mut)}
+  .cat{padding:2px 12px 4px;font-size:13.5px;font-weight:600}
+  .met{display:flex;gap:10px;flex-wrap:wrap;padding:0 12px 8px;font-size:12px;color:var(--mut)}
+  .met b{color:var(--txt)} .met .v b{color:var(--blue)} .met .c b{color:var(--acc)}
+  .tags{display:flex;gap:5px;flex-wrap:wrap;padding:0 12px 12px}
+  .tag{font-size:10.5px;padding:2px 7px;border-radius:14px;border:1px solid var(--line);color:var(--mut)}
+  .tag.single{color:var(--green);border-color:#2ea04340}.tag.combo{color:#f0883e;border-color:#bb800940}
+  .tag.funnel{color:var(--acc);border-color:#b62a5340}.tag.season{color:var(--gold);border-color:#9e7b1a40}
+  /* detail */
+  .detail{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:18px}
+  .detail h2{font-size:15px;margin:0 0 2px}
+  .detail .u{color:var(--mut);font-size:12px;margin-bottom:12px}
+  .blk{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:10px}
+  .blk h3{margin:0 0 6px;font-size:12px;color:var(--gold);text-transform:uppercase;letter-spacing:.04em}
+  .blk p{margin:0;font-size:13px;line-height:1.55}
+  .kv{display:flex;justify-content:space-between;font-size:13px;padding:2px 0}
+  .kv b{color:var(--blue)}
+  .why li{font-size:13px;margin:4px 0;line-height:1.5}
+  a.open{display:inline-block;margin-top:6px;color:var(--blue);text-decoration:none;font-size:13px}
+  .pickbtn{width:100%;margin-top:6px;padding:10px;border-radius:9px;background:#1d1f27;border:1px solid var(--line)}
+  .pickbtn.on{background:var(--gold);color:#111;font-weight:700;border-color:var(--gold)}
+  .pickbar{position:sticky;bottom:0;background:rgba(13,14,18,.96);border-top:1px solid var(--line);padding:10px 18px;font-size:12.5px;color:var(--mut)}
+  .pickbar b{color:var(--gold)} .chip{display:inline-block;background:#23252e;border:1px solid var(--line);color:var(--txt);padding:2px 8px;border-radius:14px;margin:2px 4px 0 0;font-size:11.5px}
+  .empty{color:var(--mut);font-size:13px;padding:30px;text-align:center}
+  dialog{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;max-width:560px;width:92%}
+  dialog textarea{width:100%;height:160px;background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px;font-size:12px;font-family:monospace}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🛍️ Shopping Shorts Finder <small>발굴 · 선택 · 분석 (MVP · 영어권 아마존)</small></h1>
+  <div class="bar">
+    <input id="q" placeholder="검색 (계정·카테고리·캡션)">
+    <span style="color:var(--mut);font-size:12px">정렬</span>
+    <button class="sortb active" data-k="score">종합점수</button>
+    <button class="sortb" data-k="play">조회수</button>
+    <button class="sortb" data-k="comment">댓글</button>
+    <span style="width:6px"></span>
+    <button class="fb" data-f="all" data-on="1">전체</button>
+    <button class="fb" data-f="single">단일제품</button>
+    <button class="fb" data-f="funnel">펀널</button>
+    <span style="flex:1"></span>
+    <button id="loadbtn">＋ 데이터 불러오기 (JSON)</button>
+  </div>
+</header>
+
+<div class="layout">
+  <div style="display:flex;flex-direction:column;min-height:0">
+    <div class="gallery"><div class="grid" id="grid"></div><div class="empty" id="empty" style="display:none">결과 없음</div></div>
+    <div class="pickbar" id="pickbar">선택된 릴스 없음 — 카드를 눌러 분석/선택</div>
+  </div>
+  <div class="detail" id="detail"><div class="empty">카드를 클릭하면 여기에 분석이 나와요.</div></div>
+</div>
+
+<dialog id="loaddlg">
+  <h3 style="margin-top:0">데이터 불러오기</h3>
+  <p style="font-size:12.5px;color:var(--mut);line-height:1.5">인스타에 로그인한 크롬 콘솔에서 <b>insta_reel_finder.js</b>를 실행하면 나오는 결과 배열(JSON)을 붙여넣으세요. 필드: user, play, like, comment, code/url, caption.</p>
+  <textarea id="jsonin" placeholder='[{"user":"...","play":123,"like":12,"comment":3,"code":"...","caption":"..."}]'></textarea>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+    <button onclick="document.getElementById('loaddlg').close()">취소</button>
+    <button id="loadok" class="active">불러오기</button>
+  </div>
+</dialog>
+
+<script>
+/* ---- 오늘 수집한 실제 데이터 (영어권 #amazonfinds 외) ---- */
+let DATA = [
+ {code:"DTJC7VUjlt-",user:"kathrynpackard",play:1551218,like:23987,comment:14814,cat:"집안 아마존 베스트셀러 모음",caption:"Comment Best Sellers for link! My 2025 Amazon Best Sellers in Our Home. Amazon Top Sellers that earn their hype. Home essentials, cleaning finds, cozy must-haves."},
+ {code:"DZJDulmBE0i",user:"laurenoggsgee",play:315883,like:3031,comment:12339,cat:"숨김 단일 제품 (블러)",caption:"Tap heart + comment YES PLEASE and I'll send you the link. This picture on the amazon listing is blurred out on purpose."},
+ {code:"DZJGw1At4vM",user:"onelifeandstyle",play:151267,like:2109,comment:5704,cat:"여름 패션(매칭셋·원피스)",caption:"These Amazon new arrivals are bringing all the summer vibes! Matching sets, dresses, lace top. Comment for links."},
+ {code:"DZ5FW1Pu4d3",user:"rachzx",play:89422,like:2948,comment:4375,cat:"바디미스트/향수 (스페인어)",caption:"Las que siempre huelen rico conocen este secreto. Comenta y te lo envio los links. amazonfinds amazonfashion"},
+ {code:"DZbL489CrbY",user:"alexandra__harper",play:152287,like:4445,comment:3453,cat:"수영복 TOP 5",caption:"AMAZON TOP 5. Comment SWIM. Best one piece swimsuit, comfortable for any body type. swimwear"},
+ {code:"DZ5toxsJv2f",user:"msdeannajump",play:160966,like:920,comment:3402,cat:"교실 정리템 (교사)",caption:"Amazon Prime Days are almost here. Classroom supplies, my favorite classroom tools. Comment for links."},
+ {code:"DYH9n9SPhfS",user:"bests_of_amz",play:155717,like:5821,comment:2662,cat:"아마존 25제품 모음",caption:"Comment Want for the links. 25 Amazon Products You Will Regret Not Trying. amazonfinds amazongadgets"},
+ {code:"DZf6hXySMmI",user:"letimomlife_",play:196455,like:2248,comment:2394,cat:"아마존 하울(주문vs실물)",caption:"Links valid in the USA only. Follow and comment shop and I'll DM you the links. whatiorderedvswhatigot amazonhaul"},
+ {code:"DZ2uKomB04f",user:"elnazhamai",play:259935,like:3507,comment:2173,cat:"로드트립 차량템",caption:"COMMENT NEED to receive a DM. Amazon Road Trip Essentials! Car finds, charging, organizing. caraccesories"},
+ {code:"DZc73IaoQ4y",user:"trytrytrydiy",play:108685,like:1020,comment:2223,cat:"집 정리/수납 (독일어)",caption:"Anzeige. Kommentiere mit Ordnung und ich schicke dir die Links. amazonfinds lifehack organisieren"},
+ {code:"DZnBgg8I2M6",user:"caitlin.edmund",play:81278,like:3886,comment:2028,cat:"노브라 심리스 탑",caption:"This video is for my girls who dislike wearing bras these tops are for you. Comment TOP. amazonfashion basics"},
+ {code:"DZNZRCuhn28",user:"easyazdeals",play:33874,like:1110,comment:1963,cat:"컬러 리갈패드 12입 (제품명 공개)",caption:"Comment NOTEPAD and I will send you the link. Colorful legal pads, college-ruled, 80GSM, 12-pack. officesupplies"},
+ {code:"DZkK6VZxiTZ",user:"katiekeever",play:229265,like:1806,comment:2761,cat:"여름 팬츠/원피스",caption:"I love neutrals but these pants. Flowy dresses, polka. YES below and I'll send links. summer style"},
+ {code:"DZIMOO4hBvo",user:"nmirabalc",play:21084,like:1482,comment:1041,cat:"콘텐츠 촬영 장비 (스페인어)",caption:"todo lo que uso para grabar contenido. comenta link y te envio todos los links. contentcreationtools"},
+ {code:"DZIdzVQR1ve",user:"bytaylormorgan_",play:162261,like:2139,comment:796,cat:"무드 조명",caption:"Comment LIGHT and I'll send you the link to this post. Make sure you are following to receive the link."},
+ {code:"DZnHeNaOLE9",user:"letimomlife_",play:85726,like:536,comment:938,cat:"베스트셀러 가정용 풀 (세일)",caption:"This best-selling pool is on sale right now! Follow and comment pool and I'll DM you the link."},
+ {code:"DZP3uyiRgwF",user:"thetiffanyconcept",play:13989,like:329,comment:998,cat:"집안 인테리어 (러그 등)",caption:"Everywhere you look in my home it's Amazon. Comment HOME for the links. The rugs."},
+ {code:"DZ7fD0JRQDJ",user:"bridgetkiene",play:15556,like:598,comment:939,cat:"프라임데이 300+ 딜 모음",caption:"Amazon Prime Day is HERE and I rounded up 300+ of the best deals! From fashion."},
+];
+
+/* ---- 분석 로직 ---- */
+const FUNNEL=/(comment|comenta|kommentier|tap heart|i'?ll dm|dm you|send you the link|te env|link in bio)/i;
+const COMBO=/(\b\d{2,3}\b.*(products|items|finds|deals)|best ?sellers|top \d|round ?up|haul|essentials|favorites)/i;
+const SEASON=/(prime day|summer|pool|deals are live|on sale|holiday)/i;
+const HOOKFAM=[
+  {re:/(secret|secreto|nobody|a#?nobody|truth|don'?t know how long|blurred)/i,name:"호기심·비밀",tip:"제품을 안 보여주고 궁금하게 → 댓글 폭발"},
+  {re:/(best ?sellers|top \d|\b\d{2,3}\b (amazon )?(products|finds|items)|round ?up|regret)/i,name:"리스트·랭킹",tip:"N개 모음/순위로 끝까지 보게"},
+  {re:/(on sale|prime day|deals are live|sale right now|while you can)/i,name:"긴급·세일",tip:"지금 아니면 손해 심리"},
+  {re:/(best-?selling|\d+,?\d* (likes|sold)|everyone|viral)/i,name:"사회적 증거",tip:"이미 다 사는 중"},
+];
+const score=m=>{const c=(m.caption||"");let s=Math.pow(m.play,0.55)+m.comment*6+m.like*0.4;if(FUNNEL.test(c))s*=1.5;if(SEASON.test(c))s*=1.1;return Math.round(s);};
+function enrich(m){
+  const c=(m.caption||"");
+  m.funnel=FUNNEL.test(c);
+  m.type=COMBO.test(c)?"combo":"single";
+  m.season=SEASON.test(c);
+  m.score=score(m);
+  m.url=m.url||("https://www.instagram.com/reel/"+m.code+"/");
+  m.hookfam=(HOOKFAM.find(h=>h.re.test(c))||{name:"전환/일반",tip:"제품 효과·결과를 보여주는 형"});
+  m.er=m.play?((m.like+m.comment)/m.play*100):0;
+  return m;
+}
+DATA.forEach(enrich);
+
+/* ---- 렌더 ---- */
+let sortK="score",filter="all",q="";
+const picks=new Set();
+const grid=document.getElementById('grid'),detail=document.getElementById('detail'),pickbar=document.getElementById('pickbar'),empty=document.getElementById('empty');
+const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(1)+"K":""+n;
+
+function list(){
+  let a=DATA.slice();
+  if(filter==="single")a=a.filter(m=>m.type==="single");
+  if(filter==="funnel")a=a.filter(m=>m.funnel);
+  if(q){const s=q.toLowerCase();a=a.filter(m=>(m.user+m.cat+m.caption).toLowerCase().includes(s));}
+  a.sort((x,y)=>y[sortK]-x[sortK]);
+  return a;
+}
+function render(){
+  const a=list();
+  empty.style.display=a.length?"none":"block";
+  grid.innerHTML=a.map((m,i)=>`<div class="card ${picks.has(m.code)?'sel':''}" data-c="${m.code}">
+    <div class="top"><span class="rank">#${i+1}</span><span class="score">점수 ${fmt(m.score)}</span></div>
+    <div class="cat">${m.cat}</div>
+    <div class="met"><span class="v">▶ <b>${fmt(m.play)}</b></span><span>❤ <b>${fmt(m.like)}</b></span><span class="c">💬 <b>${fmt(m.comment)}</b></span></div>
+    <div class="tags">
+      <span class="tag ${m.type}">${m.type==='single'?'단일제품':'모음'}</span>
+      ${m.funnel?'<span class="tag funnel">펀널</span>':''}
+      ${m.season?'<span class="tag season">시즌</span>':''}
+      <span class="tag">${m.hookfam.name}</span>
+    </div></div>`).join("");
+  grid.querySelectorAll('.card').forEach(c=>c.onclick=()=>showDetail(c.getAttribute('data-c')));
+}
+function showDetail(code){
+  const m=DATA.find(x=>x.code===code);if(!m)return;
+  detail.innerHTML=`<h2>${m.cat}</h2><div class="u">@${m.user}</div>
+    <div class="blk"><h3>지표</h3>
+      <div class="kv"><span>조회수</span><b>${m.play.toLocaleString()}</b></div>
+      <div class="kv"><span>좋아요</span><b>${m.like.toLocaleString()}</b></div>
+      <div class="kv"><span>댓글 (구매의도)</span><b>${m.comment.toLocaleString()}</b></div>
+      <div class="kv"><span>참여율</span><b>${m.er.toFixed(1)}%</b></div>
+      <div class="kv"><span>종합점수</span><b>${m.score.toLocaleString()}</b></div>
+    </div>
+    <div class="blk"><h3>왜 바이럴인가</h3><ul class="why" style="margin:0;padding-left:16px">
+      <li><b>훅 계열:</b> ${m.hookfam.name} — ${m.hookfam.tip}</li>
+      <li><b>포맷:</b> ${m.type==='single'?'단일 제품 (제품 1개 집중)':'모음형 (여러 제품 한 영상)'}</li>
+      ${m.funnel?'<li><b>펀널:</b> "댓글→DM" 구조 — 댓글 '+fmt(m.comment)+'개 = 구매의도 수집</li>':''}
+      ${m.season?'<li><b>시즌성:</b> 세일/프라임데이/계절 수요 활용</li>':''}
+      <li><b>참여율:</b> ${m.er.toFixed(1)}% ${m.er>3?'(높음 ✓)':'(보통)'}</li>
+    </ul></div>
+    <div class="blk"><h3>제작 메모</h3><p>제품 종류: <b>${m.cat}</b>. 같은 훅 계열로 한국식/영어권 리메이크 → 제품은 캡션/역이미지로 확정 후 제작.</p></div>
+    <div class="blk"><h3>캡션</h3><p style="color:var(--mut)">${m.caption}</p>
+      <a class="open" href="${m.url}" target="_blank" rel="noopener">인스타에서 열기 ↗</a></div>
+    <button class="pickbtn ${picks.has(code)?'on':''}" id="pk">${picks.has(code)?'✓ 선택됨 (해제)':'⭐ 이 릴스 선택'}</button>`;
+  document.getElementById('pk').onclick=()=>{picks.has(code)?picks.delete(code):picks.add(code);showDetail(code);render();renderPicks();};
+}
+function renderPicks(){
+  if(!picks.size){pickbar.textContent="선택된 릴스 없음 — 카드를 눌러 분석/선택";return;}
+  const chips=[...picks].map(c=>{const m=DATA.find(x=>x.code===c);return `<span class="chip">${m.user} · 💬${fmt(m.comment)}</span>`;}).join("");
+  const urls=[...picks].map(c=>DATA.find(x=>x.code===c).url).join("  ");
+  pickbar.innerHTML=`<b>선택 ${picks.size}개:</b> ${chips} &nbsp; <button id="cp" style="padding:4px 9px">📋 링크 복사</button>`;
+  document.getElementById('cp').onclick=()=>navigator.clipboard.writeText(urls).then(()=>document.getElementById('cp').textContent='✓ 복사됨');
+}
+
+document.querySelectorAll('.sortb').forEach(b=>b.onclick=()=>{sortK=b.dataset.k;document.querySelectorAll('.sortb').forEach(x=>x.classList.remove('active'));b.classList.add('active');render();});
+document.querySelectorAll('.fb').forEach(b=>b.onclick=()=>{filter=b.dataset.f;document.querySelectorAll('.fb').forEach(x=>x.classList.remove('active'));b.classList.add('active');render();});
+document.getElementById('q').oninput=e=>{q=e.target.value;render();};
+document.getElementById('loadbtn').onclick=()=>document.getElementById('loaddlg').showModal();
+document.getElementById('loadok').onclick=()=>{
+  try{const arr=JSON.parse(document.getElementById('jsonin').value);
+    if(Array.isArray(arr)&&arr.length){DATA=arr.map(enrich);render();renderPicks();detail.innerHTML='<div class="empty">불러옴. 카드를 클릭하세요.</div>';document.getElementById('loaddlg').close();}
+  }catch(e){alert('JSON 형식 오류: '+e.message);}
+};
+render();renderPicks();
+</script>
+</body>
+</html>

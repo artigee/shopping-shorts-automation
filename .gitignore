@@ -1,0 +1,11 @@
+# deps & build
+node_modules/
+dist/
+# runtime data & generated media (live working data — backed up by the move, not git)
+webapp/data/
+webapp/output/
+# secrets
+.env
+# os / logs
+.DS_Store
+*.log

@@ -1,0 +1,35 @@
+# Banned phrases — the generic LLM-creator tells.
+# check_vo.py rejects any VO line or caption containing these (case-insensitive).
+# One phrase per line. Comments (#) and blank lines are ignored.
+# Disclosure language (e.g. "Amazon Associate") is exempt and handled separately.
+
+amazon find
+unhinged
+in the best way
+game-changer
+game changer
+obsessed
+you need this
+you NEED this
+way better than anything
+drop the link
+trust me
+this changed my life
+life-changing
+must-have
+must have
+mind-blowing
+mind blowing
+level up
+elevate your
+treat yourself
+affordable luxury
+budget-friendly find
+so easy anyone can
+hidden gem
+viral for a reason
+the internet is obsessed
+run don't walk
+i can't even
+no thoughts just
+literally the best

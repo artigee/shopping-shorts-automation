@@ -1,0 +1,114 @@
+{
+  "product": "Dash My Pint single-serve ice cream maker",
+  "persona": "skeptic_won_over",
+  "hook_type": "disbelief",
+  "total_duration": 10,
+  "pacing": "1-1.5s cuts, full process compressed to ~10s",
+  "vo_monologue": "I did not believe a twenty-minute ice cream machine was a real thing. The whole trick is one bowl that just lives in the freezer - that's it. You pour your cream in, and this is where I kept waiting for the catch. Throw in whatever you've got; I did strawberries. And then you just leave. That's the part that felt illegal. Twenty minutes, I timed it, because of course I did. And it's genuinely good: scoops clean, tastes like the real thing, not sad frozen milk. Say the word and it's in your DMs.",
+  "beats": [
+    {
+      "start": 0, "end": 2,
+      "caption": "20-minute ice cream. No shop.",
+      "vo_line": "I did not believe a twenty-minute ice cream machine was a real thing.",
+      "sealcam": {
+        "subject": "the maker on a clean counter",
+        "environment": "bright modern kitchen, white cabinets",
+        "action": "slow push-in toward the closed machine",
+        "lighting": "soft daylight from left",
+        "camera": "extreme close-up, slow dolly in",
+        "sound": "ambient kitchen, light hum"
+      },
+      "transition": "hard cut"
+    },
+    {
+      "start": 2, "end": 3,
+      "caption": "Single-serve. No ice, no salt.",
+      "vo_line": "The whole trick is one bowl that just lives in the freezer.",
+      "sealcam": {
+        "subject": "pre-freeze bowl",
+        "environment": "freezer interior to counter",
+        "action": "two hands lift the bowl out",
+        "lighting": "cool freezer glow to warm kitchen",
+        "camera": "low-angle upward reveal",
+        "sound": "freezer seal pop"
+      },
+      "transition": "whip"
+    },
+    {
+      "start": 3, "end": 5,
+      "caption": "Add your cream base",
+      "vo_line": "You pour it in, and this is where I kept waiting for the catch.",
+      "sealcam": {
+        "subject": "cream pouring from a small pitcher",
+        "environment": "counter, bowl seated in base",
+        "action": "heavy cream streams into the bowl",
+        "lighting": "warm key, soft fill",
+        "camera": "top-down overhead",
+        "sound": "liquid pour"
+      },
+      "transition": "cut"
+    },
+    {
+      "start": 5, "end": 6,
+      "caption": "Your mix-ins",
+      "vo_line": "Throw in whatever you've got. I did strawberries.",
+      "sealcam": {
+        "subject": "diced strawberries",
+        "environment": "over the open bowl",
+        "action": "fingers sprinkle fruit in",
+        "lighting": "warm, slight rim",
+        "camera": "tight top view",
+        "sound": "soft drops"
+      },
+      "transition": "cut"
+    },
+    {
+      "start": 6, "end": 7.5,
+      "caption": "Lid on. One button.",
+      "vo_line": "And then you just leave. That's the part that felt illegal.",
+      "sealcam": {
+        "subject": "two hands seating the motor head",
+        "environment": "counter",
+        "action": "twist-lock the lid, press the button",
+        "lighting": "warm",
+        "camera": "two-hand close-up",
+        "sound": "click, motor start"
+      },
+      "transition": "cut"
+    },
+    {
+      "start": 7.5, "end": 8,
+      "caption": "20 min",
+      "vo_line": "Twenty minutes. I timed it, because of course I did.",
+      "sealcam": {
+        "subject": "machine spinning",
+        "environment": "counter, full frame",
+        "action": "slight vibration, spinning hum",
+        "lighting": "warm",
+        "camera": "full machine front",
+        "sound": "steady motor hum"
+      },
+      "transition": "dramatic cut"
+    },
+    {
+      "start": 8, "end": 9,
+      "caption": "Real soft-serve",
+      "vo_line": "It's genuinely good, scoops clean, tastes like the real thing, not sad frozen milk.",
+      "sealcam": {
+        "subject": "finished pink ice cream",
+        "environment": "counter",
+        "action": "lift the motor head to reveal the swirl",
+        "lighting": "dramatic warm tilt-up",
+        "camera": "reveal tilt-up",
+        "sound": "satisfying reveal swell"
+      },
+      "transition": "cut"
+    }
+  ],
+  "cta": {
+    "caption": "Comment NEED IT",
+    "vo_line": "Say the word and it's in your DMs.",
+    "mechanic": "comment keyword -> DM link (soft funnel)",
+    "disclosure": "As an Amazon Associate I earn from qualifying purchases."
+  }
+}

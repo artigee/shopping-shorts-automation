@@ -1,0 +1,101 @@
+# hooks.yaml — hook archetypes / storytelling structures
+# The hook is the OTHER lever (besides persona) for making a re-skinned short
+# feel original. Where persona = the voice, the hook = the SHAPE of the story.
+# Pass one by key to the script step. The teardown names the original reel's
+# hook; you can keep it or deliberately swap to a different one to change the flavor.
+# Each hook: when to reach for it, the energy arc, and how it bends VO + captions.
+
+disbelief_reveal:
+  name: "Disbelief → reveal"
+  when_to_use: "The product does something that sounds too good / fake. Great default for gadgets."
+  arc: "disbelief → mechanism reveal → anti-climax ('that's it?') → earned payoff → casual close"
+  vo_guidance: >
+    Open refusing to believe it's real. Reveal the one trick that makes it work,
+    then undercut it ("that's the entire hard part"). Land on genuine, specific payoff.
+  caption_style: "claim that sounds impossible up front (e.g. '20 min → real ice cream')"
+
+problem_agitate_solve:
+  name: "Problem → agitate → solve"
+  when_to_use: "Product removes a specific, relatable daily hassle."
+  arc: "name the pain → make it sting (specific) → the fix appears → relief → close"
+  vo_guidance: >
+    Start inside the annoyance, concretely. Twist the knife with one specific detail.
+    The product enters as relief, not as a sales pitch. Close on the small win.
+  caption_style: "the pain as a fragment, then the fix ('No more 40-min cleanup')"
+
+before_after:
+  name: "Before / after"
+  when_to_use: "There is a visible, dramatic transformation to show."
+  arc: "the sad before → the turn → the after → why it actually works → close"
+  vo_guidance: >
+    Sit in the 'before' honestly (don't rush it). The turn is the beat to land.
+    Explain the mechanism briefly so the after feels earned, not staged.
+  caption_style: "before → after compressed with an arrow"
+
+price_shock:
+  name: "Price shock"
+  when_to_use: "The product replaces something people overpay for."
+  arc: "what you used to overpay → the cheap replacement → proof it's as good → close"
+  vo_guidance: >
+    Open with a personal, specific past expense ('I used to pay eight bucks a scoop').
+    Reveal the one-time cheap fix. Prove parity with a sensory detail, not a claim.
+  caption_style: "the old price vs the new reality"
+
+curiosity_gap:
+  name: "Curiosity gap"
+  when_to_use: "There's a non-obvious trick or detail worth withholding for a beat."
+  arc: "tease the secret → withhold → reveal the trick → payoff → close"
+  vo_guidance: >
+    Promise there's a trick nobody mentions, then make them wait one beat before
+    revealing it. The reveal must actually deliver — no bait without the switch.
+  caption_style: "the withheld promise ('The part nobody tells you')"
+
+myth_bust:
+  name: "You're doing it wrong"
+  when_to_use: "People commonly use the old/wrong method the product replaces."
+  arc: "you're doing X wrong → why it's wrong → the right way (product) → proof → close"
+  vo_guidance: >
+    Lead with a confident contrarian claim about the common method. Explain the why
+    briefly. The product is 'the right way' — show it, don't assert it.
+  caption_style: "the contrarian claim as a fragment ('Stop pre-rinsing')"
+
+pov:
+  name: "POV / you're the one"
+  when_to_use: "The audience strongly self-identifies with a situation or role (tired parent, frequent traveler, small kitchen)."
+  arc: "name the viewer's exact moment → they feel seen → product enters as their fix → payoff → close"
+  vo_guidance: >
+    Open by describing the viewer's specific situation so precisely they think 'that's literally me'.
+    Then deliver the product as the thing made for that exact moment. Second-person, intimate, specific.
+  caption_style: "the viewer's situation as a fragment (e.g. 'POV: you swore off travel gear')"
+
+social_proof:
+  name: "Social proof / everyone asked"
+  when_to_use: "There is REAL demand evidence — lots of comments, repeat asks, sell-outs."
+  arc: "the proof of demand → why everyone wants it → what it actually is → payoff → close"
+  vo_guidance: >
+    Open with a real, specific demand fact ('I'm not kidding, 1,600 people commented asking for this').
+    Then show why it earned that. Must be concrete and true — NEVER the generic 'viral for a reason' (banned).
+  caption_style: "the demand number/fact as the hook (e.g. '1,600 of you asked')"
+
+unboxing_first_impression:
+  name: "Unboxing / first impression"
+  when_to_use: "A new arrival; raw real-time reaction as it's opened and used for the first time."
+  arc: "just got it / opening now → first honest reaction → the standout moment → verdict → close"
+  vo_guidance: >
+    Present-tense, in-the-moment, as if discovering it live. Keep the honesty (including a beat of doubt)
+    so the moment it wins you over lands. Don't pre-judge the verdict before the reveal.
+  caption_style: "present-tense first-impression fragment (e.g. 'Opening this now')"
+
+usage_review:
+  name: "Usage review / try-on (demo-driven)"
+  when_to_use: "Products sold by SEEING them used and the result — cosmetics, skincare, makeup, food/drink, anything where the demo IS the proof, not a story. (This is the shape the ANUA k-beauty reel used.)"
+  arc: "result-or-price hook → live usage demo → texture/result close-up → honest verdict → casual CTA"
+  vo_guidance: >
+    Talk like an HONEST tester showing the product in use, not a character with a story arc. React to what
+    you see and feel as you use it — texture, glow, taste, the actual effect. The demo and the visible
+    result are the sell; narrate what is happening and give a straight, specific verdict. Close on the
+    casual comment-for-link ask. Shots are demo + close-ups of the result on the body/skin/food.
+  caption_style: "the result/claim as the demo runs (e.g. 'Glass skin, 4 steps' / 'Comment LINK')"
+
+# To add a new storytelling flavor, add a block here — no code change needed.
+# Keep arc as an explicit energy sequence; that's what stops every line sounding the same.

@@ -1,0 +1,48 @@
+# camera-moves.yaml — the camera movements for image→video clips.
+# Core rule (from the director's-note reference): AI video looks awkward because the
+# camera doesn't move. Add ONE simple, SLOW move per shot. NEVER stack moves
+# (push-in + orbit + zoom = bad). Slow = cinema. The clip prompt format is "CAMERA: <move>".
+# `prompt` is the exact phrase to feed the image→video model.
+
+static:
+  name: "Static (no move)"
+  prompt: "static locked-off shot, no camera movement"
+  when: "let the subject/action carry it; or a very short beat"
+push_in:
+  name: "Push in"
+  prompt: "slow push in"
+  when: "tension, immersion, emotional emphasis (great default for a product reveal)"
+pull_back:
+  name: "Pull back"
+  prompt: "slow pull back"
+  when: "reveal the wider scene, scale, an ending beat"
+pan:
+  name: "Pan"
+  prompt: "slow pan left to right"
+  when: "establish a space, connect elements, light suspense"
+tilt:
+  name: "Tilt up"
+  prompt: "slow tilt up"
+  when: "hero shot, height, majesty/scale"
+tracking:
+  name: "Tracking"
+  prompt: "tracking shot following the subject"
+  when: "realism, motion, energy"
+orbit:
+  name: "Orbit"
+  prompt: "slow orbit right around the subject"
+  when: "360 product look, dramatic, premium feel"
+crane:
+  name: "Crane / Jib"
+  prompt: "crane up slowly"
+  when: "grandeur, god's-eye, big reveal"
+dolly_zoom:
+  name: "Dolly zoom"
+  prompt: "dolly zoom in"
+  when: "unease, a wow/disbelief moment (use sparingly)"
+whip_pan:
+  name: "Whip pan"
+  prompt: "whip pan right"
+  when: "hard transition, grab attention, comedic beat"
+
+# Add a move here to make it selectable — no code change. Keep ONE move per shot, slow.

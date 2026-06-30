@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>바이럴 쇼핑 릴스 — 선택 갤러리 (2026-06-23)</title>
+<style>
+  :root{ --bg:#0e0f13; --card:#181a21; --line:#262a35; --txt:#e8eaf0; --mut:#9aa0ad; --acc:#ff5c8a; --acc2:#4cc2ff; --gold:#ffce4d; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  header{padding:22px 24px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(14,15,19,.92);backdrop-filter:blur(8px);z-index:50}
+  h1{margin:0 0 4px;font-size:19px}
+  .sub{color:var(--mut);font-size:13px;line-height:1.5}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+  .btn{background:var(--card);border:1px solid var(--line);color:var(--txt);padding:7px 12px;border-radius:9px;font-size:13px;cursor:pointer}
+  .btn.active{border-color:var(--acc);color:var(--acc)}
+  .btn:hover{border-color:var(--acc2)}
+  .pickbar{margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;font-size:13px;color:var(--mut);min-height:20px}
+  .pickbar b{color:var(--gold)}
+  .pickbar .chip{display:inline-flex;align-items:center;gap:6px;background:#23252e;border:1px solid var(--line);color:var(--txt);padding:3px 8px;border-radius:20px;margin:3px 4px 0 0;font-size:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px;padding:20px 24px 80px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s}
+  .card.sel{border-color:var(--gold);box-shadow:0 0 0 2px rgba(255,206,77,.25)}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 14px 8px;gap:8px}
+  .rank{font-weight:700;font-size:13px;color:var(--bg);background:var(--gold);border-radius:7px;padding:2px 8px}
+  .metrics{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--mut);padding:0 14px 8px}
+  .metrics b{color:var(--txt)}
+  .views b{color:var(--acc2)} .cmts b{color:var(--acc)}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 10px}
+  .tag{font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--mut)}
+  .tag.single{color:#7ee787;border-color:#2ea04340}
+  .tag.combo{color:#f0883e;border-color:#bb800940}
+  .tag.season{color:var(--gold);border-color:#9e7b1a40}
+  .tag.funnel{color:var(--acc);border-color:#b62a5340}
+  .cat{padding:0 14px 6px;font-size:13.5px}
+  .cat b{color:#fff}
+  .embedwrap{margin:0 10px 10px;border-top:1px solid var(--line);padding-top:10px;min-height:60px}
+  .ig-ph{background:#11131a;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center}
+  .ig-ph a{color:var(--acc2);text-decoration:none;font-size:13px}
+  .act{display:flex;gap:8px;padding:0 14px 14px;margin-top:auto}
+  .act .btn{flex:1;text-align:center}
+  .pick{background:#1d1f27}
+  .card.sel .pick{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+  a.open{flex:1;text-align:center;text-decoration:none;background:var(--card);border:1px solid var(--line);color:var(--acc2);padding:7px 12px;border-radius:9px;font-size:13px}
+  .note{font-size:11.5px;color:var(--mut);padding:0 14px 10px;line-height:1.45}
+</style>
+</head>
+<body>
+<header>
+  <h1>🛍️ 바이럴 쇼핑 릴스 — 선택 갤러리</h1>
+  <div class="sub">소스: 인스타 #amazonfinds 외 5개 해시태그 'Top' · 수집일 2026-06-23 (아마존 프라임데이 첫날) · 상위 18개<br>
+  미리보기를 보고 마음에 드는 릴스 <b>1~2개</b>를 <b>⭐선택</b> → 아래 바에 모인 링크를 복사해서 알려주세요. 그럼 "왜 터졌나" 분석 + 영상 제작으로 넘어갑니다.</div>
+  <div class="controls">
+    <span style="color:var(--mut);font-size:12px">정렬:</span>
+    <button class="btn active" data-sort="score">종합점수</button>
+    <button class="btn" data-sort="play">조회수</button>
+    <button class="btn" data-sort="comment">댓글(구매의도)</button>
+    <span style="width:10px"></span>
+    <span style="color:var(--mut);font-size:12px">필터:</span>
+    <button class="btn" data-filter="single">단일 제품만</button>
+    <button class="btn" data-filter="all">전체</button>
+    <span style="width:10px"></span>
+    <button class="btn" id="loadEmbeds">▶ 미리보기 모두 불러오기</button>
+  </div>
+  <div class="pickbar" id="pickbar">선택된 릴스 없음 — 카드의 <b>⭐선택</b>을 눌러보세요.</div>
+</header>
+<div class="grid" id="grid"></div>
+
+<script>
+const REELS = [
+ {r:1, code:"DTJC7VUjlt-", user:"kathrynpackard",  play:1551218, like:23987, comment:14814, type:"combo",  season:false, cat:"집안 아마존 베스트셀러 모음", why:["펀널","모음포맷"]},
+ {r:2, code:"DZJDulmBE0i", user:"laurenoggsgee",   play:315883,  like:3031,  comment:12339, type:"single", season:false, cat:"숨김 단일 제품 (리스팅 일부러 블러)", why:["펀널","호기심훅"]},
+ {r:3, code:"DZJGw1At4vM", user:"onelifeandstyle", play:151267,  like:2109,  comment:5704,  type:"combo",  season:true,  cat:"여름 패션 (매칭셋·원피스·레이스탑)", why:["펀널","시즌성"]},
+ {r:4, code:"DZ5FW1Pu4d3", user:"rachzx",          play:89422,   like:2948,  comment:4375,  type:"single", season:false, cat:"바디미스트/향수 (좋은 향 비결·스페인어)", why:["펀널","비밀훅"]},
+ {r:5, code:"DZbL489CrbY", user:"alexandra__harper",play:152287, like:4445,  comment:3453,  type:"combo",  season:true,  cat:"수영복 TOP 5", why:["펀널","시즌성"]},
+ {r:6, code:"DZ5toxsJv2f", user:"msdeannajump",    play:160966,  like:920,   comment:3402,  type:"combo",  season:true,  cat:"교실 정리템 (교사 타겟)", why:["펀널","니치타겟","시즌성"]},
+ {r:7, code:"DYH9n9SPhfS", user:"bests_of_amz",    play:155717,  like:5821,  comment:2662,  type:"combo",  season:false, cat:"아마존 25제품 모음 (\"안 사면 후회\")", why:["펀널","모음포맷","랭킹훅"]},
+ {r:8, code:"DZf6hXySMmI", user:"letimomlife_",    play:196455,  like:2248,  comment:2394,  type:"combo",  season:false, cat:"아마존 하울 (주문 vs 실물)", why:["펀널","비포애프터"]},
+ {r:9, code:"DZ2uKomB04f", user:"elnazhamai",      play:259935,  like:3507,  comment:2173,  type:"combo",  season:true,  cat:"로드트립 차량템 (충전·정리)", why:["펀널","시즌성"]},
+ {r:10,code:"DZc73IaoQ4y", user:"trytrytrydiy",    play:108685,  like:1020,  comment:2223,  type:"combo",  season:false, cat:"집 정리/수납 (독일어)", why:["펀널","만족영상"]},
+ {r:11,code:"DZnBgg8I2M6", user:"caitlin.edmund",  play:81278,   like:3886,  comment:2028,  type:"single", season:false, cat:"노브라 심리스 탑", why:["펀널","공감훅"]},
+ {r:12,code:"DZNZRCuhn28", user:"easyazdeals",     play:33874,   like:1110,  comment:1963,  type:"single", season:false, cat:"컬러 리갈패드 12입 ⭐제품명 공개", why:["펀널","제품명공개"]},
+ {r:13,code:"DZkK6VZxiTZ", user:"katiekeever",     play:229265,  like:1806,  comment:2761,  type:"combo",  season:true,  cat:"여름 팬츠/원피스", why:["시즌성","스타일링"]},
+ {r:14,code:"DZIMOO4hBvo", user:"nmirabalc",       play:21084,   like:1482,  comment:1041,  type:"combo",  season:false, cat:"콘텐츠 촬영 장비 세트 (스페인어)", why:["펀널","니치타겟"]},
+ {r:15,code:"DZIdzVQR1ve", user:"bytaylormorgan_", play:162261,  like:2139,  comment:796,   type:"single", season:false, cat:"무드 조명", why:["펀널","감성연출"]},
+ {r:16,code:"DZnHeNaOLE9", user:"letimomlife_",    play:85726,   like:536,   comment:938,   type:"single", season:true,  cat:"베스트셀러 가정용 수영장 (세일)", why:["펀널","시즌성"]},
+ {r:17,code:"DZP3uyiRgwF", user:"thetiffanyconcept",play:13989,  like:329,   comment:998,   type:"combo",  season:false, cat:"집안 인테리어 (러그 등)", why:["펀널","룸투어"]},
+ {r:18,code:"DZ7fD0JRQDJ", user:"bridgetkiene",    play:15556,   like:598,   comment:939,   type:"combo",  season:true,  cat:"프라임데이 300+ 딜 모음", why:["펀널","시즌성","모음포맷"]},
+];
+
+const fmt = n => n>=1e6 ? (n/1e6).toFixed(1)+"M" : n>=1e3 ? (n/1e3).toFixed(1)+"K" : ""+n;
+const score = m => Math.round(Math.pow(m.play,0.55) + m.comment*6 + m.like*0.4);
+REELS.forEach(m=>m.score=score(m));
+
+let sortKey="score", filter="all", embedsOn=false;
+const picks = new Set();
+const grid = document.getElementById('grid');
+const pickbar = document.getElementById('pickbar');
+
+const TAGCLASS = {"펀널":"funnel","모음포맷":"combo","시즌성":"season"};
+
+function cardHTML(m){
+  const tags = [
+    m.type==="single" ? '<span class="tag single">단일 제품</span>' : '<span class="tag combo">모음</span>',
+    ...m.why.map(w=>`<span class="tag ${TAGCLASS[w]||''}">${w}</span>`)
+  ].join("");
+  const url = `https://www.instagram.com/reel/${m.code}/`;
+  const embed = embedsOn
+    ? `<blockquote class="instagram-media" data-instgrm-permalink="${url}" data-instgrm-version="14" style="margin:0;width:100%"></blockquote>`
+    : `<div class="ig-ph">미리보기 꺼짐 · <a href="${url}" target="_blank" rel="noopener">인스타에서 열기 ↗</a></div>`;
+  return `<div class="card ${picks.has(m.code)?'sel':''}" data-code="${m.code}">
+    <div class="top"><span class="rank">#${m.r}</span></div>
+    <div class="metrics">
+      <span class="views">▶ <b>${fmt(m.play)}</b> 조회</span>
+      <span>❤ <b>${fmt(m.like)}</b></span>
+      <span class="cmts">💬 <b>${fmt(m.comment)}</b> 댓글</span>
+    </div>
+    <div class="cat"><b>${m.cat}</b></div>
+    <div class="tags">${tags}</div>
+    <div class="embedwrap">${embed}</div>
+    <div class="act">
+      <button class="btn pick" data-pick="${m.code}">${picks.has(m.code)?'✓ 선택됨':'⭐ 선택'}</button>
+      <a class="open" href="${url}" target="_blank" rel="noopener">열기 ↗</a>
+    </div>
+  </div>`;
+}
+
+function render(){
+  let list = REELS.slice();
+  if(filter==="single") list = list.filter(m=>m.type==="single");
+  list.sort((a,b)=> b[sortKey]-a[sortKey]);
+  grid.innerHTML = list.map(cardHTML).join("");
+  if(embedsOn && window.instgrm) window.instgrm.Embeds.process();
+  bindCards();
+}
+
+function bindCards(){
+  grid.querySelectorAll('[data-pick]').forEach(b=>{
+    b.onclick = e=>{
+      const c=b.getAttribute('data-pick');
+      if(picks.has(c)) picks.delete(c); else picks.add(c);
+      render(); renderPicks();
+    };
+  });
+}
+
+function renderPicks(){
+  if(picks.size===0){ pickbar.innerHTML='선택된 릴스 없음 — 카드의 <b>⭐선택</b>을 눌러보세요.'; return; }
+  const chips=[...picks].map(c=>{
+    const m=REELS.find(x=>x.code===c);
+    return `<span class="chip">#${m.r} ${m.user} · 💬${fmt(m.comment)}</span>`;
+  }).join("");
+  const urls=[...picks].map(c=>`https://www.instagram.com/reel/${c}/`).join("  ");
+  pickbar.innerHTML = `<b>선택 ${picks.size}개:</b> ${chips}<br>
+    <button class="btn" id="copyBtn" style="margin-top:8px">📋 링크 복사 (Claude에게 붙여넣기)</button>
+    <span style="font-size:11px;margin-left:8px">${urls}</span>`;
+  document.getElementById('copyBtn').onclick=()=>{
+    navigator.clipboard.writeText(urls).then(()=>{document.getElementById('copyBtn').textContent='✓ 복사됨';});
+  };
+}
+
+document.querySelectorAll('[data-sort]').forEach(b=>b.onclick=()=>{
+  sortKey=b.getAttribute('data-sort');
+  document.querySelectorAll('[data-sort]').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); render();
+});
+document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{
+  filter=b.getAttribute('data-filter'); render();
+});
+document.getElementById('loadEmbeds').onclick=()=>{
+  embedsOn=!embedsOn;
+  document.getElementById('loadEmbeds').textContent = embedsOn? '⏸ 미리보기 끄기' : '▶ 미리보기 모두 불러오기';
+  if(embedsOn && !document.getElementById('igscript')){
+    const s=document.createElement('script'); s.id='igscript'; s.async=true; s.src='https://www.instagram.com/embed.js';
+    s.onload=()=>{ if(window.instgrm) window.instgrm.Embeds.process(); };
+    document.body.appendChild(s);
+  }
+  render();
+};
+
+render();
+</script>
+</body>
+</html>

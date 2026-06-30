@@ -1,0 +1,108 @@
+// shorts-playbook 로더 — 규칙·페르소나·훅·금지어를 폴더에서 읽어 프롬프트 블록으로.
+// 폴더가 소스 오브 트루스: personas.yaml / hooks.yaml / banlist.txt / references/*.md 를
+// 고치면 webapp 생성 결과가 바로 바뀐다 (코드 수정 X).
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { parse as parseYaml } from 'yaml'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+export const PLAYBOOK_DIR = path.resolve(process.env.PLAYBOOK_DIR || path.join(__dirname, '../../shorts-playbook'))
+
+export function playbookReady() { return fs.existsSync(path.join(PLAYBOOK_DIR, 'SKILL.md')) }
+
+function readText(rel) { try { return fs.readFileSync(path.join(PLAYBOOK_DIR, rel), 'utf8') } catch { return '' } }
+function readYaml(rel) { try { return parseYaml(readText(rel)) || {} } catch { return {} } }
+
+// ── 페르소나 라이브러리 ──
+export function getPersonas() {
+  const y = readYaml('data/personas.yaml')
+  return Object.entries(y).map(([key, v]) => ({ key, ...v }))
+}
+export function getPersona(key) {
+  if (!key) return null
+  const y = readYaml('data/personas.yaml')
+  return y[key] ? { key, ...y[key] } : null
+}
+
+// ── 훅/스토리텔링 라이브러리 ──
+export function getHooks() {
+  const y = readYaml('data/hooks.yaml')
+  return Object.entries(y).map(([key, v]) => ({ key, ...v }))
+}
+export function getHook(key) {
+  if (!key) return null
+  const y = readYaml('data/hooks.yaml')
+  return y[key] ? { key, ...y[key] } : null
+}
+
+// ── 카메라 무빙 (image→video 클립) ──
+export function getCameraMoves() {
+  const y = readYaml('data/camera-moves.yaml')
+  return Object.entries(y).map(([key, v]) => ({ key, ...v }))
+}
+export function getCameraMove(key) {
+  if (!key) return null
+  const y = readYaml('data/camera-moves.yaml')
+  return y[key] ? { key, ...y[key] } : null
+}
+
+// ── 금지어 ──
+export function getBanlist() {
+  return readText('data/banlist.txt')
+    .split('\n').map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'))
+}
+
+// ── 프롬프트 블록 ──
+// 페르소나: 라이브러리 키면 풍부한 스펙, 자유 텍스트면 그대로.
+export function personaBlock(personaKeyOrText) {
+  const p = getPersona(personaKeyOrText)
+  if (!p) {
+    const t = (personaKeyOrText || '').trim()
+    return t
+      ? `\n[PERSONA — the single voice for ALL voiceover]\n${t}\n`
+      : `\n[PERSONA] a been-burned skeptic who is now quietly a little obsessed — deadpan, dry, specific.\n`
+  }
+  const list = (a) => (Array.isArray(a) && a.length ? a.map((x) => `  - ${x}`).join('\n') : '  - (none)')
+  return `\n[PERSONA — the single voice for ALL voiceover]
+Name: ${p.name}
+Register: ${p.register || ''}
+Voice: ${(p.voice || '').trim()}
+Idioms they actually use:\n${list(p.idiom_markers)}
+They NEVER say:\n${list(p.never_says)}
+Dollar/value framing: ${p.dollar_reference_style || ''}
+Example lines (match this exact voice):\n${list(p.example_lines)}\n`
+}
+
+// 훅/스토리텔링 셰이프 — 지정 안 하면 LLM이 가장 잘 맞는 훅을 직접 고르게 (훅 크래프트는 항상 적용)
+export function hookBlock(hookKey) {
+  const h = getHook(hookKey)
+  if (!h) {
+    const names = getHooks().map((x) => x.name).filter(Boolean)
+    return `\n[HOOK / STORYTELLING SHAPE — none preset; CHOOSE the strongest one for this product and apply it]
+Available shapes: ${names.join(', ') || 'disbelief reveal, problem-agitate-solve, before/after, price-shock, curiosity gap, myth-bust'}.
+Pick the one that best fits this product, then build the short around its energy arc. Scene 1 must execute that hook hard.\n`
+  }
+  return `\n[HOOK / STORYTELLING SHAPE — apply this exactly]
+Shape: ${h.name}
+When it fits: ${h.when_to_use || ''}
+Energy ARC (each line a DIFFERENT energy): ${h.arc || ''}
+VO shape: ${(h.vo_guidance || '').trim()}
+Caption style: ${h.caption_style || ''}\n`
+}
+
+// 금지어 블록
+export function banBlock() {
+  const ban = getBanlist()
+  if (!ban.length) return ''
+  return `\n[VO BAN-LIST — these clichés are FORBIDDEN in any voiceover OR caption line; if tempted, rewrite]: ${ban.join(', ')}.`
+}
+
+// 크래프트 규칙 (references 핵심 파일 주입 — 폴더가 권위, 프롬프트는 가볍게)
+export function rulesBlock() {
+  const parts = [readText('references/vo-rules.md'), readText('references/title-rules.md'), readText('references/storytelling.md')]
+    .map((s) => s.trim().slice(0, 2200)).filter(Boolean)
+  if (!parts.length) return ''
+  return `\n[SHORTS-PLAYBOOK RULES — follow these exactly]\n${parts.join('\n\n---\n\n')}\n`
+}
