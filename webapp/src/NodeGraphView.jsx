@@ -125,8 +125,10 @@ export default function NodeGraphView() {
   const [selId, setSel] = useState(null)
   const [drawerH, setDrawerH] = useState(300)
   const [menu, setMenu] = useState(null)
+  const [libOpen, setLibOpen] = useState(false)
+  const [preview, setPreview] = useState(null)
   const nodeRefs = useRef({})
-  const pan = useRef(null), drag = useRef(null)
+  const pan = useRef(null), drag = useRef(null), libUid = useRef(0)
 
   useLayoutEffect(() => { const h = document.querySelector('header')?.offsetHeight; if (h) setTop(h) }, [])
   useEffect(() => {
@@ -167,10 +169,15 @@ export default function NodeGraphView() {
   function addNode(kind, wx, wy) { const id = kind + '-' + Math.round(wx) + '-' + Math.round(wy); setNg((g) => ({ ...g, nodes: [...g.nodes, { id, role: kind, kind, hd: kind, x: Math.round(wx / 20) * 20, y: Math.round(wy / 20) * 20, data: {}, dirty: true }] })); setMenu(null) }
   function onCanvasMenu(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setMenu({ sx: ev.clientX, sy: ev.clientY, wx: (ev.clientX - r.left - view.x) / view.k, wy: (ev.clientY - r.top - view.y) / view.k }) }
   function startDrawerResize(ev) { ev.preventDefault(); const sy = ev.clientY, h0 = drawerH; const mv = (e) => setDrawerH(Math.min(560, Math.max(140, h0 - (e.clientY - sy)))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
+  function addRefAsset(role, thumb, name) { if (!thumb) return; setNg((g) => ({ ...g, refLib: { ...g.refLib, [role]: [...(g.refLib[role] || []), { id: 'lib-' + (libUid.current++), thumb, role, name: name || role }] } })) }
+  function deleteRefAsset(role, id) { setNg((g) => ({ ...g, refLib: { ...g.refLib, [role]: (g.refLib[role] || []).filter((a) => a.id !== id) }, nodes: g.nodes.map((n) => (n.data && n.data.refs && n.data.refs[role]) ? { ...n, data: { ...n.data, refs: { ...n.data.refs, [role]: n.data.refs[role].filter((x) => x !== id) } } } : n) })) }
+  function dropRefs(ev, role) { ev.preventDefault(); ev.currentTarget.classList.remove('drag'); const files = [...(ev.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/')); files.forEach((f) => addRefAsset(role, URL.createObjectURL(f), f.name)); if (!files.length) { const uri = ev.dataTransfer?.getData('text/uri-list') || ev.dataTransfer?.getData('text/plain') || ''; if (/^https?:/.test(uri)) addRefAsset(role, uri.trim(), role) } }
+  const hoverPreview = { onMouseEnter: (e) => setPreview({ url: e.target.src, x: e.clientX, y: e.clientY }), onMouseMove: (e) => setPreview((p) => p ? { ...p, x: e.clientX, y: e.clientY } : p), onMouseLeave: () => setPreview(null) }
 
   return (
     <div className="ng-wrap" style={{ top }}>
       <div className="ng-bar">
+        <button className={'ng-libtoggle' + (libOpen ? ' on' : '')} onClick={() => setLibOpen((o) => !o)} title="reference asset library">▤ refs</button>
         <select value={cid ?? ''} onChange={(e) => setCid(Number(e.target.value))}>{list.map((c) => <option key={c.id} value={c.id}>#{c.id} {(c.title || 'untitled').slice(0, 30)}</option>)}</select>
       </div>
       {err && <div className="ng-err">{err}</div>}
@@ -200,6 +207,28 @@ export default function NodeGraphView() {
         </div>
       </div>
 
+      {libOpen && (
+        <div className="ng-libpanel">
+          {['product', 'character', 'environment'].map((role) => {
+            const items = graph.refLib[role] || []
+            return (
+              <div key={role} className="ng-libzone" onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('drag') }} onDragLeave={(e) => e.currentTarget.classList.remove('drag')} onDrop={(e) => dropRefs(e, role)}>
+                <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="add by URL" onClick={() => { const url = window.prompt(role + ' reference — image URL:'); if (url) addRefAsset(role, url, role + ' ' + (items.length + 1)) }}>＋</span></h4>
+                {items.length
+                  ? <div className="ng-libgrid">{items.map((a) => (
+                    <div key={a.id} className="ng-libitem">
+                      <img src={a.thumb} onError={(e) => { e.target.style.opacity = .2 }} {...hoverPreview} />
+                      <span className="ng-libdel" title="delete" onClick={() => deleteRefAsset(role, a.id)}>×</span>
+                      <div className="nm">{a.name}</div>
+                    </div>))}</div>
+                  : <div className="ng-empty">drop image here · or ＋ URL</div>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {preview && <div className="ng-refpreview" style={{ left: Math.min(preview.x + 18, window.innerWidth - 280), top: Math.min(preview.y + 18, window.innerHeight - 280) }}><img src={preview.url} /></div>}
+
       {menu && (<>
         <div className="ng-menu-bd" onPointerDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null) }} />
         <div className="ng-menu" style={{ left: menu.sx, top: menu.sy }}>
@@ -210,7 +239,7 @@ export default function NodeGraphView() {
 
       {selNode && <Drawer n={selNode} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
         onClose={() => setSel(null)} onRename={(v) => setNodeField(selNode.id, { hd: v })} onField={(f, v) => f === '__nodeval' ? setNodeField(selNode.id, { t: v }) : setNodeData(selNode.id, { [f]: v })}
-        onToggleRef={(role, id) => toggleRef(selNode.id, role, id)} onDelete={() => deleteNode(selNode.id)} incoming={graph.edges.filter((e) => e.to === selNode.id).map((e) => nodeById[e.from]).filter(Boolean)} />}
+        onToggleRef={(role, id) => toggleRef(selNode.id, role, id)} onDelete={() => deleteNode(selNode.id)} hoverPreview={hoverPreview} incoming={graph.edges.filter((e) => e.to === selNode.id).map((e) => nodeById[e.from]).filter(Boolean)} />}
     </div>
   )
 }
@@ -228,7 +257,7 @@ function Field({ c, d, onField }) {
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} />
 }
 
-function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, incoming }) {
+function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, incoming }) {
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
   const runnable = k && !k.source
   const header = (
@@ -313,7 +342,7 @@ function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, 
             {['product', 'character', 'environment'].map((role) => {
               const items = refLib[role] || [], on = (d.refs && d.refs[role]) || []
               return <div key={role} className="ng-refblk"><div className="ng-slot-h"><span style={{ color: COLOR[role] }}>{role}</span><em>{on.length} applied</em></div>
-                <div className="ng-refchips">{items.length ? items.map((a) => <span key={a.id} className={'ng-refchip' + (on.includes(a.id) ? ' on' : '')} style={on.includes(a.id) ? { borderColor: COLOR[role], color: COLOR[role] } : null} onClick={() => onToggleRef(role, a.id)}><img src={a.thumb} />{a.name}</span>) : <span className="ng-none">— none —</span>}</div></div>
+                <div className="ng-refchips">{items.length ? items.map((a) => <span key={a.id} className={'ng-refchip' + (on.includes(a.id) ? ' on' : '')} style={on.includes(a.id) ? { borderColor: COLOR[role], color: COLOR[role] } : null} onClick={() => onToggleRef(role, a.id)}><img src={a.thumb} {...hoverPreview} />{a.name}</span>) : <span className="ng-none">— none —</span>}</div></div>
             })}
           </>}
         </div>
