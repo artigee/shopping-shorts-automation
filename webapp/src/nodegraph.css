@@ -1,5 +1,5 @@
-/* Node graph (④ content, read-only render) — dark, self-contained, scoped under .ng-wrap */
-.ng-wrap { display: flex; flex-direction: column; height: calc(100vh - 130px); background: #17171a; color: #e8e6dd; border: 1px solid #2f2f36; border-radius: 12px; overflow: hidden; }
+/* Content Gen node graph — full window (below the webapp header), read-only render */
+.ng-wrap { position: fixed; left: 0; right: 0; bottom: 0; /* top set inline = header height */ display: flex; flex-direction: column; background: #17171a; color: #e8e6dd; overflow: hidden; z-index: 5; }
 .ng-bar { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-bottom: 1px solid #2f2f36; font-size: 13px; }
 .ng-bar select { background: #1c1c20; border: 1px solid #2f2f36; color: #e8e6dd; border-radius: 7px; padding: 5px 9px; font-family: inherit; }
 .ng-muted { color: #6b6a64; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; margin-left: auto; }
@@ -10,7 +10,8 @@
 .ng-world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 .ng-edges { position: absolute; top: 0; left: 0; width: 3000px; height: 4000px; overflow: visible; pointer-events: none; }
 
-.ng-node { position: absolute; box-sizing: border-box; background: #232328; border: 1px solid #2f2f36; border-radius: 11px; padding: 8px 10px; font-size: 12px; }
+.ng-node { position: absolute; box-sizing: border-box; background: #232328; border: 1px solid #2f2f36; border-radius: 11px; padding: 8px 10px; font-size: 12px; cursor: grab; }
+.ng-node:active { cursor: grabbing; }
 .ng-type { position: absolute; top: -10px; left: 9px; background: #1e1e22; border: 1px solid; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 8.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; padding: 1px 7px; border-radius: 6px; white-space: nowrap; z-index: 2; }
 .ng-thumb { display: block; height: 150px; aspect-ratio: 9/16; object-fit: cover; margin: 2px auto 6px; border-radius: 8px; background: linear-gradient(150deg, #2b3340, #20262e); }
 .ng-thumb.ph { display: flex; align-items: center; justify-content: center; color: #6b6a64; font-family: ui-monospace, monospace; font-size: 9px; }

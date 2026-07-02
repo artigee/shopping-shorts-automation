@@ -53,7 +53,7 @@ export default function App() {
           <button className={tab === 'analyses' ? 'tab on' : 'tab'} onClick={() => setTab('analyses')}>{t('② 릴스 분석')}</button>
           <button className={tab === 'products' ? 'tab on' : 'tab'} onClick={() => setTab('products')}>{t('③ 제품 선택')}</button>
           <button className={tab === 'contents' ? 'tab on' : 'tab'} onClick={() => setTab('contents')}>{t('④ 콘텐츠 제작')}</button>
-          <button className={tab === 'nodegraph' ? 'tab on' : 'tab'} onClick={() => setTab('nodegraph')}>⑤ 노드 그래프</button>
+          <button className={tab === 'nodegraph' ? 'tab on' : 'tab'} onClick={() => setTab('nodegraph')}>⑤ Content Gen</button>
         </div>
       </header>
 

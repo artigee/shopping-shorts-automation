@@ -86,8 +86,12 @@ export default function NodeGraphView() {
   const [err, setErr] = useState(null)
   const [view, setView] = useState({ x: 30, y: 20, k: 0.62 })
   const [heights, setHeights] = useState({})
+  const [top, setTop] = useState(96) // fill the whole window below the webapp header
   const nodeRefs = useRef({})
   const pan = useRef(null)
+  const drag = useRef(null)
+
+  useLayoutEffect(() => { const h = document.querySelector('header')?.offsetHeight; if (h) setTop(h) }, [])
 
   useEffect(() => {
     api('/api/contents').then((cs) => {
@@ -101,7 +105,9 @@ export default function NodeGraphView() {
     api(`/api/contents/${cid}`).then((r) => setData(adapt(r))).catch((e) => setErr(String(e.message || e)))
   }, [cid])
 
-  const graph = useMemo(() => (data ? buildGraph(data) : { nodes: [], edges: [] }), [data])
+  const [ng, setNg] = useState({ nodes: [], edges: [] })
+  useEffect(() => { setNg(data ? buildGraph(data) : { nodes: [], edges: [] }) }, [data])
+  const graph = ng
   const nodeById = useMemo(() => { const m = {}; graph.nodes.forEach((n) => (m[n.id] = n)); return m }, [graph])
 
   useLayoutEffect(() => {
@@ -124,18 +130,35 @@ export default function NodeGraphView() {
       return { k, x: mx - (mx - v.x) * (k / v.k), y: my - (my - v.y) * (k / v.k) }
     })
   }
+  function startNodeDrag(ev, n) {
+    if (ev.target.closest('video, button, select, a')) return
+    ev.stopPropagation()
+    drag.current = { id: n.id, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y }
+  }
   function onDown(ev) { if (ev.target.closest('video, select, button')) return; pan.current = { sx: ev.clientX, sy: ev.clientY, x: view.x, y: view.y } }
-  function onMove(ev) { if (!pan.current) return; setView((v) => ({ ...v, x: pan.current.x + (ev.clientX - pan.current.sx), y: pan.current.y + (ev.clientY - pan.current.sy) })) }
-  function onUp() { pan.current = null }
+  function onMove(ev) {
+    if (drag.current) {
+      const d = drag.current, dx = (ev.clientX - d.sx) / view.k, dy = (ev.clientY - d.sy) / view.k
+      setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === d.id ? { ...n, x: d.ox + dx, y: d.oy + dy } : n) }))
+      return
+    }
+    if (!pan.current) return
+    setView((v) => ({ ...v, x: pan.current.x + (ev.clientX - pan.current.sx), y: pan.current.y + (ev.clientY - pan.current.sy) }))
+  }
+  function onUp() {
+    if (drag.current) {
+      const id = drag.current.id; drag.current = null
+      setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, x: Math.round(n.x / 20) * 20, y: Math.round(n.y / 20) * 20 } : n) }))
+    }
+    pan.current = null
+  }
 
   return (
-    <div className="ng-wrap">
+    <div className="ng-wrap" style={{ top }}>
       <div className="ng-bar">
-        <b>노드 그래프</b>
         <select value={cid ?? ''} onChange={(e) => setCid(Number(e.target.value))}>
           {list.map((c) => <option key={c.id} value={c.id}>#{c.id} {(c.title || 'untitled').slice(0, 30)}</option>)}
         </select>
-        <span className="ng-muted">read-only · wheel = zoom · drag = pan</span>
       </div>
       {err && <div className="ng-err">{err}</div>}
       <div className="ng-canvas" onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
@@ -146,7 +169,7 @@ export default function NodeGraphView() {
           {graph.nodes.map((n) => {
             const c = nodeColor(n), tl = typeLabel(n)
             return (
-              <div key={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n)} style={{ left: n.x, top: n.y, width: NODE_W, borderColor: c + '99' }}>
+              <div key={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n)} style={{ left: n.x, top: n.y, width: NODE_W, borderColor: c + '99' }} onPointerDown={(e) => startNodeDrag(e, n)}>
                 {tl && <span className="ng-type" style={{ color: c, borderColor: c + '66' }}>{tl}</span>}
                 {n.kind === 'image' && (n.thumb ? <img className="ng-thumb" src={n.thumb} loading="lazy" onError={(e) => { e.target.style.opacity = .2 }} /> : <div className="ng-thumb ph">9:16</div>)}
                 {n.kind === 'clip' && (n.video ? <video className="ng-thumb" src={n.video} muted loop playsInline preload="metadata" /> : n.image ? <img className="ng-thumb" style={{ opacity: .4 }} src={n.image} /> : null)}
