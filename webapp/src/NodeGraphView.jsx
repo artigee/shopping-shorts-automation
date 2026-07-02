@@ -1,6 +1,23 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api } from './util.js'
 import './nodegraph.css'
+
+// crash guard — a render error in the graph must not blank the whole app (black screen);
+// show the error inline instead so it can be reported/fixed.
+class ErrorBoundary extends Component {
+  constructor(p) { super(p); this.state = { err: null } }
+  static getDerivedStateFromError(err) { return { err } }
+  render() {
+    if (this.state.err) return (
+      <div className="ng-crash">
+        <div>⚠ Content Gen 렌더 오류 — 화면이 검게 되는 대신 이 메시지를 표시합니다.</div>
+        <pre>{String(this.state.err && (this.state.err.stack || this.state.err.message || this.state.err))}</pre>
+        <button onClick={() => this.setState({ err: null })}>다시 시도</button>
+      </div>
+    )
+    return this.props.children
+  }
+}
 
 // ⑤ Content Gen — node graph for ④ content, ported faithfully from prototypes/node-studio.html.
 // Same node model (KIND registry, typed inputs), same drawer layout. Read/edit is local (dirty);
@@ -120,7 +137,8 @@ function buildGraph(data) {
   return { nodes, edges, refLib }
 }
 
-export default function NodeGraphView() {
+export default function NodeGraphView() { return <ErrorBoundary><NodeGraphInner /></ErrorBoundary> }
+function NodeGraphInner() {
   const [list, setList] = useState([])
   const [cid, setCid] = useState(null)
   const [data, setData] = useState(null)
@@ -131,11 +149,14 @@ export default function NodeGraphView() {
   const [heights, setHeights] = useState({})
   const [top, setTop] = useState(96)
   const [selId, setSel] = useState(null)
+  const [closing, setClosing] = useState(false)
   const [drawerH, setDrawerH] = useState(300)
   const [menu, setMenu] = useState(null)
   const [libOpen, setLibOpen] = useState(false)
   const [preview, setPreview] = useState(null)
   const [wireEnd, setWireEnd] = useState(null)
+  const [locked, setLocked] = useState(false)
+  const [framing, setFraming] = useState(false)
   const nodeRefs = useRef({})
   const canvasRef = useRef(null)
   const pan = useRef(null), drag = useRef(null), libUid = useRef(0)
@@ -158,17 +179,33 @@ export default function NodeGraphView() {
   const nodeById = useMemo(() => { const m = {}; graph.nodes.forEach((n) => (m[n.id] = n)); return m }, [graph])
   const ctx = useMemo(() => ({ persona: data?.persona || '—', hook: data?.hook || '—', angle: data?.overall?.angle || '—', product: data?.product?.title || '—' }), [data])
   const selNode = nodeById[selId]
+  const lastSel = useRef(null)
+  if (selNode) lastSel.current = selNode
+  const drawerNode = selNode || (closing ? lastSel.current : null)
+  useEffect(() => {
+    if (selId) { setClosing(false); return }
+    if (lastSel.current) { setClosing(true); const t = setTimeout(() => { setClosing(false); lastSel.current = null }, 220); return () => clearTimeout(t) }
+  }, [selId])
 
   useLayoutEffect(() => { const h = {}; graph.nodes.forEach((n) => { const el = nodeRefs.current[n.id]; if (el) h[n.id] = el.offsetHeight }); setHeights(h) }, [graph])
 
   const anchor = (n, side) => ({ x: n.x + (side === 'out' ? NODE_W : 0), y: n.y + (heights[n.id] || 90) / 2 })
   const paths = graph.edges.map((e, i) => { const a = nodeById[e.from], b = nodeById[e.to]; if (!a || !b) return null; const p1 = anchor(a, 'out'), p2 = anchor(b, 'in'), dx = Math.max(40, (p2.x - p1.x) * 0.5); return { key: i, i, d: `M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`, color: EDGE_COLOR[e.cls] || '#7d8590', dashed: e.cls === 'global', editable: ['ref', 'product', 'character', 'environment'].includes(e.cls), label: (e.from === 'overall' && e.to.indexOf('script-') === 0 && b.scene != null) ? { x: p2.x - 34, y: p2.y - 5, t: b.scene } : null } }).filter(Boolean)
-  const selFromArray = selNode ? graph.edges.some((e) => e.to === selNode.id && KIND[nodeById[e.from]?.kind]?.out?.array) : false
+  const selFromArray = drawerNode ? graph.edges.some((e) => e.to === drawerNode.id && KIND[nodeById[e.from]?.kind]?.out?.array) : false
   const wireFrom = wireEnd ? nodeById[wireEnd.fromId] : null
 
   function onWheel(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top; setView((v) => { const k = Math.min(2, Math.max(0.2, v.k * (ev.deltaY < 0 ? 1.1 : 1 / 1.1))); return { k, x: mx - (mx - v.x) * (k / v.k), y: my - (my - v.y) * (k / v.k) } }) }
   function startNodeDrag(ev, n) { if (ev.target.closest('video, button, select, a, .ng-del')) return; ev.stopPropagation(); drag.current = { id: n.id, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y, moved: false } }
-  function onDown(ev) { if (ev.target.closest('.ng-node')) return; setSel(null); pan.current = { sx: ev.clientX, sy: ev.clientY, x: view.x, y: view.y } }
+  function onDown(ev) { if (ev.target.closest('.ng-node')) return; if (!locked) setSel(null); pan.current = { sx: ev.clientX, sy: ev.clientY, x: view.x, y: view.y } }
+  function frameNode(id) {
+    const n = nodeById[id]; if (!n || !canvasRef.current) return
+    const r = canvasRef.current.getBoundingClientRect()
+    const cx = n.x + NODE_W / 2, cy = n.y + (heights[id] || 100) / 2, dh = drawerH
+    setFraming(true)
+    setView((v) => ({ ...v, x: r.width / 2 - cx * v.k, y: (r.height - dh) / 2 - cy * v.k }))
+    setSel(id)
+    setTimeout(() => setFraming(false), 300)
+  }
   function onMove(ev) {
     if (drag.current) { const d = drag.current; if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 3) d.moved = true; const dx = (ev.clientX - d.sx) / view.k, dy = (ev.clientY - d.sy) / view.k; setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === d.id ? { ...n, x: d.ox + dx, y: d.oy + dy } : n) })); return }
     if (!pan.current) return; setView((v) => ({ ...v, x: pan.current.x + (ev.clientX - pan.current.sx), y: pan.current.y + (ev.clientY - pan.current.sy) }))
@@ -213,7 +250,8 @@ export default function NodeGraphView() {
       </div>
       {err && <div className="ng-err">{err}</div>}
       <div className="ng-canvas" ref={canvasRef} onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onContextMenu={onCanvasMenu}>
-        <div className="ng-world" style={{ transform: `translate(${view.x}px,${view.y}px) scale(${view.k})` }}>
+        {!data && <div className="ng-loading">loading #{cid}…</div>}
+        <div className="ng-world" style={{ transform: `translate(${view.x}px,${view.y}px) scale(${view.k})`, transition: framing ? 'transform .28s ease' : 'none' }}>
           <svg className="ng-edges">
             {paths.map((p) => (<g key={p.key}>
               {p.editable && <path className="ng-edge-hit" d={p.d} onClick={() => cutEdge(p.i)} />}
@@ -278,10 +316,12 @@ export default function NodeGraphView() {
         </div>
       </>)}
 
-      {selNode && <Drawer n={selNode} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
-        fromArray={selFromArray} onScene={(v) => setNodeScene(selNode.id, v)}
-        onClose={() => setSel(null)} onRename={(v) => setNodeField(selNode.id, { hd: v })} onField={(f, v) => f === '__nodeval' ? setNodeField(selNode.id, { t: v }) : setNodeData(selNode.id, { [f]: v })}
-        onToggleRef={(role, id) => toggleRef(selNode.id, role, id)} onDelete={() => deleteNode(selNode.id)} hoverPreview={hoverPreview} incoming={graph.edges.filter((e) => e.to === selNode.id).map((e) => nodeById[e.from]).filter(Boolean)} />}
+      {drawerNode && <Drawer key={drawerNode.id} n={drawerNode} closing={closing && !selId} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
+        fromArray={selFromArray} onScene={(v) => setNodeScene(drawerNode.id, v)} locked={locked} onLock={() => setLocked((l) => !l)} onFrame={frameNode}
+        onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })} onField={(f, v) => f === '__nodeval' ? setNodeField(drawerNode.id, { t: v }) : setNodeData(drawerNode.id, { [f]: v })}
+        onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} onDelete={() => deleteNode(drawerNode.id)} hoverPreview={hoverPreview}
+        incoming={graph.edges.filter((e) => e.to === drawerNode.id).map((e) => nodeById[e.from]).filter(Boolean)}
+        outgoing={graph.edges.filter((e) => e.from === drawerNode.id).map((e) => nodeById[e.to]).filter(Boolean)} />}
     </div>
   )
 }
@@ -299,7 +339,7 @@ function Field({ c, d, onField }) {
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} />
 }
 
-function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, incoming }) {
+function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, incoming, outgoing }) {
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
   const runnable = k && !k.source
   const header = (
@@ -309,7 +349,10 @@ function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, 
       <span className="ng-kind">#{n.id}</span>
       {k && <span className="ng-out">→ {k.out.n} ({k.out.t})</span>}
       {runnable && <button className="ng-run" title="run (next block)">▶ re-run</button>}
-      <span className="ng-wctrl"><button className="ng-icn" onClick={onClose} title="close">✕</button></span>
+      <span className="ng-wctrl">
+        <button className={'ng-icn' + (locked ? ' on' : '')} onClick={onLock} title={locked ? 'locked — stays open' : 'lock — keep open when clicking elsewhere'}>{locked ? '📌' : '📍'}</button>
+        <button className="ng-icn" onClick={onClose} title="close">✕</button>
+      </span>
     </div>
   )
 
@@ -332,7 +375,7 @@ function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, 
           <div className="ng-kv"><span className="l">format</span><span className="v">{st.format || '—'}</span></div>
           <div className="ng-kv"><span className="l">pacing</span><span className="v">{st.pacing || '—'}</span></div>
           <div className="ng-kv"><span className="l">cta</span><span className="v">{st.cta || '—'}</span></div>
-          {(st.beats || []).map((b, i) => <div key={i} className="ng-kv"><span className="l">beat {i + 1}</span><span className="v">{b}</span></div>)}
+          {(Array.isArray(st.beats) ? st.beats : []).map((b, i) => <div key={i} className="ng-kv"><span className="l">beat {i + 1}</span><span className="v">{typeof b === 'string' ? b : JSON.stringify(b)}</span></div>)}
         </div>
         <div className="ng-col right">
           <div className="ng-sh" style={{ color: '#5DCAA5' }}>matched product</div>
@@ -377,7 +420,7 @@ function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, 
           <div className="ng-sh top">inputs</div>
           {(k.inputs && k.inputs.length) ? k.inputs.map((slot) => {
             const listS = slot.frame ? incoming.filter((s) => outTypeOf(s) === 'image' && ((s.data && s.data.frameRole) || 'start') === slot.frame) : incoming.filter((s) => outTypeOf(s) === slot.type)
-            return <div key={slot.key} className="ng-slot"><div className="ng-slot-h"><span>{slot.label || slot.key}</span><em>{slot.type}{slot.multi ? '[]' : ''}</em></div><div className="ng-wired">{listS.length ? listS.map((s) => <span key={s.id} className="ng-chip">◦ {s.hd}</span>) : <span className="ng-none">— none —</span>}</div></div>
+            return <div key={slot.key} className="ng-slot"><div className="ng-slot-h"><span>{slot.label || slot.key}</span><em>{slot.type}{slot.multi ? '[]' : ''}</em></div><div className="ng-wired">{listS.length ? listS.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>) : <span className="ng-none">— none —</span>}</div></div>
           }) : <div className="ng-wired"><span className="ng-none">— no inputs —</span></div>}
           {n.kind === 'image' && <>
             <div className="ng-sh top">references (from library)</div>
@@ -394,6 +437,8 @@ function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, 
           {cfg.length ? cfg.map((cc) => <div key={cc.f} className="ng-prop"><label>{cc.f}</label><Field c={cc} d={d} onField={onField} /></div>) : <div className="ng-prop"><span className="ng-fixed">— none —</span></div>}
           <div className="ng-sh top">output</div>
           <div className="ng-wired"><span className="ng-chip">{k.out.t === 'image' || k.out.t === 'video' ? '🎞' : '⤷'} {k.out.n}<em>{k.out.t}</em></span></div>
+          {outgoing && outgoing.length > 0 && <><div className="ng-sh top">→ feeds ({outgoing.length})</div>
+            <div className="ng-wired">{outgoing.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>)}</div></>}
           <div className="ng-sh top">context</div>
           <div className="ng-ctxrow">persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div>
           <div className="ng-ctxrow">{ctx.product}</div>
@@ -403,7 +448,7 @@ function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, 
   }
 
   return (
-    <div className="ng-drawer" style={{ height: h }}>
+    <div className={'ng-drawer' + (closing ? ' closing' : '')} style={{ height: h }}>
       <div className="ng-drawer-grip" onPointerDown={onResize} />
       {header}
       {body}
