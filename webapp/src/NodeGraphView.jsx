@@ -152,7 +152,8 @@ export default function NodeGraphView() {
   useLayoutEffect(() => { const h = {}; graph.nodes.forEach((n) => { const el = nodeRefs.current[n.id]; if (el) h[n.id] = el.offsetHeight }); setHeights(h) }, [graph])
 
   const anchor = (n, side) => ({ x: n.x + (side === 'out' ? NODE_W : 0), y: n.y + (heights[n.id] || 90) / 2 })
-  const paths = graph.edges.map((e, i) => { const a = nodeById[e.from], b = nodeById[e.to]; if (!a || !b) return null; const p1 = anchor(a, 'out'), p2 = anchor(b, 'in'), dx = Math.max(40, (p2.x - p1.x) * 0.5); return { key: i, d: `M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`, color: EDGE_COLOR[e.cls] || '#7d8590', dashed: e.cls === 'global' } }).filter(Boolean)
+  const paths = graph.edges.map((e, i) => { const a = nodeById[e.from], b = nodeById[e.to]; if (!a || !b) return null; const p1 = anchor(a, 'out'), p2 = anchor(b, 'in'), dx = Math.max(40, (p2.x - p1.x) * 0.5); return { key: i, d: `M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`, color: EDGE_COLOR[e.cls] || '#7d8590', dashed: e.cls === 'global', label: (e.from === 'overall' && e.to.indexOf('script-') === 0 && b.scene != null) ? { x: p2.x - 34, y: p2.y - 5, t: b.scene } : null } }).filter(Boolean)
+  const selFromArray = selNode ? graph.edges.some((e) => e.to === selNode.id && KIND[nodeById[e.from]?.kind]?.out?.array) : false
 
   function onWheel(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top; setView((v) => { const k = Math.min(2, Math.max(0.2, v.k * (ev.deltaY < 0 ? 1.1 : 1 / 1.1))); return { k, x: mx - (mx - v.x) * (k / v.k), y: my - (my - v.y) * (k / v.k) } }) }
   function startNodeDrag(ev, n) { if (ev.target.closest('video, button, select, a, .ng-del')) return; ev.stopPropagation(); drag.current = { id: n.id, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y, moved: false } }
@@ -165,6 +166,7 @@ export default function NodeGraphView() {
   function deleteNode(id) { setNg((g) => ({ ...g, nodes: g.nodes.filter((n) => n.id !== id), edges: g.edges.filter((e) => e.from !== id && e.to !== id) })); if (selId === id) setSel(null) }
   function setNodeData(id, patch) { setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, data: { ...n.data, ...patch } } : n) })) }
   function setNodeField(id, patch) { setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, ...patch } : n) })) }
+  function setNodeScene(id, v) { if (!(v > 0)) return; setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, scene: v, hd: /^scene \d+$/.test(n.hd || '') ? 'scene ' + v : n.hd } : n) })) }
   function toggleRef(id, role, refId) { setNg((g) => ({ ...g, nodes: g.nodes.map((n) => { if (n.id !== id) return n; const refs = { product: [], character: [], environment: [], ...(n.data.refs || {}) }; const arr = refs[role] = [...(refs[role] || [])]; const i = arr.indexOf(refId); if (i >= 0) arr.splice(i, 1); else arr.push(refId); return { ...n, dirty: true, data: { ...n.data, refs } } }) })) }
   function addNode(kind, wx, wy) { const id = kind + '-' + Math.round(wx) + '-' + Math.round(wy); setNg((g) => ({ ...g, nodes: [...g.nodes, { id, role: kind, kind, hd: kind, x: Math.round(wx / 20) * 20, y: Math.round(wy / 20) * 20, data: {}, dirty: true }] })); setMenu(null) }
   function onCanvasMenu(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setMenu({ sx: ev.clientX, sy: ev.clientY, wx: (ev.clientX - r.left - view.x) / view.k, wy: (ev.clientY - r.top - view.y) / view.k }) }
@@ -183,7 +185,7 @@ export default function NodeGraphView() {
       {err && <div className="ng-err">{err}</div>}
       <div className="ng-canvas" onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onContextMenu={onCanvasMenu}>
         <div className="ng-world" style={{ transform: `translate(${view.x}px,${view.y}px) scale(${view.k})` }}>
-          <svg className="ng-edges">{paths.map((p) => <path key={p.key} d={p.d} stroke={p.color} strokeWidth="1.6" fill="none" strokeDasharray={p.dashed ? '5 4' : 'none'} opacity={p.dashed ? 0.5 : 0.9} />)}</svg>
+          <svg className="ng-edges">{paths.map((p) => (<g key={p.key}><path d={p.d} stroke={p.color} strokeWidth="1.6" fill="none" strokeDasharray={p.dashed ? '5 4' : 'none'} opacity={p.dashed ? 0.5 : 0.9} />{p.label && <text x={p.label.x} y={p.label.y} fill="#c9b3ea" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontSize="11" fontWeight="600">{p.label.t}</text>}</g>))}</svg>
           {graph.nodes.map((n) => {
             const c = nodeColor(n), tl = typeLabel(n)
             return (
@@ -238,6 +240,7 @@ export default function NodeGraphView() {
       </>)}
 
       {selNode && <Drawer n={selNode} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
+        fromArray={selFromArray} onScene={(v) => setNodeScene(selNode.id, v)}
         onClose={() => setSel(null)} onRename={(v) => setNodeField(selNode.id, { hd: v })} onField={(f, v) => f === '__nodeval' ? setNodeField(selNode.id, { t: v }) : setNodeData(selNode.id, { [f]: v })}
         onToggleRef={(role, id) => toggleRef(selNode.id, role, id)} onDelete={() => deleteNode(selNode.id)} hoverPreview={hoverPreview} incoming={graph.edges.filter((e) => e.to === selNode.id).map((e) => nodeById[e.from]).filter(Boolean)} />}
     </div>
@@ -257,7 +260,7 @@ function Field({ c, d, onField }) {
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} />
 }
 
-function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, incoming }) {
+function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, incoming }) {
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
   const runnable = k && !k.source
   const header = (
@@ -348,6 +351,7 @@ function Drawer({ n, ctx, lib, refLib, h, onResize, onClose, onRename, onField, 
         </div>
         <div className="ng-col right">
           <div className="ng-sh">properties</div>
+          {fromArray && <div className="ng-prop"><label>index</label><select value={n.scene ?? ''} onChange={(e) => onScene(parseInt(e.target.value, 10))} style={{ color: '#c9b3ea', maxWidth: 110 }}>{n.scene == null && <option value="">— pick —</option>}{Array.from({ length: 100 }, (_, i) => i + 1).map((v) => <option key={v} value={v}>{v}</option>)}</select></div>}
           {cfg.length ? cfg.map((cc) => <div key={cc.f} className="ng-prop"><label>{cc.f}</label><Field c={cc} d={d} onField={onField} /></div>) : <div className="ng-prop"><span className="ng-fixed">— none —</span></div>}
           <div className="ng-sh top">output</div>
           <div className="ng-wired"><span className="ng-chip">{k.out.t === 'image' || k.out.t === 'video' ? '🎞' : '⤷'} {k.out.n}<em>{k.out.t}</em></span></div>
