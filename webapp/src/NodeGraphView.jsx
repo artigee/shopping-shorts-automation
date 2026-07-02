@@ -75,8 +75,8 @@ function typeLabel(n) {
   const map = { prompt: 'image prompt', analysis: 'analysis', overall: 'overall', script: 'scene script', image: 'image gen', clip: 'clip gen', vo: 'VO gen', movie: 'movie', template: 'template', function: 'function', skill: 'skill' }
   return map[n.kind] || n.kind || ''
 }
-const hasInput = (n) => { if (n.role === 'input') return false; const k = KIND[n.kind]; if (!k || k.source) return false; return (k.inputs || []).length > 0 }
-function outTypeOf(n) { if (!n) return null; if (n.role === 'input') return n.hd === 'hook' ? 'hook' : 'persona'; if (n.refKey !== undefined) return 'imageRef'; const k = KIND[n.kind]; return k ? k.out.t : null }
+const hasInput = (n) => { if (n.role === 'input' || n.role === 'animref') return false; const k = KIND[n.kind]; if (k && k.source) return false; if (k) return (k.accepts || []).length > 0; return false }
+function outTypeOf(n) { if (!n) return null; if (n.role === 'input') return n.hd === 'hook' ? 'hook' : 'persona'; if (n.role === 'animref') return 'video'; if (n.refKey !== undefined) return 'imageRef'; const k = KIND[n.kind]; return k ? k.out.t : null }
 const cameraMoveName = (v, moves) => { if (!v) return 'default'; if (v === 'auto') return '✨ auto'; const m = (moves || []).find((x) => x.key === v); return m ? m.name : v }
 
 function adapt(resp) {
