@@ -3,6 +3,7 @@ import CollectView from './CollectView.jsx'
 import AnalysesView from './AnalysesView.jsx'
 import ProductSelectView from './ProductSelectView.jsx'
 import ContentsView from './ContentsView.jsx'
+import NodeGraphView from './NodeGraphView.jsx'
 import { useT } from './i18n.jsx'
 
 export default function App() {
@@ -52,6 +53,7 @@ export default function App() {
           <button className={tab === 'analyses' ? 'tab on' : 'tab'} onClick={() => setTab('analyses')}>{t('② 릴스 분석')}</button>
           <button className={tab === 'products' ? 'tab on' : 'tab'} onClick={() => setTab('products')}>{t('③ 제품 선택')}</button>
           <button className={tab === 'contents' ? 'tab on' : 'tab'} onClick={() => setTab('contents')}>{t('④ 콘텐츠 제작')}</button>
+          <button className={tab === 'nodegraph' ? 'tab on' : 'tab'} onClick={() => setTab('nodegraph')}>⑤ 노드 그래프</button>
         </div>
       </header>
 
@@ -60,6 +62,7 @@ export default function App() {
         {tab === 'analyses' && <AnalysesView openId={analysisOpenId} onOpenHandled={() => setAnalysisOpenId(null)} goProducts={goProducts} />}
         {tab === 'products' && <ProductSelectView openId={productOpenId} onOpenHandled={() => setProductOpenId(null)} goContents={goContents} />}
         {tab === 'contents' && <ContentsView openId={contentOpenId} onOpenHandled={() => setContentOpenId(null)} goProducts={goProducts} />}
+        {tab === 'nodegraph' && <NodeGraphView />}
       </div>
     </>
   )
