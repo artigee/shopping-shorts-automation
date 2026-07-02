@@ -251,7 +251,7 @@ function NodeGraphInner() {
   }
   function onMove(ev) {
     if (drag.current) { const d = drag.current; if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 3) d.moved = true; const dx = (ev.clientX - d.sx) / view.k, dy = (ev.clientY - d.sy) / view.k; setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === d.id ? { ...n, x: d.ox + dx, y: d.oy + dy } : n) })); return }
-    if (!pan.current) return; setView((v) => ({ ...v, x: pan.current.x + (ev.clientX - pan.current.sx), y: pan.current.y + (ev.clientY - pan.current.sy) }))
+    const p = pan.current; if (!p) return; const nx = p.x + (ev.clientX - p.sx), ny = p.y + (ev.clientY - p.sy); setView((v) => ({ ...v, x: nx, y: ny }))
   }
   function onUp() { if (drag.current) { const d = drag.current; drag.current = null; if (!d.moved) setSel(d.id); else { pushSnap(dragSnap.current); setNg((g) => { const n = { ...g, nodes: g.nodes.map((x) => x.id === d.id ? { ...x, x: Math.round(x.x / 20) * 20, y: Math.round(x.y / 20) * 20 } : x) }; ngRef.current = n; return n }) } } pan.current = null }
   function deleteNode(id) { commit((g) => ({ ...g, nodes: g.nodes.filter((n) => n.id !== id), edges: g.edges.filter((e) => e.from !== id && e.to !== id) })); if (selId === id) setSel(null) }
