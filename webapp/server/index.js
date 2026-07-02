@@ -5,7 +5,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { db, dbStats, getSetting, setSetting } from './db.js'
 import { collect } from './collect.js'
-import { scoreReel } from './score.js'
 import { extractProducts, identifyReel } from './extract.js'
 import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon.js'
 import { analyzeReel } from './analyze.js'
@@ -90,42 +89,6 @@ app.post('/api/collect', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message || String(e), code: e.code || null })
   }
-})
-
-// Import pre-scraped reels from the bookmarklet running in YOUR logged-in instagram.com tab
-// (uses YOUR session — no Playwright, no debug Chrome, no separate login). Same storage as /api/collect.
-function pna(res) { res.set('Access-Control-Allow-Private-Network', 'true') } // allow https IG → http localhost
-app.options('/api/collect/import', (req, res) => { pna(res); res.sendStatus(204) })
-app.post('/api/collect/import', (req, res) => {
-  pna(res)
-  const { tags = [], rows = [], region = 'us', network = 'amazon', note = 'bookmarklet', minPlay = 1000 } = req.body || {}
-  if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'rows (scraped reels) required' })
-  try {
-    const pool = {}
-    for (const m of rows) { if (!m || !m.code) continue; if (!pool[m.code] || (m.play || 0) > (pool[m.code].play || 0)) pool[m.code] = m }
-    let reels = Object.values(pool).filter((m) => (m.type === 2 || m.type == null) && (m.play || 0) >= minPlay)
-    reels.forEach((m) => { m.score = scoreReel(m) })
-    reels.sort((a, b) => b.score - a.score)
-
-    const snapId = db.prepare(
-      `INSERT INTO snapshots (source, region, network, tag_set, note, reel_count) VALUES (?, ?, ?, ?, ?, ?)`
-    ).run('ig', region, network, JSON.stringify(tags), note, reels.length).lastInsertRowid
-
-    const insReel = db.prepare(
-      `INSERT INTO reels (snapshot_id, code, url, thumbnail, username, followers, play, likes, comments, taken_at, is_paid, caption, tag, score, raw)
-       VALUES (@snapshot_id,@code,@url,@thumbnail,@username,@followers,@play,@likes,@comments,@taken_at,@is_paid,@caption,@tag,@score,@raw)`
-    )
-    const tx = db.transaction((rr) => rr.forEach((r) => insReel.run(r)))
-    tx(reels.map((m) => ({
-      snapshot_id: snapId, code: m.code, url: m.url || ('https://www.instagram.com/reel/' + m.code + '/'),
-      thumbnail: m.thumb || m.thumbnail || null, username: m.user || m.username || null, followers: m.followers || null,
-      play: m.play || 0, likes: m.like || m.likes || 0, comments: m.comment || m.comments || 0,
-      taken_at: m.taken ? new Date(m.taken * 1000).toISOString() : null, is_paid: m.paid ? 1 : 0,
-      caption: m.caption || '', tag: m.tag || null, score: m.score || 0,
-      raw: JSON.stringify({ type: m.type, ptype: m.ptype }),
-    })))
-    res.json({ snapshotId: Number(snapId), count: reels.length })
-  } catch (e) { res.status(500).json({ error: e.message || String(e) }) }
 })
 
 app.get('/api/snapshots', (req, res) => {
