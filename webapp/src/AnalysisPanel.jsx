@@ -40,37 +40,37 @@ export default function AnalysisPanel({ data, runUrl, onUpdated, readOnly }) {
               <h4>{t('훅')} · {a.hook.family}</h4>
               <div className="hookline">“{a.hook.openingLine}”</div>
               <div className="muted" style={{ fontSize: 12 }}>{a.hook.why}</div>
-              {a.hook.scrollStopper && <div className="kv"><span>{t('스크롤 스토퍼')}</span><b>{a.hook.scrollStopper}</b></div>}
-              {a.hook.emotionalTrigger && <div className="kv"><span>{t('감정 트리거')}</span><b>{a.hook.emotionalTrigger}</b></div>}
+              {a.hook.scrollStopper && <div className="ainfo"><span className="k">Scroll stopper</span><span className="v">{a.hook.scrollStopper}</span></div>}
+              {a.hook.emotionalTrigger && <div className="ainfo"><span className="k">Emotional trigger</span><span className="v">{a.hook.emotionalTrigger}</span></div>}
             </div>
           )}
           {a.audience && (a.audience.who || a.audience.painPoint || a.audience.objection) && (
             <div className="ablk">
-              <h4>{t('타깃 시청자')}</h4>
-              {a.audience.who && <div className="kv"><span>{t('대상')}</span><b>{a.audience.who}</b></div>}
-              {a.audience.painPoint && <div className="kv"><span>{t('페인 포인트')}</span><b>{a.audience.painPoint}</b></div>}
-              {a.audience.objection && <div className="kv"><span>{t('반론')}</span><b>{a.audience.objection}</b></div>}
+              <h4>Target viewer</h4>
+              {a.audience.who && <div className="ainfo"><span className="k">Who</span><span className="v">{a.audience.who}</span></div>}
+              {a.audience.painPoint && <div className="ainfo"><span className="k">Pain point</span><span className="v">{a.audience.painPoint}</span></div>}
+              {a.audience.objection && <div className="ainfo"><span className="k">Objection</span><span className="v">{a.audience.objection}</span></div>}
             </div>
           )}
           {a.structure && (
             <div className="ablk">
               <h4>{t('구조')} · {a.structure.format}</h4>
               <ol className="beats">{(a.structure.beats || []).map((b, i) => <li key={i}>{b}</li>)}</ol>
-              <div className="kv"><span>{t('페이싱')}</span><b>{a.structure.pacing}</b></div>
-              {a.structure.turningPoint && <div className="kv"><span>{t('전환점')}</span><b>{a.structure.turningPoint}</b></div>}
-              {a.structure.productIntegration && <div className="kv"><span>{t('제품 등장')}</span><b>{a.structure.productIntegration}</b></div>}
-              <div className="kv"><span>CTA</span><b>{a.structure.cta}</b></div>
-              {a.structure.whyItConverts && <div className="kv"><span>{t('전환 기제')}</span><b>{a.structure.whyItConverts}</b></div>}
+              {a.structure.pacing && <div className="ainfo"><span className="k">Pacing</span><span className="v">{a.structure.pacing}</span></div>}
+              {a.structure.turningPoint && <div className="ainfo"><span className="k">Turning point</span><span className="v">{a.structure.turningPoint}</span></div>}
+              {a.structure.productIntegration && <div className="ainfo"><span className="k">Product entry</span><span className="v">{a.structure.productIntegration}</span></div>}
+              {a.structure.cta && <div className="ainfo"><span className="k">CTA</span><span className="v">{a.structure.cta}</span></div>}
+              {a.structure.whyItConverts && <div className="ainfo"><span className="k">Why it converts</span><span className="v">{a.structure.whyItConverts}</span></div>}
             </div>
           )}
           {a.visualStyle && (a.visualStyle.lookFeel || a.visualStyle.lighting || a.visualStyle.palette || a.visualStyle.textStyle || a.visualStyle.editing) && (
             <div className="ablk">
-              <h4>{t('비주얼 스타일')}</h4>
-              {a.visualStyle.lookFeel && <div className="kv"><span>{t('룩앤필')}</span><b>{a.visualStyle.lookFeel}</b></div>}
-              {a.visualStyle.lighting && <div className="kv"><span>{t('조명')}</span><b>{a.visualStyle.lighting}</b></div>}
-              {a.visualStyle.palette && <div className="kv"><span>{t('컬러')}</span><b>{a.visualStyle.palette}</b></div>}
-              {a.visualStyle.textStyle && <div className="kv"><span>{t('자막 스타일')}</span><b>{a.visualStyle.textStyle}</b></div>}
-              {a.visualStyle.editing && <div className="kv"><span>{t('편집')}</span><b>{a.visualStyle.editing}</b></div>}
+              <h4>Visual style</h4>
+              {a.visualStyle.lookFeel && <div className="ainfo"><span className="k">Look &amp; feel</span><span className="v">{a.visualStyle.lookFeel}</span></div>}
+              {a.visualStyle.lighting && <div className="ainfo"><span className="k">Lighting</span><span className="v">{a.visualStyle.lighting}</span></div>}
+              {a.visualStyle.palette && <div className="ainfo"><span className="k">Palette</span><span className="v">{a.visualStyle.palette}</span></div>}
+              {a.visualStyle.textStyle && <div className="ainfo"><span className="k">Text style</span><span className="v">{a.visualStyle.textStyle}</span></div>}
+              {a.visualStyle.editing && <div className="ainfo"><span className="k">Editing</span><span className="v">{a.visualStyle.editing}</span></div>}
             </div>
           )}
           {a.sceneScript?.length > 0 && (
@@ -93,7 +93,7 @@ export default function AnalysisPanel({ data, runUrl, onUpdated, readOnly }) {
           )}
           {a.viralFactors?.length > 0 && (
             <div className="ablk">
-              <h4>{t('바이럴 요인')}</h4>
+              <h4>Viral factors</h4>
               <ol className="beats">{a.viralFactors.map((f, i) => <li key={i}>{f}</li>)}</ol>
             </div>
           )}

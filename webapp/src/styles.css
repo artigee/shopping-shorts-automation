@@ -165,6 +165,10 @@ header .hrow { margin-top:10px; }
 .analysis { margin-top:8px; }
 .ablk { background:#11131a; border:1px solid var(--line); border-radius:9px; padding:11px; margin-top:8px; }
 .ablk h4 { margin:0 0 8px; font-size:12px; color:var(--blue); }
+.ainfo { padding:5px 0; border-top:1px solid var(--line); }
+.ainfo:first-of-type { border-top:0; }
+.ainfo .k { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.6px; color:var(--mut); margin-bottom:2px; }
+.ainfo .v { display:block; font-size:13px; color:var(--blue); line-height:1.45; }
 .hookline { font-size:14px; font-weight:600; color:var(--gold); margin-bottom:5px; line-height:1.4; }
 .beats { margin:0 0 8px; padding-left:18px; }
 .beats li { font-size:12.5px; line-height:1.5; margin:2px 0; }
