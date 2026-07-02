@@ -1,8 +1,6 @@
 // 아마존 검증 게이트 — 어댑터 구조. 지금은 '내 크롬으로 검색'(CDP), 나중에 PA-API로 교체 가능.
 // 목표: 제품 후보 → 구매가능한 실제 리스팅(ASIN·가격·별점·이미지) 후보를 사람에게 제시.
-import { chromium } from 'playwright-core'
-
-const CDP_URL = process.env.CDP_URL || 'http://localhost:9222'
+import { getContext } from './browser.js'
 
 function tagError(code, message) {
   const e = new Error(message)
@@ -26,14 +24,9 @@ export function extractAsin(s = '') {
 
 // 단일 제품 상세 가져오기 (직접 입력한 ASIN/URL용) — 디버그 크롬으로 제품 페이지 파싱
 export async function amazonProduct(asin, { domain = 'www.amazon.com' } = {}) {
-  let browser
-  try {
-    browser = await chromium.connectOverCDP(CDP_URL, { timeout: 4000 })
-  } catch {
-    throw tagError('CHROME_NOT_FOUND', `디버그 크롬(${CDP_URL})에 못 붙음 — launch-chrome.sh 로 크롬을 먼저 띄워주세요.`)
-  }
-  const ctx = browser.contexts()[0] || (await browser.newContext())
-  const page = await ctx.newPage()
+  let context
+  try { context = await getContext() } catch (e) { throw tagError('BROWSER_LAUNCH_FAILED', 'Playwright 브라우저 실행 실패: ' + e.message) }
+  const page = await context.newPage()
   try {
     await page.goto(`https://${domain}/dp/${asin}`, { waitUntil: 'domcontentloaded', timeout: 20000 })
     const robot = await page.evaluate(() =>
@@ -79,22 +72,16 @@ export async function amazonProduct(asin, { domain = 'www.amazon.com' } = {}) {
     throw e
   } finally {
     await page.close().catch(() => {})
-    await browser.close().catch(() => {})
   }
 }
 
 export async function amazonSearch(query, { domain = 'www.amazon.com', max = 8 } = {}) {
-  let browser
-  try {
-    browser = await chromium.connectOverCDP(CDP_URL, { timeout: 4000 })
-  } catch {
-    throw tagError('CHROME_NOT_FOUND', `디버그 크롬(${CDP_URL})에 못 붙음 — scripts/launch-chrome.sh 로 크롬을 먼저 띄워주세요.`)
-  }
+  let context
+  try { context = await getContext() } catch (e) { throw tagError('BROWSER_LAUNCH_FAILED', 'Playwright 브라우저 실행 실패: ' + e.message) }
 
   let page
   try {
-    const ctx = browser.contexts()[0] || (await browser.newContext())
-    page = await ctx.newPage()
+    page = await context.newPage()
     await page.goto(`https://${domain}/s?k=` + encodeURIComponent(query), {
       waitUntil: 'domcontentloaded',
       timeout: 20000,
@@ -143,6 +130,6 @@ export async function amazonSearch(query, { domain = 'www.amazon.com', max = 8 }
     throw e
   } finally {
     if (page) await page.close().catch(() => {})
-    await browser.close().catch(() => {}) // CDP 연결만 종료, 실제 크롬은 유지
+    // 공유 persistent context는 닫지 않음.
   }
 }

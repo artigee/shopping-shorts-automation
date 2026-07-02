@@ -4,11 +4,10 @@ import { spawn } from 'node:child_process'
 import { mkdirSync, rmSync, existsSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium } from 'playwright-core'
+import { getContext } from './browser.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DATA = resolve(__dirname, '../data')
-const CDP_URL = process.env.CDP_URL || 'http://localhost:9222'
 const CLI_MODEL = process.env.ANALYZE_CLI_MODEL || 'sonnet' // 비전+추론 → sonnet 권장
 
 // ── 유틸: 자식 프로세스 실행 ──
@@ -26,14 +25,13 @@ function run(cmd, args, { timeout = 60000, input } = {}) {
 
 // ── 1) 릴스 mp4 다운로드 (디버그 크롬으로 영상 URL 캡처) ──
 export async function downloadReel(reelUrl, outPath) {
-  let browser
+  let ctx
   try {
-    browser = await chromium.connectOverCDP(CDP_URL, { timeout: 4000 })
-  } catch {
-    const e = new Error('디버그 크롬에 못 붙음 — launch-chrome.sh 로 크롬을 먼저 띄워주세요.')
-    e.code = 'CHROME_NOT_FOUND'; throw e
+    ctx = await getContext()
+  } catch (err) {
+    const e = new Error('Playwright 브라우저 실행 실패: ' + err.message)
+    e.code = 'BROWSER_LAUNCH_FAILED'; throw e
   }
-  const ctx = browser.contexts()[0] || (await browser.newContext())
   const page = await ctx.newPage()
   let intercepted = null
   page.on('response', (r) => { const u = r.url(); if (!intercepted && /\.mp4/i.test(u) && /fbcdn|cdninstagram/i.test(u)) intercepted = u })
@@ -56,7 +54,7 @@ export async function downloadReel(reelUrl, outPath) {
     return { path: outPath, bytes: buf.length, src: mp4 }
   } finally {
     await page.close().catch(() => {})
-    await browser.close().catch(() => {})
+    // 공유 persistent context는 닫지 않음.
   }
 }
 

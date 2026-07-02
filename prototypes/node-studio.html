@@ -1,0 +1,1302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Content Studio</title>
+<style>
+  :root{
+    --bg:#1a1a1e; --bg-card:#232328; --bg-surface:#1e1e22; --bg-hover:#2a2a30;
+    --text-primary:#e8e6dd; --text-secondary:#9c9a92; --text-dim:#6b6a64;
+    --border:rgba(222,220,209,.12); --border-hover:rgba(222,220,209,.30);
+    --teal:#5DCAA5; --teal-bg:#085041; --teal-dim:rgba(93,202,165,.12);
+    --blue:#378ADD; --blue-bg:#0e2a4d; --blue-dim:rgba(55,138,221,.12);
+    --orange:#F0997B; --orange-bg:#4a2a1a; --orange-dim:rgba(240,153,123,.12);
+    --violet:#b98be0; --violet-bg:#33214a;
+    --radius:12px; --radius-sm:8px;
+    --font-body:'DM Sans',system-ui,-apple-system,sans-serif;
+    --font-mono:'JetBrains Mono','SF Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--text-primary);font-family:var(--font-body);overflow:hidden}
+
+  /* top bar */
+  header{position:fixed;top:0;left:0;right:0;height:54px;z-index:30;display:flex;align-items:center;gap:16px;
+    padding:0 18px;background:rgba(26,26,30,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+  header .title{font-weight:600;letter-spacing:.2px}
+  header .title small{color:var(--text-dim);font-weight:400;margin-left:8px;font-family:var(--font-mono);font-size:12px}
+  header select{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);
+    border-radius:var(--radius-sm);padding:6px 10px;font-family:var(--font-mono);font-size:12px}
+  header .stat{margin-left:auto;display:flex;gap:18px;font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)}
+  header .stat b{color:var(--teal);font-weight:600}
+  header .stat .save b{color:var(--orange)}
+  header .hint{color:var(--text-dim);font-size:11px;font-family:var(--font-mono)}
+
+  /* canvas */
+  #canvas{position:absolute;inset:54px 0 0 0;overflow:hidden;cursor:grab}
+  #canvas.panning{cursor:grabbing}
+  #world{position:absolute;top:0;left:0;transform-origin:0 0}
+  svg.edges{position:absolute;top:0;left:0;width:6000px;height:4000px;overflow:visible;pointer-events:none}
+  .edge{fill:none;stroke-width:1.6;opacity:.28;transition:opacity .12s,stroke-width .12s}
+  .edge.hot{opacity:.95;stroke-width:2.6}
+  .edge.dim{opacity:.06}
+  .edge.ctx{opacity:.55;stroke-dasharray:5 4}
+  .edge-hit{fill:none;stroke:transparent;stroke-width:12px;pointer-events:stroke;cursor:pointer}
+  .edge-hit:hover + .edge, .edge.willcut{opacity:1;stroke-width:3;stroke-dasharray:5 4}
+  .tmp-edge{fill:none;stroke:#e8e6dd;stroke-width:2;stroke-dasharray:5 5;opacity:.8;pointer-events:none}
+
+  /* nodes */
+  .node{position:absolute;width:var(--w,200px);background:var(--bg-card);border:1px solid var(--border);
+    border-radius:var(--radius);user-select:none;cursor:grab;transition:border-color .12s,box-shadow .12s,opacity .12s}
+  .node:hover{border-color:var(--border-hover)}
+  .node.drag{cursor:grabbing;z-index:20}
+  .node.dim{opacity:.32}
+  .node .hd{display:flex;align-items:center;gap:7px;padding:8px 11px;border-bottom:1px solid var(--border);
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary)}
+  .node .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .node .bd{padding:9px 11px}
+  .node .bd .t{font-size:13px;line-height:1.35;color:var(--text-primary)}
+  .node .bd .sub{font-size:11px;color:var(--text-dim);margin-top:4px;font-family:var(--font-mono)}
+  .node .bd .vo{font-size:11.5px;color:var(--text-secondary);margin-top:6px;line-height:1.4;font-style:italic}
+  .thumb{display:block;height:172px;aspect-ratio:9/16;object-fit:cover;margin:8px auto 4px;border-radius:8px;background:var(--bg-surface)} /* 9:16 shorts format */
+  .thumb.ph{border:1px dashed var(--border)}
+  .voplayer{display:flex;align-items:center;gap:9px;margin-top:6px;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:4px 9px}
+  .voplay{width:24px;height:24px;flex:0 0 auto;border-radius:50%;border:1px solid var(--border-hover);background:var(--bg-card);color:#e0c85d;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;line-height:1}
+  .voplay:hover{background:var(--bg-hover)}
+  .votime{font-family:var(--font-mono);font-size:10px;color:var(--text-dim)}
+  .reframe .thumb{height:62px}
+  .node .pill{display:inline-block;font-family:var(--font-mono);font-size:9.5px;padding:2px 8px;border-radius:6px;margin-top:7px;
+    background:var(--bg-surface);color:var(--text-secondary);border:1px solid var(--border)}
+  .node .rolechip{display:inline-block;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:6px;margin-bottom:2px}
+
+  /* port handles */
+  .port{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--bg-surface);
+    border:1.5px solid var(--text-dim);top:calc(50% - 6px);transition:transform .1s,background .1s,border-color .1s}
+  .port.out{right:-7px;cursor:crosshair} .port.in{left:-7px}
+  .port.wired{background:var(--c,var(--teal));border-color:var(--c,var(--teal));box-shadow:0 0 6px -1px var(--c,var(--teal))} /* connected */
+  .port.out:hover{transform:scale(1.4);border-color:var(--teal);background:var(--teal)}
+  .node.wire-target{box-shadow:0 0 0 2px var(--teal)} .node.wire-target .port.in{transform:scale(1.5);border-color:var(--teal);background:var(--teal)}
+  .node.wire-bad{box-shadow:0 0 0 2px #c0554a}
+  .node.drop-on{box-shadow:0 0 0 2px var(--teal);background:rgba(93,202,165,.06)}
+
+  /* delete (×) on node */
+  .node .idx{position:absolute;top:-9px;left:-9px;background:#2a2740;border:1px solid #4a4470;color:#c9b3ea;
+    font-family:var(--mono);font-size:9.5px;font-weight:600;padding:1px 7px;border-radius:9px;z-index:4}
+  .node .typetag{position:absolute;top:-10px;left:9px;background:var(--bg-panel,#1e1e22);border:1px solid;
+    font-family:var(--font-mono);font-size:8.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;
+    padding:1px 7px;border-radius:6px;z-index:4;white-space:nowrap;pointer-events:none}
+  .node .del{position:absolute;top:-9px;right:-9px;width:19px;height:19px;border-radius:50%;
+    background:var(--bg-hover);border:1px solid var(--border);color:var(--text-secondary);
+    display:none;align-items:center;justify-content:center;font-size:13px;cursor:pointer;z-index:5;line-height:1}
+  .node:hover .del{display:flex} .node .del:hover{background:#5a2a2a;color:#ffb4a4;border-color:#7a3a3a}
+
+  /* toolbar buttons */
+  header button{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);
+    border-radius:var(--radius-sm);padding:6px 11px;font-family:var(--font-mono);font-size:11.5px;cursor:pointer;transition:.12s}
+  header button:hover{border-color:var(--border-hover);background:var(--bg-hover)}
+  header .sep{width:1px;height:22px;background:var(--border)}
+  .toast{position:fixed;bottom:52px;left:50%;transform:translateX(-50%);z-index:40;background:var(--bg-card);
+    border:1px solid var(--border-hover);border-radius:var(--radius-sm);padding:8px 14px;font-family:var(--font-mono);
+    font-size:12px;color:var(--teal);opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+
+  /* role colors */
+  .role-product{--c:var(--blue)}   .role-product .dot{background:var(--blue)}   .role-product .hd{color:var(--blue)}
+  .role-ref{--c:var(--teal)}        .role-ref .dot{background:var(--teal)}       .role-ref .hd{color:var(--teal)}
+  .role-scene{--c:var(--orange)}    .role-scene .dot{background:var(--orange)}   .role-scene .hd{color:var(--orange)}
+  .role-input{--c:var(--violet)}    .role-input .dot{background:var(--violet)}   .role-input .hd{color:var(--violet)}
+  .role-out{--c:var(--text-secondary)} .role-out .dot{background:var(--text-secondary)}
+
+  /* node action buttons (expand / rerun) — clearly visible */
+  .node .acts{margin-left:auto;display:flex;gap:5px}
+  .node .nbtn{width:26px;height:23px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-size:14px;cursor:pointer;color:var(--text-primary);background:var(--bg-surface);border:1px solid var(--border);line-height:1}
+  .node .nbtn:hover{background:var(--bg-hover);border-color:var(--border-hover)}
+  .node .nbtn.run{color:var(--teal)}
+  .node .nbtn.run::before{content:"";display:block;width:0;height:0;
+    border-style:solid;border-width:5px 0 5px 8px;border-color:transparent transparent transparent currentColor}
+  .node .nbtn.exp{font-weight:700}
+  .node.exp{z-index:15}
+  .node.drag{z-index:20}
+  /* tier accent = node border color (follows the rounded rect, aligns with highlight rings) */
+
+  /* run status — animated outline (running), amber outline (dirty/stale) */
+  @property --a{syntax:"<angle>";inherits:false;initial-value:0deg}
+  .node.running::before{content:"";position:absolute;inset:-3px;border-radius:15px;padding:3px;pointer-events:none;z-index:3;
+    background:conic-gradient(from var(--a), transparent 0 55%, var(--c,#5DCAA5) 74%, #fff 80%, var(--c,#5DCAA5) 86%, transparent 92%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude; animation:sweep .85s linear infinite}
+  @keyframes sweep{to{--a:360deg}}
+  .node.done{box-shadow:0 0 0 1px rgba(93,202,165,.4)}
+  .node.done .hd .dot{box-shadow:0 0 7px var(--teal)}
+  .node.dirty{box-shadow:0 0 0 1.5px rgba(217,164,65,.85)}
+  .node.dirty .hd .dot{background:#d9a441!important;box-shadow:0 0 6px #d9a441}
+  .node.dirty .acts::after{content:"stale";font-family:var(--font-mono);font-size:8.5px;color:#d9a441;margin-left:2px}
+
+  /* expanded detail panel */
+  .node .detail{border-top:1px dashed var(--border);padding:9px 11px;font-family:var(--font-mono);font-size:10.5px;display:none}
+  .node.exp .detail{display:block}
+  .detail .sec{margin-bottom:8px}
+  .detail .sec-h{color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;font-size:9px;margin-bottom:3px}
+  .detail .kv{color:var(--text-secondary);line-height:1.5}
+  .detail .kv b{color:var(--text-primary);font-weight:500}
+  .detail .chip{display:inline-block;background:var(--bg-surface);border:1px solid var(--border);border-radius:5px;
+    padding:1px 6px;margin:2px 3px 0 0;color:var(--text-secondary)}
+  .detail .out{color:var(--teal)}
+  .detail .ctx{border-top:1px solid var(--border);margin-top:6px;padding-top:6px;color:var(--text-dim)}
+  .detail .ctx b{color:var(--violet)}
+  .detail input,.detail textarea{width:100%;background:var(--bg-surface);border:1px solid var(--border);border-radius:5px;
+    color:var(--text-primary);font-family:var(--font-mono);font-size:10.5px;padding:4px 6px;margin-top:2px;resize:vertical}
+
+  /* kind accents */
+  .role-animref{--c:#6bc7d9} .role-animref .dot{background:#6bc7d9} .role-animref .hd{color:#6bc7d9}
+  .role-analysis{--c:#7fc7c0} .role-analysis .dot{background:#7fc7c0} .role-analysis .hd{color:#7fc7c0}
+  .role-overall{--c:#9bb8e8} .role-overall .dot{background:#9bb8e8} .role-overall .hd{color:#9bb8e8}
+  .role-script{--c:#c9b3ea} .role-script .dot{background:#c9b3ea} .role-script .hd{color:#c9b3ea}
+  .role-prompt{--c:#c7b3f0} .role-prompt .dot{background:#c7b3f0} .role-prompt .hd{color:#c7b3f0}
+  .role-image{--c:#5DCAA5} .role-image .dot{background:#5DCAA5} .role-image .hd{color:#5DCAA5}
+  .role-clip{--c:#F0997B} .role-clip .dot{background:#F0997B} .role-clip .hd{color:#F0997B}
+  .role-vo{--c:#e0c85d} .role-vo .dot{background:#e0c85d} .role-vo .hd{color:#e0c85d}
+  .role-movie{--c:#378ADD} .role-movie .dot{background:#378ADD} .role-movie .hd{color:#378ADD}
+  .role-template{--c:#9c9a92} .role-template{border-style:dashed} .role-template .dot{background:#9c9a92}
+  .role-function{--c:#8fb8e0} .role-function .dot{background:#8fb8e0} .role-function .hd{color:#8fb8e0}
+  .role-skill{--c:#d59be0} .role-skill .dot{background:#d59be0} .role-skill .hd{color:#d59be0}
+
+  /* right-click context menu */
+  .ctxmenu{position:fixed;z-index:50;background:var(--bg-card);border:1px solid var(--border-hover);border-radius:var(--radius-sm);
+    padding:5px;min-width:210px;max-height:82vh;overflow:auto;box-shadow:0 8px 30px rgba(0,0,0,.5);font-family:var(--font-mono);font-size:12px}
+  .ctxmenu .mi{padding:6px 9px;border-radius:6px;cursor:pointer;color:var(--text-secondary);display:flex;align-items:center;gap:9px}
+  .ctxmenu .mi:hover{background:var(--bg-hover);color:var(--text-primary)}
+  .ctxmenu .dotk{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .ctxmenu .mh{padding:6px 9px 3px;color:var(--text-dim);font-size:9.5px;text-transform:uppercase;letter-spacing:.6px}
+  .ctxmenu .sub{margin-left:auto;color:var(--text-dim);font-size:10px}
+
+  /* selection */
+  .node.sel{box-shadow:0 0 0 2px var(--c,var(--teal)),0 10px 30px -8px var(--c,var(--teal));z-index:16}
+  .node .port.in{border-color:var(--c,var(--text-dim))}
+
+  /* bottom inspector drawer */
+  .drawer{position:fixed;left:0;right:0;bottom:0;z-index:35;height:0;overflow:hidden;
+    background:rgba(24,24,28,.97);backdrop-filter:blur(14px);border-top:1px solid var(--border-hover);
+    display:flex;flex-direction:column}
+  .drawer.open{height:46vh}
+  .drawer .dhandle{height:9px;flex:0 0 auto;cursor:ns-resize;position:relative;background:transparent}
+  .drawer .dhandle::before{content:"";position:absolute;left:50%;top:3px;transform:translateX(-50%);width:44px;height:3px;border-radius:3px;background:var(--border-hover)}
+  .drawer .dhandle:hover::before{background:var(--teal)}
+  .drawer .dh{display:flex;align-items:center;gap:12px;padding:9px 18px 11px;border-bottom:1px solid var(--border);flex:0 0 auto}
+  .drawer .wired .chip[data-src]{cursor:pointer}
+  .drawer .wired .chip[data-src]:hover{border-color:var(--teal);color:var(--text-primary)}
+  .drawer .dh .k{width:10px;height:10px;border-radius:50%}
+  .drawer .dh .title{font-weight:600;font-size:14px}
+  .drawer .dh .title-edit{background:transparent;border:1px solid transparent;border-radius:6px;color:var(--text-primary);
+    font-family:var(--font-body);font-size:14px;font-weight:600;padding:3px 7px;min-width:130px;max-width:340px}
+  .drawer .dh .title-edit:hover{border-color:var(--border)}
+  .drawer .dh .title-edit:focus{border-color:var(--border-hover);background:var(--bg-surface);outline:none}
+  .drawer .dh .kind{font-family:var(--font-mono);font-size:11px;color:var(--text-dim)}
+  .drawer .dh .out{font-family:var(--font-mono);font-size:11px;color:var(--teal)}
+  .drawer .dh .wctrl{margin-left:auto;display:flex;gap:8px;padding-left:14px;border-left:1px solid var(--border)}
+  .drawer .dh button{background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border);
+    border-radius:7px;padding:6px 12px;font-family:var(--font-mono);font-size:12px;cursor:pointer}
+  .drawer .dh button:hover{background:var(--bg-hover)}
+  .drawer .dh button.run{color:var(--teal);border-color:rgba(93,202,165,.45);background:rgba(93,202,165,.08);margin-left:6px}
+  .drawer .dh button.run:hover{background:rgba(93,202,165,.16)}
+  .drawer .dh button.icn{width:34px;padding:6px 0;justify-content:center;font-size:13px}
+  .drawer .dh button.lock-on{color:var(--teal);border-color:var(--teal)}
+  .drawer .db{flex:1;overflow:auto;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:0}
+  .drawer .col{padding:14px 18px;min-width:0}
+  .drawer .col.right{border-left:1px solid var(--border);background:rgba(255,255,255,.015)}
+  .drawer .sh{font-family:var(--font-mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--text-dim);margin:0 0 7px}
+  .drawer .sh.top{margin-top:16px}
+  .drawer .big{width:100%;min-height:150px;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;
+    color:var(--text-primary);font-family:var(--font-mono);font-size:13px;line-height:1.55;padding:11px 13px;resize:vertical}
+  .drawer .fed{font-family:var(--font-mono);font-size:10px;color:var(--teal);margin-bottom:5px}
+  .drawer .fed.manual{color:var(--text-dim)}
+  .drawer .prop{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .drawer .prop label{font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);min-width:96px}
+  .drawer .prop .fixed{font-family:var(--font-mono);font-size:11px;color:var(--text-dim)}
+  .drawer .prop input,.drawer .prop select{flex:1;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;
+    color:var(--text-primary);font-family:var(--font-mono);font-size:12px;padding:5px 8px}
+  .drawer .bigsel{width:100%;background:var(--bg-surface);border:1px solid var(--border);border-radius:7px;
+    color:var(--text-primary);font-family:var(--font-mono);font-size:13px;padding:8px 10px;cursor:pointer}
+  .drawer .wired{font-family:var(--font-mono);font-size:11.5px;line-height:1.7;color:var(--text-secondary)}
+  .drawer .wired .chip{display:inline-block;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:2px 8px;margin:0 5px 5px 0}
+  .drawer .wired .chip em{color:var(--teal);font-style:normal;margin-left:5px}
+  .drawer .none{font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim)}
+  /* analysis · reel view — two equal columns + center divider */
+  .drawer .db.analysisview{grid-template-columns:1fr 1fr}
+  .drawer .db.analysisview .col{padding:16px 22px}
+  .drawer .db.analysisview .col.right{border-left:2px solid var(--border-hover);background:transparent}
+  .drawer .kv{display:flex;gap:12px;align-items:baseline;font-family:var(--font-mono);font-size:11.5px;line-height:1.55;margin-bottom:4px}
+  .drawer .kv .l{flex:0 0 70px;color:var(--text-dim);text-transform:uppercase;font-size:9px;letter-spacing:.5px;padding-top:2px;text-align:right}
+  .drawer .kv .v{flex:1;min-width:0;color:var(--text-primary);word-break:break-word}
+  .drawer .kv .v a{color:var(--teal)}
+  .drawer .kvtext{font-family:var(--font-mono);font-size:10.5px;line-height:1.6;color:var(--text-dim);margin:2px 0 8px 82px}
+  .drawer .arow{display:flex;gap:12px;align-items:flex-start;margin-bottom:6px}
+  .drawer .athumb{flex:0 0 auto;width:104px;height:104px;object-fit:cover;border-radius:9px;border:1px solid var(--border);cursor:zoom-in}
+  .drawer .ameta{flex:1;min-width:0;padding-top:2px}
+  .drawer .slot{margin-bottom:10px}
+  .drawer .slot-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-family:var(--font-mono);font-size:10px;
+    text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);margin-bottom:4px}
+  .drawer .slot-h em{color:var(--teal);font-style:normal;font-size:10px}
+  .drawer .ctxrow{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);margin-top:6px}
+  .drawer .ctxrow b{color:var(--violet)}
+  .drawer .accept{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);margin-top:4px}
+
+  /* reference asset library side panel */
+  #libToggle{position:fixed;top:64px;left:14px;z-index:34;background:var(--bg-card);color:var(--text-primary);
+    border:1px solid var(--border);border-radius:8px;padding:6px 11px;font-family:var(--font-mono);font-size:12px;cursor:pointer}
+  #libToggle:hover{background:var(--bg-hover);border-color:var(--border-hover)} #libToggle.on{border-color:var(--teal);color:var(--teal)}
+  .libpanel{position:fixed;top:54px;left:0;bottom:0;width:270px;z-index:33;background:rgba(24,24,28,.97);backdrop-filter:blur(12px);
+    border-right:1px solid var(--border-hover);overflow:auto;padding:52px 14px 20px;transform:translateX(-100%);transition:transform .18s}
+  .libpanel.open{transform:none}
+  .libpanel h4{font-family:var(--font-mono);font-size:11px;letter-spacing:.5px;text-transform:uppercase;margin:16px 0 8px;display:flex;align-items:center;gap:7px}
+  .libpanel h4 .d{width:8px;height:8px;border-radius:50%} .libpanel h4 .add{margin-left:auto;cursor:pointer;color:var(--text-dim);font-size:14px}
+  .libpanel h4 .add:hover{color:var(--teal)}
+  .libgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .libitem{position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .libitem img{width:100%;height:64px;object-fit:cover;display:block;background:var(--bg-surface);cursor:zoom-in}
+  .libitem .nm{font-family:var(--font-mono);font-size:9px;color:var(--text-dim);padding:3px 16px 3px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .libitem .libdel{position:absolute;top:3px;right:3px;width:17px;height:17px;border-radius:50%;background:rgba(20,20,24,.85);
+    color:var(--text-secondary);display:none;align-items:center;justify-content:center;font-size:12px;cursor:pointer;line-height:1}
+  .libitem:hover .libdel{display:flex} .libitem .libdel:hover{background:#5a2a2a;color:#ffb4a4}
+  /* hover-to-enlarge preview */
+  #refpreview{position:fixed;z-index:60;pointer-events:none;opacity:0;transition:opacity .1s;border:1px solid var(--border-hover);
+    border-radius:10px;overflow:hidden;box-shadow:0 12px 44px rgba(0,0,0,.6);background:var(--bg-card)}
+  #refpreview.show{opacity:1} #refpreview img{display:block;max-width:260px;max-height:260px}
+  .libpanel .empty{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);border:1px dashed var(--border);border-radius:8px;padding:14px 8px;text-align:center}
+  .libzone{border-radius:9px;padding:2px 2px 6px;transition:background .12s}
+  .libzone.drag{outline:2px dashed var(--teal);outline-offset:-2px;background:rgba(93,202,165,.08)}
+
+  /* reference picker chips (in image gen drawer) */
+  .refroleblk{margin-bottom:10px}
+  .refchips{display:flex;flex-wrap:wrap;gap:6px}
+  .refchip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:7px;padding:2px 8px 2px 3px;
+    font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);cursor:pointer;opacity:.6}
+  .refchip img{width:22px;height:22px;border-radius:4px;object-fit:cover}
+  .refchip.on{opacity:1;background:var(--bg-surface)}
+
+  .group-label{position:absolute;font-family:var(--font-mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;
+    color:var(--text-dim);font-weight:500}
+  .legend{position:fixed;bottom:14px;left:18px;z-index:30;display:flex;gap:16px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .err{position:fixed;bottom:14px;right:18px;z-index:30;font-family:var(--font-mono);font-size:11px;color:var(--orange);max-width:40ch}
+  /* ── top-level tabs ── */
+  header .brand{font-weight:600;font-family:var(--font-mono);color:var(--text-secondary);letter-spacing:1px;font-size:13px}
+  header .tabs{display:flex;gap:4px}
+  header .tab{background:transparent;border:1px solid transparent;color:var(--text-secondary);padding:6px 15px;border-radius:8px;font-size:13px;cursor:pointer}
+  header .tab:hover{color:var(--text-primary);background:var(--bg-hover)}
+  header .tab.active{color:var(--text-primary);background:var(--bg-card);border-color:var(--border)}
+  header .studio-tools{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .tabpanel{position:absolute;inset:54px 0 0 0;overflow:auto;display:none;padding:26px 34px 70px}
+  body[data-tab="find"] #tab-find, body[data-tab="analysis"] #tab-analysis{display:block}
+  body[data-tab="find"] #canvas, body[data-tab="analysis"] #canvas{display:none}
+  body:not([data-tab="studio"]) .studio-tools, body:not([data-tab="studio"]) .drawer,
+  body:not([data-tab="studio"]) #libpanel, body:not([data-tab="studio"]) #libToggle{display:none!important}
+  /* ── Find / Analysis page chrome ── */
+  .page{max-width:1080px;margin:0 auto}
+  .page h1{font-size:20px;margin:0 0 3px;font-weight:600}
+  .page .lead{color:var(--text-dim);font-family:var(--font-mono);font-size:12px;margin-bottom:20px}
+  .page h2{font-size:12px;font-family:var(--font-mono);letter-spacing:.6px;text-transform:uppercase;color:var(--text-secondary);margin:26px 0 10px}
+  .agentbar{display:flex;align-items:center;gap:10px;background:rgba(93,202,165,.06);border:1px solid rgba(93,202,165,.28);border-radius:11px;padding:11px 14px;margin-bottom:18px;font-size:12.5px;color:var(--text-secondary)}
+  .agentbar .bot{font-size:15px}
+  .searchrow{display:flex;gap:9px;margin-bottom:6px}
+  .searchrow input,.searchrow select{background:var(--bg-surface);border:1px solid var(--border);color:var(--text-primary);border-radius:9px;padding:9px 12px;font-size:13px;font-family:inherit}
+  .searchrow input{flex:1}
+  .searchrow button{background:var(--teal);border:none;color:#0c1a15;font-weight:600;border-radius:9px;padding:0 18px;cursor:pointer;font-size:13px}
+  .reelgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px}
+  .reelcard{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+  .reelcard .rthumb{aspect-ratio:9/16;background:linear-gradient(150deg,#2b3340,#20262e);display:flex;align-items:center;justify-content:center;font-size:24px;color:#4a5563;position:relative}
+  .reelcard .rank{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:var(--teal);font-family:var(--font-mono);font-size:10px;font-weight:600;padding:2px 7px;border-radius:7px}
+  .reelcard .rbody{padding:9px 11px 11px;display:flex;flex-direction:column;gap:5px}
+  .reelcard .racct{font-size:12px;color:var(--text-secondary);font-family:var(--font-mono)}
+  .reelcard .rcap{font-size:13px;line-height:1.35;color:var(--text-primary)}
+  .reelcard .rmeta{display:flex;gap:12px;font-family:var(--font-mono);font-size:11px;color:var(--text-dim);margin-top:1px}
+  .reelcard .ranalyze{margin-top:6px;background:var(--bg-surface);border:1px solid var(--border);color:var(--text-primary);border-radius:8px;padding:6px 0;cursor:pointer;font-size:12px}
+  .reelcard .ranalyze:hover{border-color:var(--teal);color:var(--teal)}
+  /* analysis page */
+  .acards{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start}
+  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:13px;padding:15px 16px}
+  .card .prodimg{width:100%;aspect-ratio:1;object-fit:contain;background:#fff;border-radius:9px;margin-bottom:10px}
+  .card .ptitle{font-size:14px;font-weight:600;margin-bottom:3px}
+  .card .pprice{color:var(--teal);font-family:var(--font-mono);font-size:14px}
+  .card a.plink{display:inline-block;margin-top:9px;font-size:12px;color:var(--blue);font-family:var(--font-mono);text-decoration:none}
+  .kv2{display:grid;grid-template-columns:120px 1fr;gap:7px 14px;font-size:13px;line-height:1.45}
+  .kv2 .k{color:var(--text-dim);font-family:var(--font-mono);font-size:11px;padding-top:1px}
+  .kv2 .v{color:var(--text-primary)}
+  .stab{width:100%;border-collapse:collapse;font-size:12.5px}
+  .stab th{text-align:left;color:var(--text-dim);font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-weight:500;padding:0 10px 8px;border-bottom:1px solid var(--border)}
+  .stab td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--text-primary)}
+  .stab td.sc{font-family:var(--font-mono);color:var(--teal)}
+  .stab td.tc{font-family:var(--font-mono);color:var(--text-dim);white-space:nowrap}
+  .pillt{display:inline-block;font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:6px;background:var(--bg-surface);border:1px solid var(--border);color:var(--text-secondary)}
+  /* candidate pick states */
+  .pickable{cursor:pointer;transition:border-color .12s,box-shadow .12s}
+  .pickable:hover{border-color:var(--border-hover)}
+  .picked{border-color:var(--teal)!important;box-shadow:0 0 0 1px rgba(93,202,165,.5)}
+  .picked>.pickmark{display:flex}
+  .pickmark{display:none;position:absolute;top:8px;right:8px;background:var(--teal);color:#0c1a15;font-family:var(--font-mono);font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:7px;align-items:center;z-index:2}
+  .candrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:14px}
+  .pcard{position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;gap:11px;align-items:center}
+  .pcard img{width:52px;height:52px;object-fit:contain;background:#fff;border-radius:8px;flex:none}
+  .pcard .pc-t{font-size:13px;font-weight:600;line-height:1.3}
+  .pcard .pc-p{color:var(--teal);font-family:var(--font-mono);font-size:12px;margin-top:2px}
+  .pcard .pc-b{font-family:var(--font-mono);font-size:9.5px;color:var(--text-dim);margin-top:3px}
+  .acard{position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:13px 15px}
+  .acard .ac-n{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--blue);margin-bottom:7px}
+  .acard .ac-h{font-size:14px;font-weight:600;line-height:1.35;margin-bottom:5px}
+  .acard .ac-a{font-size:12.5px;color:var(--text-secondary);line-height:1.4}
+  .pickedbar{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--text-secondary);background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;padding:9px 13px;margin-bottom:18px}
+  .pickedbar b{color:var(--text-primary)}
+  .buildbtn{background:var(--teal);border:none;color:#0c1a15;font-weight:600;border-radius:10px;padding:11px 20px;cursor:pointer;font-size:13.5px}
+  .buildbtn:disabled{opacity:.4;cursor:not-allowed}
+  .ovar{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+  .ovcard{position:relative;background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+  .ovcard .ov-n{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--blue);margin-bottom:4px}
+  .ovcard .ov-h{font-size:12.5px;font-weight:600;line-height:1.3;margin-bottom:3px}
+  .ovcard .ov-a{font-size:11.5px;color:var(--text-secondary);line-height:1.35}
+</style>
+</head>
+<body data-tab="studio">
+<header>
+  <div class="brand">◆ shorts</div>
+  <nav class="tabs">
+    <button class="tab" data-tab="find">Find</button>
+    <button class="tab" data-tab="analysis">Analysis</button>
+    <button class="tab active" data-tab="studio">Content Studio</button>
+  </nav>
+  <div class="studio-tools">
+    <select id="picker" title="content"></select>
+    <button id="runAll" title="run every node in dependency order">▶▶ run all</button>
+    <div class="sep"></div>
+    <button id="tplSave" title="save this graph as a template (localStorage)">💾 save</button>
+    <button id="tplExport" title="download the template as JSON to share">⤓ export</button>
+    <button id="tplReset" title="reset to the original content data">↺ reset</button>
+    <div class="stat"><span id="nSlots" hidden></span><span id="nNodes" hidden></span></div>
+  </div>
+</header>
+
+<div id="tab-find" class="tabpanel"></div>
+<div id="tab-analysis" class="tabpanel"></div>
+
+<div id="canvas">
+  <div id="world">
+    <svg class="edges" id="edges"></svg>
+  </div>
+</div>
+
+<div class="err" id="err"></div>
+
+<div class="drawer" id="drawer"></div>
+
+<button id="libToggle" title="reference asset library">▤ refs</button>
+<div class="libpanel" id="libpanel"></div>
+<div id="refpreview"><img alt=""/></div>
+
+<script>
+const SERVER = 'http://localhost:5174';
+
+/* ---- embedded real snapshot (content #27) — works with no server ---- */
+const EMBED = {"id":27,"title":"keeping it simple and stayin","persona":"skeptic_won_over","hook":"myth_bust","style":null,"final_form":"movie","product":{"title":"Dr.Althea","image":"https://m.media-amazon.com/images/I/61TPbKa5AjL._SL1200_.jpg","price":"$23.90"},"overall":{"angle":"you're doing retinol wrong → gentle protocol → visible barrier repair","hookLine":"Your retinol is making your skin worse.","cta":"Comment 'RETINOL' for the link"},"scenes":[{"id":1,"t":"0-4s","onScreenText":"You're using retinol wrong","vo":"Your retinol is making your skin worse.","cameraMove":"static","makeVideo":true,"image":"/output/content-27/scene-1.png","refs":["hfmedia:05d89d21-87df-43b0-9fa4-300a04a73d2f|/output/content-27/uref-6865307.png","https://m.media-amazon.com/images/I/31Vl3DLSdBL._SY300_SX300_QL70_FMwebp_.jpg","https://m.media-amazon.com/images/I/41bPSVOTuZL.jpg","https://m.media-amazon.com/images/I/31Vl3DLSdBL.jpg","hfmedia:25e926af-78c0-46cb-8e24-5ae8635fec81|/output/content-27/uref-7947456.png"]},{"id":2,"t":"4-7s","onScreenText":"Strong retinol → broken barrier","vo":"Went in strong. Of course.","cameraMove":"static","makeVideo":true,"image":"/output/content-27/scene-2.png","refs":["hfmedia:05d89d21-87df-43b0-9fa4-300a04a73d2f|/output/content-27/uref-6865307.png","https://m.media-amazon.com/images/I/31Vl3DLSdBL._SY300_SX300_QL70_FMwebp_.jpg","https://m.media-amazon.com/images/I/41dq4lEugQL.jpg","hfmedia:25e926af-78c0-46cb-8e24-5ae8635fec81|/output/content-27/uref-7947456.png","https://m.media-amazon.com/images/I/41bPSVOTuZL.jpg"]},{"id":3,"t":"7-12s","onScreenText":"Dr. Althea 0.1%","vo":"This is where I kept waiting for the catch. It just cooperates.","cameraMove":"","makeVideo":true,"image":"/output/content-27/scene-3.png","refs":["https://m.media-amazon.com/images/I/61TPbKa5AjL._SL1200_.jpg","hfmedia:05d89d21-87df-43b0-9fa4-300a04a73d2f|/output/content-27/uref-6865307.png","https://m.media-amazon.com/images/I/31Vl3DLSdBL._SY300_SX300_QL70_FMwebp_.jpg","https://m.media-amazon.com/images/I/31Vl3DLSdBL.jpg","https://m.media-amazon.com/images/I/41bPSVOTuZL.jpg","https://m.media-amazon.com/images/I/41dq4lEugQL.jpg","hfmedia:25e926af-78c0-46cb-8e24-5ae8635fec81|/output/content-27/uref-7947456.png"]},{"id":4,"t":"12-18s","onScreenText":"Zero purge. Zero flaking.","vo":"Layer it, sleep. Three months — I did not believe that was my face.","makeVideo":true,"image":"/output/content-27/scene-4.png","refs":["hfmedia:25e926af-78c0-46cb-8e24-5ae8635fec81|/output/content-27/uref-7947456.png","hfmedia:05d89d21-87df-43b0-9fa4-300a04a73d2f|/output/content-27/uref-6865307.png","https://m.media-amazon.com/images/I/31Vl3DLSdBL._SY300_SX300_QL70_FMwebp_.jpg","https://m.media-amazon.com/images/I/31Vl3DLSdBL.jpg","https://m.media-amazon.com/images/I/41bPSVOTuZL.jpg","https://m.media-amazon.com/images/I/41dq4lEugQL.jpg"]},{"id":5,"t":"18-22s","onScreenText":"Comment RETINOL 👇","vo":"Say RETINOL. I'll send it.","makeVideo":true,"image":"/output/content-27/scene-5.png","refs":["hfmedia:25e926af-78c0-46cb-8e24-5ae8635fec81|/output/content-27/uref-7947456.png","hfmedia:05d89d21-87df-43b0-9fa4-300a04a73d2f|/output/content-27/uref-6865307.png","https://m.media-amazon.com/images/I/31Vl3DLSdBL._SY300_SX300_QL70_FMwebp_.jpg","https://m.media-amazon.com/images/I/31Vl3DLSdBL.jpg","https://m.media-amazon.com/images/I/41bPSVOTuZL.jpg","https://m.media-amazon.com/images/I/41dq4lEugQL.jpg"]}]};
+
+/* ---- helpers ---- */
+const $ = (s,el=document)=>el.querySelector(s);
+const world = $('#world'), edgesSvg = $('#edges'), canvas = $('#canvas');
+
+// a ref string is "url" or "hfmedia:<id>|/output/...". Resolve to a displayable image url + a stable key + role.
+function resolveRef(ref){
+  let local=null, key=ref;
+  if(ref.includes('|/output/')){ const [,loc]=ref.split('|'); local=loc; key='hf:'+ref.split(':')[1].split('|')[0]; }
+  const isImg = /\.(png|jpe?g|webp|gif)(\?|$)/i.test(ref) || /m\.media-amazon\.com\/images/.test(ref) || local;
+  if(!isImg) return null; // amazon product *page* link etc. — not a thumbnail
+  let src = local ? (SERVER+local) : ref;
+  let role = local ? 'ref' : (/m\.media-amazon\.com\/images/.test(ref) ? 'product' : 'ref');
+  // normalize amazon image variants to one key (same base id)
+  if(role==='product'){ const m=ref.match(/images\/I\/([A-Za-z0-9]+)\./); if(m) key='amz:'+m[1]; }
+  return {src,key,role,label: local? local.split('/').pop() : (ref.match(/I\/([A-Za-z0-9]+)\./)?.[1]||'product')};
+}
+
+let nodes=[], edges=[], dragRAF=null, currentData=null, uidN=0, ctx={};
+let LIB={personas:[],hooks:[],moves:[]}; // playbook option libraries (persona/hook/camera-move)
+let refLib={product:[],character:[],environment:[]}, libUid=0; // reference ASSET library (side panel) — nodes pick from this by property
+const GRID=20, snap=v=>Math.round(v/GRID)*GRID;
+const PITCH=280; // per-scene band height (fits image prompt / motion prompt / VO text stacked)
+const NODE_W=210; // consistent node width
+const COL={input:40, overall:300, script:560, prompt:820, image:1080, clip:1340, vo:1600, movie:1860, ref:820};
+const COLOR={product:'#378ADD',character:'#b98be0',environment:'#7fc7a0',ref:'#5DCAA5',animref:'#6bc7d9',analysis:'#7fc7c0',overall:'#9bb8e8',script:'#c9b3ea',
+  prompt:'#c7b3f0',image:'#5DCAA5',clip:'#F0997B',
+  vo:'#e0c85d',movie:'#378ADD',flow:'#7d8590',audio:'#e0c85d',global:'#9a86c8',input:'#b98be0',
+  template:'#9c9a92',function:'#8fb8e0',skill:'#d59be0'};
+const byId=id=>nodes.find(n=>n.id===id);
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+// node color THEME by tier: data (sources) · special (orchestrators) · general (generators)
+const TIERCOLOR={data:'#8790b5', special:'#4f9fe0', general:'#5DCAA5'};
+function tierOf(n){ if(n.kind==='overall'||n.kind==='movie'||n.kind==='script') return 'special'; // script = scene-defining (indexed) node
+  if(n.kind && KIND[n.kind] && !KIND[n.kind].source) return 'general'; return 'data'; }
+function nodeColor(n){ if(n&&n.refKey!==undefined) return COLOR[n.refRole]||COLOR.ref; return TIERCOLOR[tierOf(n)]; }
+// node TYPE (shown as a corner tag outside the node, not in the title)
+function typeLabel(n){ if(!n) return '';
+  if(n.role==='animref') return 'anim ref';
+  if(n.role==='input') return ''; // persona / hook — title already IS the type word, no tag
+  if(typeof n.id==='string'){ if(n.id.indexOf('promptM-')===0) return 'motion prompt'; if(n.id.indexOf('promptV-')===0) return 'VO text'; }
+  const map={prompt:'image prompt',analysis:'analysis',overall:'overall',script:'scene script',image:'image gen',clip:'clip gen',vo:'VO gen',movie:'movie',template:'template',function:'function',skill:'skill'};
+  return map[n.kind]||n.kind||n.role||'node'; }
+// source/data nodes only OUTPUT — no input connector
+function hasInput(n){ if(n.role==='input'||n.role==='animref') return false; const k=KIND[n.kind];
+  if(k&&k.source) return false; if(k) return (k.accepts||[]).length>0; return false; }
+// resolve a media path to a loadable URL (/output/... → server; http → as-is; hfmedia:..|/output.. → local)
+function resolveMedia(u){ if(!u) return null; if(u.indexOf('|/output/')>=0) u=u.split('|')[1];
+  if(u.indexOf('/output/')===0) return SERVER+u; if(/^https?:/.test(u)) return u; return u; }
+function aspectCSS(a){ return String(a||'9:16').replace(':','/'); } // '9:16' → '9/16'
+function cameraMoveName(v){ if(!v) return 'default'; if(v==='auto') return '✨ auto'; const m=(LIB.moves||[]).find(x=>x.key===v); return m?m.name:v; }
+function clipModeLabel(n){ const d=n.data||{}; return d.makeVideo==='still'?'🖼 still':'🎥 '+cameraMoveName(d.cameraMove); }
+
+// node-kind registry — CONFIRMED contracts + TYPED ports (accepts = which out-types can wire in)
+const KIND={
+  analysis:{hd:'analysis · reel', accepts:[], out:{t:'analysis',n:'reel structure'}, source:true, // read-only artifact from stage ② (not re-run here)
+    editor:{field:'angle',label:'structure / angle (from reel analysis)'}, config:[]},
+  overall:{hd:'overall + scene split · LLM', accepts:['context'], out:{t:'text',n:'scene[] · N ordered',array:true},
+    editor:{field:'vo',label:'overall VO — the through-line'},
+    config:[{f:'shotCount',edit:true,ph:'auto | 1-9  (# scene scripts)'},{f:'direction',edit:true,ph:'hook·shot direction'},
+      {f:'angle',edit:true},{f:'hookLine',edit:true},{f:'cta',edit:true},{f:'beats',edit:true},{f:'guidance',edit:true,ph:'steer re-run'}]},
+  script:{hd:'scene script · LLM', accepts:['text','context'], out:{t:'text',n:'Title + VO'},
+    editor:{field:'vo',label:'scene VO'}, config:[{f:'title',edit:true,ph:'on-screen title'},{f:'guidance',edit:true,ph:'steer re-run'}]},
+  prompt:{hd:'prompt · LLM', accepts:['text','context'], out:{t:'text',n:'prompt text'},
+    editor:{field:'prompt',label:'prompt'}, config:[{f:'guidance',edit:true,ph:'idea / instruction'}]},
+  image:{hd:'image gen', accepts:['text','imageRef','context'], out:{t:'image',n:'scene .png'},
+    // no editor — the image prompt is OWNED by the prompt node (wired in, read-only here)
+    config:[{f:'frameRole',edit:true,choices:['start','end']}, // which clip keyframe this image feeds (start = default)
+      {f:'aspect',edit:true,choices:['9:16','4:5','1:1','16:9']},
+      {f:'model',edit:true,choices:['auto','nano_banana_pro','marketing_studio_image']},
+      {f:'style',edit:true,ph:'all-scene style'},{f:'seed',edit:true,ph:'random'},{f:'guidance',edit:true,ph:'steer re-run'}]},
+  clip:{hd:'clip gen', accepts:['image','text'], out:{t:'video',n:'clip .mp4'},
+    // no editor — motion prompt is OWNED by a prompt node (wired into the 'motion' slot); cameraMove is the default control
+    config:[{f:'makeVideo',edit:true,choices:['animate','still']},{f:'cameraMove',edit:true,cameraLib:true},
+      {f:'duration',edit:true},{f:'model',edit:true,choices:['kling3_0','seedance','hailuo','wan','kling3_0_turbo']}]}, // end_image-capable first; turbo = start only
+  vo:{hd:'VO gen', accepts:['text','context'], out:{t:'audio',n:'.mp3'},
+    // no editor — the spoken text is OWNED by the VO text node (wired in)
+    config:[{f:'voiceId',edit:true},{f:'lang',fixed:'US EN'}]},
+  movie:{hd:'movie · assemble', accepts:['video','image','audio','context'], out:{t:'video',n:'final .mp4'},
+    // no editor — movie is an assembler; the CTA lives in the LAST scene (its scene script), not here
+    config:[{f:'final_form',edit:true,choices:['card','movie']},{f:'exportMode',edit:true,choices:['preview','remotion']},{f:'fps',fixed:'30'},
+      {f:'outputDir',edit:true,ph:'output/ (folder)'},{f:'outputName',edit:true,ph:'{product}_{hook}_v1 (naming template)'}]},
+  template:{hd:'template', accepts:['*'], out:{t:'graph',n:'reusable subgraph'}, config:[]},
+  function:{hd:'function', accepts:['*'], out:{t:'data',n:'typed output'}, config:[]},
+  skill:{hd:'skill call', accepts:['*'], out:{t:'data',n:'skill result'}, editor:{field:'goal',label:'goal / args'}, config:[]},
+};
+// typed INPUT SLOTS per node kind — each slot has a specific type; only matching out-types can wire in.
+const INPUTS={
+  analysis:[],
+  overall:[{key:'analysis',type:'analysis'},{key:'persona',type:'persona'},{key:'hook',type:'hook'}],
+  script:[{key:'overall',type:'text',label:'overall · scene[]'},{key:'persona',type:'persona'},{key:'hook',type:'hook'}],
+  prompt:[{key:'script',type:'text',label:'scene script (Title + VO)'}], // generic text-gen: script in → image prompt out
+  image:[{key:'prompt',type:'text',label:'image prompt'}], // references are a PROPERTY (asset library), not wired inputs
+  clip:[{key:'startImage',type:'image',frame:'start',label:'start image (required)'},
+    {key:'endImage',type:'image',frame:'end',label:'end image (optional · 2nd keyframe)'},
+    {key:'motion',type:'text',label:'motion prompt'},
+    {key:'animationRef',type:'video',label:'animation ref (acting · motion transfer)'}],
+  vo:[{key:'voText',type:'text',label:'VO text'},{key:'persona',type:'persona',label:'persona (voice)'}],
+  movie:[{key:'clips',type:'video',label:'clips',multi:true},{key:'stills',type:'image',label:'stills',multi:true},{key:'audio',type:'audio',label:'VO audio',multi:true}],
+};
+// attach slots + derive `accepts` from them (single source of truth for type validation)
+Object.keys(INPUTS).forEach(k=>{ if(KIND[k]){ KIND[k].inputs=INPUTS[k];
+  if(!(KIND[k].accepts||[]).includes('*')) KIND[k].accepts=[...new Set(INPUTS[k].map(i=>i.type))]; } });
+// port typing
+function outTypeOf(n){ if(!n) return null;
+  if(n.role==='input') return n.hd==='hook'?'hook':'persona'; // persona / hook are DISTINCT types
+  if(n.role==='animref') return 'video'; // animation/motion reference clip
+  if(n.refKey!==undefined) return 'imageRef';
+  const k=KIND[n.kind]; return k?k.out.t:null; }
+function acceptsOf(n){ const k=KIND[n.kind]; return k?k.accepts:null; }
+function canConnect(from,to){ const ot=outTypeOf(from), acc=acceptsOf(to);
+  if(!ot||!acc||from.id===to.id) return false;
+  return acc.includes('*')||acc.includes(ot); }
+// index/numbering is needed ONLY where a node connects directly to an ARRAY output (it must pick which element).
+function fromArray(n){ return edges.some(e=>{ if(e.to!==n.id) return false; const src=byId(e.from); return !!(src&&KIND[src.kind]&&KIND[src.kind].out&&KIND[src.kind].out.array); }); }
+function edgeClassFor(ot,from){ return ot==='imageRef'?(from.refRole||'ref')
+  : ot==='audio'?'audio' : (ot==='context'||ot==='persona'||ot==='hook'||ot==='analysis')?'global' : 'flow'; }
+
+// shape raw content data → generation-pipeline nodes + edges, then draw
+function build(data){
+  currentData=data; nodes=[]; edges=[]; uidN=0;
+  ctx={persona:data.persona||'—', hook:data.hook||'—', angle:data.overall?.angle||'—', product:data.product?.title||'—'};
+  const scenes=data.scenes||[];
+  const refMap=new Map();
+  scenes.forEach(s=>(s.refs||[]).forEach(r=>{ const R=resolveRef(r); if(!R)return;
+    if(!refMap.has(R.key)) refMap.set(R.key,{...R,scenes:[]}); refMap.get(R.key).scenes.push(s.id); }));
+  const refs=[...refMap.values()];
+  const mk=mkNode;
+
+  const midY=snap(100+Math.max(0,(scenes.length-1))*PITCH/2);
+
+  // SOURCES — persona / hook (context) + analysis (the reel structure the whole thing derives from)
+  mk({id:'in-0',role:'input',hd:'persona',t:ctx.persona,sub:'VO voice',x:COL.input,y:100,w:NODE_W,global:true});
+  mk({id:'in-1',role:'input',hd:'hook',t:ctx.hook,sub:'story shape',x:COL.input,y:240,w:NODE_W,global:true});
+  const ar=data.analysisRow||{}; let aj={}; try{aj=JSON.parse(ar.analysis||'{}')}catch{}
+  let mm={}; try{mm=JSON.parse(ar.match_meta||'{}')}catch{}
+  const pI=data.productInfo||data.product||{};
+  mk({id:'analysis',role:'analysis',hd:'reel',kind:'analysis',x:COL.input,y:400,w:NODE_W,
+    data:{ angle:ctx.angle, hook:aj.hook||null, struct:aj.structure||null, sceneScript:aj.sceneScript||null,
+      reel:{url:ar.reel_url,thumb:ar.reel_thumbnail,user:ar.reel_username,caption:ar.reel_caption,comments:ar.reel_comments,play:ar.reel_play,category:ar.category,title:ar.title},
+      product:{title:pI.title,price:pI.price,rating:pI.rating,reviews:pI.reviewCount,features:pI.features,dimensions:pI.dimensions,asin:pI.asin,url:pI.amazon_url,image:pI.image},
+      match:mm }});
+
+  // reference nodes → fan out into IMAGE nodes
+  // reference ASSET LIBRARY (side panel) — not nodes. image gen picks from this by property.
+  refLib={product:[],character:[],environment:[]}; libUid=0; const seen=new Set();
+  const pushAsset=(thumb,role,name)=>{ if(!thumb||seen.has(thumb))return; seen.add(thumb);
+    refLib[role].push({id:'lib-'+(libUid++),thumb,role,name:name||role}); };
+  if(data.product?.image) pushAsset(data.product.image,'product','product main');
+  refs.forEach(r=>pushAsset(r.src, r.role==='product'?'product':'character', r.label));
+
+  // OVERALL (split) + MOVIE (aggregator) — single upstream/downstream anchors
+  mk({id:'overall',role:'overall',hd:'overall',kind:'overall',x:COL.overall,y:midY,w:NODE_W,
+    data:{shotCount:(data.shot_count?String(data.shot_count):''),direction:data.direction||'',
+      angle:ctx.angle,hookLine:data.overall?.hookLine||'',vo:data.overall?.vo||'',cta:data.overall?.cta||'',
+      beats:Array.isArray(data.overall?.beats)?data.overall.beats.join(' / '):''}});
+  const slug=(t)=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,24);
+  mk({id:'movie',role:'movie',hd:'final movie',kind:'movie',x:COL.movie,y:midY,w:NODE_W,
+    data:{sceneCount:scenes.length,final_form:data.final_form||'card', output:data.export_mp4||data.preview||null,
+      outputDir:'output/content-'+(data.id||'x')+'/', outputName:(slug(ctx.product)||'short')+'_'+(slug(ctx.hook)||'hook')+'_v1'}});
+  edges.push({from:'analysis',to:'overall',cls:'global'});
+  nodes.filter(n=>n.global).forEach(g=>edges.push({from:g.id,to:'overall',cls:'global'}));
+  // per-scene chains, keyed by SCENE NUMBER (1..N) — the stable binding key
+  scenes.forEach((s,i)=>addSceneChain(i+1,s));
+  redraw();
+  loadTemplate();
+  if(document.body.dataset.tab==='analysis') renderAnalysis(); // keep analysis tab in sync with loaded content
+}
+
+// shared node factory (baseline-committed) + keyed scene-chain add/remove
+function mkNode(o){ const nn={status:'idle',ran:false,...o}; nn.baseline=sig(nn); nodes.push(nn); return nn; }
+function addSceneChain(k, s){ s=s||{}; const y=100+(k-1)*PITCH;
+  const defRefs={ product:refLib.product.map(a=>a.id), character:refLib.character.map(a=>a.id), environment:[] }; // default: inherit shared product + character
+  mkNode({id:'script-'+k,role:'script',kind:'script',hd:'scene '+k,x:COL.script,y,w:NODE_W,scene:k,data:{title:s.onScreenText||'',vo:s.vo||''}});
+  // prompt column stacks the 3 text-authoring nodes: image prompt / motion prompt / VO text
+  mkNode({id:'prompt-'+k,role:'prompt',kind:'prompt',hd:'scene '+k,x:COL.prompt,y,w:NODE_W,scene:k,data:{prompt:s.imagePrompt||''}});
+  mkNode({id:'promptV-'+k,role:'prompt',kind:'prompt',hd:'scene '+k,x:COL.prompt,y:y+160,w:NODE_W,scene:k,data:{prompt:s.voEn||s.vo||''}}); // spoken line (translate/refine)
+  mkNode({id:'image-'+k,role:'image',kind:'image',hd:'scene '+k,thumb:s.image?(SERVER+s.image):null,x:COL.image,y,w:NODE_W,scene:k,data:{imagePrompt:s.imagePrompt||'',productName:ctx.product,image:s.image||'',aspect:'9:16',model:'auto',seed:'',style:(currentData&&currentData.style)||'',refs:defRefs}});
+  mkNode({id:'vo-'+k,role:'vo',kind:'vo',hd:'scene '+k,x:COL.vo,y,w:NODE_W,scene:k,data:{voiceId:(currentData&&currentData.persona)||'default',audio:s.audio||null}});
+  const clip = s.makeVideo!==false;
+  if(clip){
+    mkNode({id:'promptM-'+k,role:'prompt',kind:'prompt',hd:'scene '+k,x:COL.prompt,y:y+80,w:NODE_W,scene:k,data:{prompt:s.motionPrompt||''}}); // camera motion / acting
+    mkNode({id:'clip-'+k,role:'clip',kind:'clip',hd:'scene '+k,x:COL.clip,y,w:NODE_W,scene:k,data:{makeVideo:'animate',cameraMove:s.cameraMove||'',duration:s.durationSec||4,image:s.image||'',video:s.video||null}});
+  }
+  edges.push({from:'overall',to:'script-'+k,cls:'flow'});
+  nodes.filter(n=>n.global).forEach(g=>edges.push({from:g.id,to:'script-'+k,cls:'global'})); // persona + hook → script
+  edges.push({from:'script-'+k,to:'prompt-'+k,cls:'flow'});   edges.push({from:'prompt-'+k,to:'image-'+k,cls:'flow'});   // → image
+  edges.push({from:'script-'+k,to:'promptV-'+k,cls:'flow'});  edges.push({from:'promptV-'+k,to:'vo-'+k,cls:'flow'});     // → VO text → VO gen
+  nodes.filter(n=>n.role==='input'&&n.hd==='persona').forEach(p=>edges.push({from:p.id,to:'vo-'+k,cls:'global'}));       // persona → VO gen (voice)
+  if(clip){ edges.push({from:'script-'+k,to:'promptM-'+k,cls:'flow'}); edges.push({from:'promptM-'+k,to:'clip-'+k,cls:'flow'}); // motion prompt → clip
+    edges.push({from:'image-'+k,to:'clip-'+k,cls:'flow'}); edges.push({from:'clip-'+k,to:'movie',cls:'flow'}); }
+  else edges.push({from:'image-'+k,to:'movie',cls:'flow'});
+  edges.push({from:'vo-'+k,to:'movie',cls:'audio'});
+  // references are NOT wired — image gen picks them from the asset library via its `refs` property
+}
+function removeSceneChain(k){ const kill=new Set(['script-'+k,'prompt-'+k,'promptM-'+k,'promptV-'+k,'image-'+k,'clip-'+k,'vo-'+k]);
+  nodes=nodes.filter(n=>!kill.has(n.id)); edges=edges.filter(e=>!kill.has(e.from)&&!kill.has(e.to));
+  if(kill.has(selectedId)) deselect(); }
+
+// full re-render from nodes/edges (source of truth)
+function redraw(){
+  world.querySelectorAll('.node,.group-label').forEach(n=>n.remove());
+  renderNodes(); renderEdges();
+  updateStats(); populateVoTimes();
+  if(selectedId){ const s=byId(selectedId); if(s&&s.el){ s.el.classList.add('sel'); if(s.refKey!==undefined) traceRef(s.refKey); } }
+}
+function updateStats(){
+  const wired=edges.filter(e=>['ref','product','character','environment'].includes(e.cls));
+  $('#nSlots').textContent=wired.length;
+  $('#nNodes').textContent=new Set(wired.map(e=>e.from)).size;
+}
+function addLabel(txt,x,y){ const d=document.createElement('div'); d.className='group-label'; d.textContent=txt;
+  d.style.left=x+'px'; d.style.top=y+'px'; world.appendChild(d); }
+
+function sceneCountFor(id){ return edges.filter(e=>e.from===id && ['ref','product','character','environment'].includes(e.cls)).length; }
+
+// COMPACT node — no inline detail; select opens the bottom drawer
+function renderNodes(){
+  nodes.forEach(n=>{
+    const el=document.createElement('div');
+    el.className='node role-'+n.role+' tier-'+tierOf(n)+(n.reframe?' reframe':'')+(n.status==='running'?' running':'')+(n.status==='done'?' done':'')+(n.status==='dirty'?' dirty':'')+(n.id===selectedId?' sel':'');
+    el.style.setProperty('--c',nodeColor(n)); el.style.borderColor=nodeColor(n)+'99'; // tier-tinted border
+    el.id='n-'+n.id; el.style.setProperty('--w',(n.w||200)+'px');
+    el.style.left=n.x+'px'; el.style.top=n.y+'px';
+    const sub = n.refKey!==undefined ? (sceneCountFor(n.id)+' → images') : n.sub;
+    const runnable = KIND[n.kind] && !KIND[n.kind].source; // source artifacts (analysis) aren't re-run here
+    let html='';
+    // media preview: image gen = image · clip gen = video (or still) · (VO audio goes in the body)
+    if(n.kind==='clip'){ const v=resolveMedia(n.data&&n.data.video), im=resolveMedia(n.data&&n.data.image);
+      if(v) html+=`<video class="thumb" src="${v}" muted loop playsinline preload="metadata" onmouseover="this.play()" onmouseout="this.pause()"></video>`;
+      else if(im) html+=`<img class="thumb" src="${im}" style="opacity:.4" title="run clip to animate"/>`;
+    } else if(n.kind==='movie'){ const v=resolveMedia(n.data&&n.data.output);
+      if(v) html+=`<video class="thumb" src="${v}" controls playsinline preload="metadata"></video>`;
+    } else if(n.thumb){ const ar=n.kind==='image'?` style="aspect-ratio:${aspectCSS(n.data&&n.data.aspect)}"`:'';
+      html+=`<img class="thumb"${ar} src="${n.thumb}" loading="lazy" onerror="this.style.opacity=.18"/>`; }
+    else if(n.role==='animref'){ const v=resolveMedia(n.data&&n.data.clip);
+      if(v) html+=`<video class="thumb" style="aspect-ratio:9/16" src="${v}" muted loop playsinline preload="metadata" onmouseover="this.play()" onmouseout="this.pause()"></video>`; }
+    else if(n.kind==='image'){ // no image yet — show a format placeholder so aspect changes are visible
+      html+=`<div class="thumb ph" style="aspect-ratio:${aspectCSS(n.data&&n.data.aspect)};display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-family:var(--font-mono);font-size:9px">${esc(n.data&&n.data.aspect||'9:16')}</div>`; }
+    const nc=nodeColor(n);
+    html+=`<div class="hd" style="color:${nc}"><span class="dot" style="background:${nc}"></span>${esc(n.hd)}<span class="acts">`
+        + (runnable?`<span class="nbtn run" title="re-run this node"></span>`:'')+`</span></div><div class="bd">`;
+    if(n.refKey!==undefined) html+=`<span class="rolechip" style="background:${COLOR[n.refRole]||COLOR.ref}22;color:${COLOR[n.refRole]||COLOR.ref}">${esc(n.refRole||'ref')}</span>`;
+    if(n.t) html+=`<div class="t">${esc(n.t)}</div>`;
+    if(sub) html+=`<div class="sub">${esc(sub)}</div>`;
+    if(n.kind==='script'&&n.data?.title) html+=`<div class="t">${esc(n.data.title)}</div>`;
+    if(n.kind==='vo'){ const a=resolveMedia(n.data&&n.data.audio);
+      html+= a?`<div class="voplayer" data-src="${a}"><button class="voplay" title="play VO">▶</button><span class="votime"></span></div>`:`<div class="sub">no VO audio yet</div>`; }
+    if(n.kind==='clip') html+=`<span class="pill clip-mode">${esc(clipModeLabel(n))}</span>`; // always show camera mode
+    if(n.kind==='image' && n.data && n.data.frameRole==='end') html+=`<span class="pill" style="color:var(--teal);border-color:var(--teal)66">⏹ end frame</span>`; // flag non-default keyframe role
+    const inWired=edges.some(e=>e.to===n.id), outWired=edges.some(e=>e.from===n.id);
+    html+=`</div>${hasInput(n)?`<span class="port in${inWired?' wired':''}" title="${inWired?'connected':'in'}"></span>`:''}<span class="port out${outWired?' wired':''}" title="${outWired?'connected · drag to add more':'drag to connect'}"></span><span class="del" title="delete node">×</span>`;
+    { const tl=typeLabel(n); if(tl) html+=`<span class="typetag" style="color:${nc};border-color:${nc}66" title="node type">${esc(tl)}</span>`; } // TYPE — upper-left corner, outside
+    el.innerHTML=html;
+    el.addEventListener('pointerdown',e=>startDrag(e,n,el));
+    el.querySelector('.port.out').addEventListener('pointerdown',e=>startWire(e,n));
+    el.querySelector('.del').addEventListener('pointerdown',e=>{e.stopPropagation();deleteNode(n.id);});
+    const runB=el.querySelector('.nbtn.run'); runB&&runB.addEventListener('pointerdown',e=>{e.stopPropagation();runNode(n);});
+    if(n.role==='animref'){ // drop a video file (or double-click for URL) → motion reference
+      el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('drop-on');});
+      el.addEventListener('dragleave',()=>el.classList.remove('drop-on'));
+      el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('drop-on');
+        const f=[...(e.dataTransfer&&e.dataTransfer.files||[])].find(x=>x.type.startsWith('video/'));
+        if(f){ n.data=n.data||{}; n.data.clip=URL.createObjectURL(f); n.t=f.name; recomputeDirty(); redraw(); toast('animation ref set'); }
+        else { const uri=(e.dataTransfer&&(e.dataTransfer.getData('text/uri-list')||e.dataTransfer.getData('text/plain')))||''; if(/^https?:/.test(uri)){ n.data.clip=uri.trim(); n.t='(clip set)'; recomputeDirty(); redraw(); } } });
+      el.addEventListener('dblclick',e=>{ e.stopPropagation(); const u=window.prompt('animation reference clip URL:', (n.data&&n.data.clip)||''); if(u!=null){ n.data=n.data||{}; n.data.clip=u; n.t=u?'(clip set)':'drop a video · or ✎ URL'; recomputeDirty(); redraw(); } }); }
+    world.appendChild(el); n.el=el;
+  });
+}
+
+/* ---- reference asset library (side panel) ---- */
+function addRefAsset(role,thumb,name){ if(!thumb) return; refLib[role].push({id:'lib-'+(libUid++),thumb,role,name:name||role});
+  renderLibPanel(); if(selectedId) renderDrawer(); toast('added to '+role+' library — pickable in every image gen'); }
+function deleteRefAsset(role,id){ refLib[role]=(refLib[role]||[]).filter(a=>a.id!==id);
+  nodes.forEach(n=>{ if(n.data&&n.data.refs&&n.data.refs[role]) n.data.refs[role]=n.data.refs[role].filter(x=>x!==id); }); // un-apply everywhere
+  renderLibPanel(); if(selectedId) renderDrawer(); redraw(); toast('reference removed'); }
+function renderLibPanel(){ const p=$('#libpanel'); if(!p) return;
+  p.innerHTML=['product','character','environment'].map(role=>{
+    const items=refLib[role]||[];
+    return `<div class="libzone" data-drop="${role}"><h4><span class="d" style="background:${COLOR[role]}"></span>${role}<span class="add" data-libadd="${role}" title="add by URL">＋</span></h4>`
+      +(items.length?`<div class="libgrid">`+items.map(a=>{ const u=esc(resolveMedia(a.thumb)||a.thumb);
+        return `<div class="libitem"><img src="${u}" data-preview="${u}" onerror="this.style.opacity=.2"/><span class="libdel" data-libdel="${role}:${a.id}" title="delete">×</span><div class="nm">${esc(a.name)}</div></div>`;
+      }).join('')+`</div>`:`<div class="empty">dr​op image here · or ＋ URL</div>`)+`</div>`;
+  }).join('');
+  p.querySelectorAll('[data-libadd]').forEach(b=>b.addEventListener('click',(e)=>{ e.stopPropagation(); const role=b.dataset.libadd;
+    const url=window.prompt(role+' reference — image URL:'); if(url) addRefAsset(role,url,role+' '+(refLib[role].length+1)); }));
+  p.querySelectorAll('[data-libdel]').forEach(b=>b.addEventListener('click',(e)=>{ e.stopPropagation(); const [role,id]=b.dataset.libdel.split(':'); deleteRefAsset(role,id); }));
+  // drag & drop image FILES (or dragged image URLs) onto a role zone
+  p.querySelectorAll('[data-drop]').forEach(z=>{
+    z.addEventListener('dragover',e=>{ e.preventDefault(); z.classList.add('drag'); });
+    z.addEventListener('dragleave',()=>z.classList.remove('drag'));
+    z.addEventListener('drop',e=>{ e.preventDefault(); z.classList.remove('drag'); const role=z.dataset.drop;
+      const files=[...(e.dataTransfer&&e.dataTransfer.files||[])].filter(f=>f.type.startsWith('image/'));
+      files.forEach(f=>addRefAsset(role, URL.createObjectURL(f), f.name));
+      if(!files.length){ const uri=(e.dataTransfer&&(e.dataTransfer.getData('text/uri-list')||e.dataTransfer.getData('text/plain')))||''; if(/^https?:/.test(uri)) addRefAsset(role,uri.trim(),role); }
+    });
+  });
+}
+$('#libToggle').addEventListener('click',()=>{ const p=$('#libpanel'),b=$('#libToggle'); const open=p.classList.toggle('open'); b.classList.toggle('on',open); if(open) renderLibPanel(); });
+// hover any reference thumbnail → floating enlarged preview
+document.addEventListener('mouseover',e=>{ const t=e.target&&e.target.closest&&e.target.closest('[data-preview]'); if(!t)return;
+  const pv=$('#refpreview'); pv.querySelector('img').src=t.getAttribute('data-preview'); pv.classList.add('show'); });
+document.addEventListener('mouseout',e=>{ const t=e.target&&e.target.closest&&e.target.closest('[data-preview]'); if(t) $('#refpreview').classList.remove('show'); });
+document.addEventListener('mousemove',e=>{ const pv=$('#refpreview'); if(!pv||!pv.classList.contains('show'))return;
+  pv.style.left=Math.min(e.clientX+18,innerWidth-280)+'px'; pv.style.top=Math.min(e.clientY+18,innerHeight-280)+'px'; });
+// custom VO player — one shared audio; play/pause per node with a clean dark button
+let voAudio=null, voBtn=null; const voDur={};
+function fmtT(s){ if(!isFinite(s)||s<0)s=0; s=Math.floor(s); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+// show 0:00 / length for every VO player from the start (metadata cached per src)
+function populateVoTimes(){ document.querySelectorAll('.voplayer').forEach(w=>{ const src=w.dataset.src, t=w.querySelector('.votime');
+  if(!t||(voBtn&&voBtn.parentElement===w))return; // don't clobber the one currently playing
+  if(voDur[src]!=null){ t.textContent='0:00 / '+voDur[src]; return; }
+  const a=new Audio(); a.preload='metadata'; a.src=src;
+  a.addEventListener('loadedmetadata',()=>{ voDur[src]=fmtT(a.duration); const tt=w.querySelector('.votime'); if(tt&&!(voBtn&&voBtn.parentElement===w)) tt.textContent='0:00 / '+voDur[src]; });
+}); }
+document.addEventListener('click',e=>{ const btn=e.target&&e.target.closest&&e.target.closest('.voplay'); if(!btn)return; e.stopPropagation();
+  const wrap=btn.parentElement, src=wrap.dataset.src, time=wrap.querySelector('.votime');
+  if(voAudio && voBtn===btn && !voAudio.paused){ voAudio.pause(); btn.textContent='▶'; return; }
+  if(voAudio){ voAudio.pause(); if(voBtn)voBtn.textContent='▶'; }
+  voAudio=new Audio(src); voBtn=btn; btn.textContent='⏸';
+  voAudio.addEventListener('loadedmetadata',()=>{ if(time)time.textContent='0:00 / '+fmtT(voAudio.duration); });
+  voAudio.addEventListener('timeupdate',()=>{ if(time)time.textContent=fmtT(voAudio.currentTime)+' / '+fmtT(voAudio.duration); });
+  voAudio.addEventListener('ended',()=>{ btn.textContent='▶'; if(time)time.textContent='0:00 / '+fmtT(voAudio.duration); });
+  voAudio.play().catch(()=>{ btn.textContent='▶'; if(time)time.textContent='play error'; });
+});
+
+/* ---- selection + bottom inspector drawer ---- */
+let selectedId=null, drawerLocked=false;
+function selectNode(id){ selectedId=id; nodes.forEach(x=>x.el&&x.el.classList.toggle('sel',x.id===id));
+  traceNode(id); renderDrawer(); }
+// highlight every edge/node connected to `id`, dim the rest — so connections are obvious
+function traceNode(id){ clearTrace(); const touch=edges.filter(e=>e.from===id||e.to===id);
+  const near=new Set([id]); touch.forEach(e=>{ near.add(e.from); near.add(e.to); if(e.path)e.path.classList.add('hot'); });
+  edges.forEach(e=>{ if(e.path && e.from!==id && e.to!==id) e.path.classList.add('dim'); });
+  nodes.forEach(nn=>{ if(nn.el) nn.el.classList.toggle('dim', !near.has(nn.id)); }); }
+// pan/zoom the canvas to center a node, and select it (used by drawer input chips)
+function frameNode(id){ const n=byId(id); if(!n) return; const r=canvas.getBoundingClientRect();
+  const cx=n.x+(n.w||200)/2, cy=n.y+((n.el?n.el.offsetHeight:100)/2);
+  const drawerH=$('#drawer').classList.contains('open')?r.height*0.46:0;
+  tx=r.width/2 - cx*scale; ty=(r.height-drawerH)/2 - cy*scale;
+  world.style.transition='transform .28s ease'; applyView(); setTimeout(()=>world.style.transition='',300);
+  selectNode(id); }
+function deselect(){ selectedId=null; nodes.forEach(x=>x.el&&x.el.classList.remove('sel')); clearTrace();
+  const d=$('#drawer'); d.classList.remove('open'); d.style.height=''; d.innerHTML=''; }
+function renderDrawer(){ const d=$('#drawer'); const n=byId(selectedId); if(!n){ deselect(); return; }
+  d.innerHTML=drawerHTML(n); d.classList.add('open');
+  const onEdit=f=>{ n.data=n.data||{}; n.data[f.dataset.field]=f.value; recomputeDirty(); syncNodeSummary(n);
+    if(f.dataset.field==='aspect'&&n.el){ const th=n.el.querySelector('.thumb'); if(th){ th.style.aspectRatio=aspectCSS(f.value); if(th.classList.contains('ph')) th.textContent=f.value; } } // preview follows chosen format
+    if(f.dataset.field==='frameRole') redraw(); }; // start/end pill + clip slot routing follow the role
+  d.querySelectorAll('input[data-field], textarea[data-field]').forEach(f=>f.addEventListener('input',()=>onEdit(f)));
+  d.querySelectorAll('select[data-field]').forEach(f=>f.addEventListener('change',()=>onEdit(f)));
+  // persona/hook option picker → set the node's value; downstream goes stale (revert clears it)
+  const nv=d.querySelector('[data-nodeval]'); nv&&nv.addEventListener('change',()=>{ n.t=nv.value; recomputeDirty(); redraw(); renderDrawer(); });
+  // index dropdown → user rebinds which overall output this scene chain receives
+  const si=d.querySelector('[data-scene]'); si&&si.addEventListener('change',()=>{ const v=parseInt(si.value,10); if(v>0){ n.scene=v; if(/^scene \d+$/.test(n.hd||'')) n.hd='scene '+v; redraw(); renderDrawer(); } });
+  // node name — always editable
+  const nm=d.querySelector('[data-name]'); nm&&nm.addEventListener('change',()=>{ n.hd=nm.value; redraw(); });
+  // reference role (product | character | environment) → what slot it fills on the image node
+  const rr=d.querySelector('[data-refrole]'); rr&&rr.addEventListener('change',()=>{ n.refRole=rr.value; redraw(); renderDrawer(); });
+  // image gen references picker → toggle library assets on/off (property, not wire)
+  d.querySelectorAll('[data-refpick]').forEach(c=>c.addEventListener('click',()=>{ const [role,id]=c.dataset.refpick.split(':');
+    n.data=n.data||{}; n.data.refs=n.data.refs||{product:[],character:[],environment:[]}; const arr=n.data.refs[role]||(n.data.refs[role]=[]);
+    const i=arr.indexOf(id); if(i>=0)arr.splice(i,1); else arr.push(id); recomputeDirty(); renderDrawer(); }));
+  // overall node: pick an angle/script strategy → fills angle/hook/cta (downstream goes stale)
+  d.querySelectorAll('[data-ovar]').forEach(c=>c.addEventListener('click',()=>{
+    const i=+c.dataset.ovar, a=angleDrafts()[i]; n.data=n.data||{};
+    n.data.strategy=i; n.data.angle=a.angle; n.data.hookLine=a.hook; if(a.cta)n.data.cta=a.cta;
+    recomputeDirty(); syncNodeSummary(n); renderDrawer(); }));
+  d.querySelectorAll('.chip[data-src]').forEach(c=>c.addEventListener('click',()=>frameNode(c.dataset.src)));
+  const hb=d.querySelector('#dhandle'); hb&&hb.addEventListener('pointerdown',startDrawerResize);
+  const rb=d.querySelector('#drawerRun'); rb&&rb.addEventListener('click',()=>runNode(n));
+  const lk=d.querySelector('#drawerLock'); lk&&lk.addEventListener('click',()=>{ drawerLocked=!drawerLocked; renderDrawer(); });
+  const cb=d.querySelector('#drawerClose'); cb&&cb.addEventListener('click',()=>{ drawerLocked=false; deselect(); });
+}
+function startDrawerResize(e){ e.preventDefault(); e.stopPropagation(); const d=$('#drawer'); const hb=e.currentTarget;
+  try{hb.setPointerCapture(e.pointerId);}catch(_){}
+  const sy=e.clientY, sh=d.getBoundingClientRect().height;
+  const mv=ev=>{ let h=sh+(sy-ev.clientY); h=Math.max(140,Math.min(window.innerHeight-70,h)); d.style.height=h+'px'; };
+  const up=()=>{ hb.removeEventListener('pointermove',mv); hb.removeEventListener('pointerup',up); };
+  hb.addEventListener('pointermove',mv); hb.addEventListener('pointerup',up); }
+function syncNodeSummary(n){ if(!n.el)return;
+  const t=n.el.querySelector('.bd .t'); if(t&&n.kind==='script'&&n.data?.title) t.textContent=n.data.title;
+  const v=n.el.querySelector('.bd .vo'); if(v&&n.kind==='vo'&&n.data?.vo) v.textContent='“'+n.data.vo.slice(0,44)+'”';
+  const cm=n.el.querySelector('.clip-mode'); if(cm&&n.kind==='clip') cm.textContent=clipModeLabel(n); } // camera mode follows edits
+
+// render a config field as fixed text / select (choices or camera-move lib) / input
+function fieldControl(c,d){
+  if(c.fixed) return `<span class="fixed">${esc(c.fixed)}</span>`;
+  let choices=c.choices;
+  if(c.cameraLib) choices=[''].concat(['auto']).concat(LIB.moves.map(m=>m.key));
+  if(choices&&choices.length){ const cur=d[c.f]||'';
+    const nameOf=v=>{ if(c.cameraLib){ if(v==='')return 'default (slow push-in)'; if(v==='auto')return '✨ auto'; const m=LIB.moves.find(x=>x.key===v); return m?m.name:v; } return v; };
+    return `<select data-field="${esc(c.f)}">`+choices.map(v=>`<option value="${esc(v)}" ${cur===v?'selected':''}>${esc(nameOf(v))}</option>`).join('')+`</select>`;
+  }
+  return `<input data-field="${esc(c.f)}" value="${esc(d[c.f]||'')}" placeholder="${esc(c.ph||'')}"/>`;
+}
+// image gen references PROPERTY — pick assets from the library, grouped by role (no wires)
+function refsPickerHTML(n){ const sel=(n.data&&n.data.refs)||{product:[],character:[],environment:[]};
+  return ['product','character','environment'].map(role=>{
+    const items=refLib[role]||[], on=sel[role]||[];
+    const chips=items.length? items.map(a=>{ const u=esc(resolveMedia(a.thumb)||a.thumb);
+      return `<span class="refchip${on.includes(a.id)?' on':''}" data-refpick="${role}:${a.id}" style="${on.includes(a.id)?`border-color:${COLOR[role]};color:${COLOR[role]}`:''}"><img src="${u}" data-preview="${u}"/>${esc(a.name)}</span>`; }).join('')
+      : `<span class="none">— none —</span>`;
+    return `<div class="refroleblk"><div class="slot-h"><span style="color:${COLOR[role]}">${role}</span><em>${on.length} applied</em></div><div class="refchips">${chips}</div></div>`;
+  }).join('');
+}
+// render a node's typed input slots (each slot = one type; imageRef slots also filter by role)
+function inputSlotsHTML(n,incoming){ const k=KIND[n.kind];
+  if(!k||!k.inputs||!k.inputs.length) return `<div class="wired"><span class="none">— no inputs —</span></div>`;
+  return k.inputs.map(slot=>{
+    const list = slot.role
+      ? incoming.filter(s=>outTypeOf(s)==='imageRef' && (s.refRole||'product')===slot.role)
+      : slot.frame // image keyframe slot — the image node declares start/end (like refRole)
+      ? incoming.filter(s=>outTypeOf(s)==='image' && ((s.data&&s.data.frameRole)||'start')===slot.frame)
+      : incoming.filter(s=>outTypeOf(s)===slot.type);
+    return `<div class="slot"><div class="slot-h"><span>${esc(slot.label||slot.key)}</span><em>${esc(slot.type)}${slot.multi?'[]':''}</em></div>`
+      +`<div class="wired">`+(list.length? list.map(s=>`<span class="chip" data-src="${esc(s.id)}">◦ ${esc(s.hd)}</span>`).join('') : `<span class="none">— none —</span>`)+`</div></div>`;
+  }).join('');
+}
+// Analysis · Reel — reel structure/hook (left) | matched product (right), center divider
+function analysisDrawerHTML(n){ const d=n.data||{}, r=d.reel||{}, p=d.product||{}, hk=d.hook||{}, st=d.struct||{}, mm=d.match||{};
+  const kv=(l,v)=> (v||v===0)?`<div class="kv"><span class="l">${esc(l)}</span><span class="v">${esc(String(v))}</span></div>`:'';
+  const txt=v=>v?`<div class="kvtext">${esc(String(v))}</div>`:'';
+  const link=(l,u)=>u?`<div class="kv"><span class="l"></span><span class="v"><a href="${esc(u)}" target="_blank">${esc(l)} ↗</a></span></div>`:'';
+  const beats=(st.beats||[]).map((b,i)=>`<div class="kv"><span class="l">beat ${i+1}</span><span class="v">${esc(b)}</span></div>`).join('');
+  return `<div class="db analysisview">
+    <div class="col">
+      <div class="sh" style="color:var(--overall,#9bb8e8)">reference reel</div>
+      <div class="arow">${r.thumb?`<img class="athumb" src="${esc(r.thumb)}" referrerpolicy="no-referrer" data-preview="${esc(r.thumb)}" onerror="this.style.display='none'"/>`:''}
+        <div class="ameta">${kv('@',r.user)}${kv('category',r.category)}${kv('comments',r.comments)}${kv('plays',r.play)}${link('open reel',r.url)}</div></div>
+      <div class="sh top" style="color:#c9b3ea">hook${hk.family?` · ${esc(hk.family)}`:''}</div>
+      ${kv('opening',hk.openingLine)}${txt(hk.why)}
+      <div class="sh top" style="color:#c9b3ea">structure${st.format?` · ${esc(st.format)}`:''}</div>
+      ${beats}${kv('pacing',st.pacing)}${kv('cta',st.cta)}
+    </div>
+    <div class="col right">
+      <div class="sh" style="color:#378ADD">matched product</div>
+      <div class="arow">${p.image?`<img class="athumb" src="${esc(p.image)}" referrerpolicy="no-referrer" data-preview="${esc(p.image)}" onerror="this.style.display='none'"/>`:''}
+        <div class="ameta">${kv('name',p.title)}${kv('price',p.price)}${kv('rating',p.rating?`${p.rating} ★ (${p.reviews||0})`:'')}${kv('size',p.dimensions)}${kv('asin',p.asin)}${link('amazon',p.url)}</div></div>
+      ${p.features?`<div class="sh top">features</div>${txt(String(p.features).slice(0,300))}`:''}
+      <div class="sh top">vision match</div>${kv('confidence',mm.confidence!=null?mm.confidence:'—')}${txt(mm.reason)}
+      <div class="sh top">output</div><div class="wired"><span class="chip">⤷ reel structure + product<em>analysis → overall</em></span></div>
+    </div></div>`;
+}
+function drawerHTML(n){
+  const color=nodeColor(n);
+  const k=KIND[n.kind]; const d=n.data||{};
+  const incoming=edges.filter(e=>e.to===n.id).map(e=>byId(e.from)).filter(Boolean);
+  let h=`<div class="dhandle" id="dhandle" title="drag to resize"></div><div class="dh"><span class="k" style="background:${color}"></span>
+    <input class="title-edit" data-name value="${esc(n.hd)}" spellcheck="false" title="rename node"/><span class="kind">#${esc(n.id)}</span>`;
+  if(k) h+=`<span class="out">→ ${esc(k.out.n)} (${esc(k.out.t)})${k.out.t==='image'||k.out.t==='video'?' · no text output':''}</span>`;
+  // node action (left, with the node identity) — distinct from window controls
+  h+=((k&&!k.source)?`<button class="run" id="drawerRun" title="run this node">▶ re-run</button>`:'')
+    // window controls (far right) — icon-only; manage the drawer, not the node
+    +`<span class="wctrl"><button class="icn ${drawerLocked?'lock-on':''}" id="drawerLock" title="${drawerLocked?'locked — stays open':'lock — keep open when clicking elsewhere'}">${drawerLocked?'📌':'📍'}</button>`
+    +`<button class="icn" id="drawerClose" title="close">✕</button></span></div>`;
+
+  if(n.kind==='analysis') return h+analysisDrawerHTML(n); // rich reel + product view
+
+  if(!k){ // input / reference node
+    const feeds=edges.filter(e=>e.from===n.id).length;
+    const isP=n.hd==='persona', isH=n.hd==='hook', lib=isP?LIB.personas:isH?LIB.hooks:null;
+    let left;
+    if(lib){ const cur=n.t||'', opt=lib.find(o=>o.key===cur);
+      left=`<div class="sh">choose ${esc(n.hd)} · ${lib.length} options</div>
+        <select data-nodeval class="bigsel"><option value="">— default —</option>`
+        +lib.map(o=>`<option value="${esc(o.key)}" ${cur===o.key?'selected':''}>${esc(o.name)}</option>`).join('')+`</select>`
+        +(opt?`<div class="fed" style="margin-top:9px">${esc(opt.register||opt.when_to_use||'')}</div>`
+          +(opt.arc?`<div class="ctxrow" style="margin-top:6px">arc · ${esc(opt.arc)}</div>`:'')
+          +(opt.example_lines&&opt.example_lines[0]?`<div class="wired" style="margin-top:8px">“${esc(opt.example_lines[0])}”</div>`:'')
+          :`<div class="fed manual" style="margin-top:9px">— default (choose one) —</div>`);
+    } else if(n.refKey!==undefined){ const cur=n.refRole||'product';
+      left=`<div class="sh">role — fills which slot on the image node</div>`
+        +`<select data-refrole class="bigsel">`+['product','character','environment'].map(r=>`<option value="${r}" ${cur===r?'selected':''}>${r.toUpperCase()}</option>`).join('')+`</select>`
+        +(n.thumb?`<div style="margin-top:10px"><img src="${n.thumb}" style="max-height:130px;border-radius:8px"/></div>`:'');
+    } else left=`<div class="sh">value</div><div class="wired">${n.thumb?`<img src="${n.thumb}" style="max-height:120px;border-radius:8px"/>`:esc(n.t||n.hd)}</div>`;
+    return h+`<div class="db"><div class="col">${left}
+      <div class="accept" style="margin-top:12px">out type: <b style="color:${color}">${esc(outTypeOf(n))}</b> · feeds ${feeds} node(s)</div>
+    </div><div class="col right"><div class="sh">context</div>
+      <div class="ctxrow">persona <b>${esc(ctx.persona)}</b> · hook <b>${esc(ctx.hook)}</b></div>
+      <div class="ctxrow">angle ${esc(ctx.angle||'')}</div></div></div>`;
+  }
+
+  // index shows ONLY where a node directly consumes an ARRAY output (must pick the element).
+  // single-value consumers (prompt←script, image←prompt, …) carry no index.
+  const idxProp = fromArray(n)
+    ? `<div class="prop"><label>index</label><select data-scene style="color:#c9b3ea;max-width:110px">`
+      + (n.scene==null?`<option value="" selected>— pick —</option>`:'')
+      + Array.from({length:100},(_,i)=>i+1).map(v=>`<option value="${v}" ${v===n.scene?'selected':''}>${v}</option>`).join('')
+      + `</select></div>` : '';
+  const ed=k.editor;
+  const fedBy=incoming.filter(s=>outTypeOf(s)==='text');
+  const editor = ed?`<div class="sh">${esc(ed.label)}</div>
+    <div class="fed ${fedBy.length?'':'manual'}">${fedBy.length?'◦ from '+fedBy.map(s=>esc(s.hd)).join(', '):'✎ manual'}</div>
+    <textarea class="big" data-field="${ed.field}">${esc(d[ed.field]||'')}</textarea>`:'';
+  const wiredChips = incoming.length? incoming.map(s=>`<span class="chip" data-src="${esc(s.id)}" title="go to this node">◦ ${esc(s.hd)}<em>${esc(outTypeOf(s))}</em></span>`).join('')
+    : `<span class="none">— none —</span>`;
+  // typed input slots — each slot shows its type + what's wired; mismatched types can't connect
+  const inputsSection=`<div class="sh top">inputs</div>`+inputSlotsHTML(n,incoming);
+  const cfg = (k.config||[]).map(c=>`<div class="prop"><label>${esc(c.f)}</label>${fieldControl(c,d)}</div>`).join('')
+    || `<div class="prop"><span class="fixed">— none —</span></div>`;
+
+  return h+`<div class="db">
+    <div class="col">
+      ${n.kind==='overall'?overallVariantsHTML(n):''}
+      ${editor}
+      ${inputsSection}
+      ${n.kind==='clip'?`<div class="fed" style="margin-top:8px;font-size:10px;line-height:1.5">start→end (2 keyframes) · kling3_0 · seedance · hailuo · wan2_7. <b>kling3_0_turbo = start only.</b> set an image node's role to <b>end</b> to feed the 2nd keyframe. mid-frames: not yet.</div>`:''}
+      ${n.kind==='image'?`<div class="sh top">references (from ▤ library)</div>`+refsPickerHTML(n):''}
+    </div>
+    <div class="col right">
+      <div class="sh">properties</div>${idxProp}${cfg}
+      <div class="sh top">output</div>
+      <div class="wired"><span class="chip">${k.out.t==='image'||k.out.t==='video'?'🎞':'⤷'} ${esc(k.out.n)}<em>${esc(k.out.t)}</em></span></div>
+      <div class="sh top">context</div>
+      <div class="ctxrow">persona <b>${esc(ctx.persona)}</b> · hook <b>${esc(ctx.hook)}</b></div>
+      <div class="ctxrow">${esc(ctx.product)}</div>
+    </div></div>`;
+}
+
+function nodeAnchor(n,side){ const w=n.w||200, h=n.el?n.el.offsetHeight:80;
+  return {x:n.x+(side==='out'?w:0), y:n.y+h/2}; }
+function edgePath(p1,p2){ const dx=Math.max(40,(p2.x-p1.x)*0.5);
+  return `M${p1.x},${p1.y} C${p1.x+dx},${p1.y} ${p2.x-dx},${p2.y} ${p2.x},${p2.y}`; }
+
+function renderEdges(){
+  edgesSvg.innerHTML='';
+  edges.forEach(e=>{ const a=byId(e.from),b=byId(e.to); if(!a||!b)return;
+    const d=edgePath(nodeAnchor(a,'out'),nodeAnchor(b,'in'));
+    const editable = ['ref','product','character','environment'].includes(e.cls); // reference wires are cuttable
+    if(editable){ const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
+      hit.setAttribute('d',d); hit.setAttribute('class','edge-hit');
+      hit.addEventListener('click',()=>cutEdge(e)); edgesSvg.appendChild(hit); }
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',d); path.setAttribute('class','edge'+(e.cls==='global'?' ctx':''));
+    path.setAttribute('stroke',COLOR[e.cls]||'#888');
+    edgesSvg.appendChild(path); e.path=path;
+    // overall → scene script : label the connection with the receiving scene index
+    if(e.from==='overall' && e.to.indexOf('script-')===0 && b.scene!=null){ const p2=nodeAnchor(b,'in');
+      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',p2.x-34); t.setAttribute('y',p2.y-5); t.setAttribute('fill','#c9b3ea');
+      t.setAttribute('font-family',"'JetBrains Mono',monospace"); t.setAttribute('font-size','11'); t.setAttribute('font-weight','600');
+      t.textContent=b.scene; edgesSvg.appendChild(t); } });
+}
+
+function traceRef(key){
+  edges.forEach(e=>{ if(!e.path)return; e.path.classList.toggle('hot',e.key===key); e.path.classList.toggle('dim',e.key!==key); });
+  const hot=new Set(edges.filter(e=>e.key===key).map(e=>e.to));
+  nodes.forEach(n=>{ if(n.role==='scene'&&n.el) n.el.classList.toggle('dim',!hot.has(n.id)); });
+}
+function clearTrace(){ edges.forEach(e=>e.path&&e.path.classList.remove('hot','dim'));
+  nodes.forEach(n=>n.el&&n.el.classList.remove('dim')); }
+let pinnedRef=null;
+function toggleTrace(key){ if(pinnedRef===key){ pinnedRef=null; clearTrace(); } else { pinnedRef=key; clearTrace(); traceRef(key); } }
+
+/* ---- edit: wire / cut / add / delete ---- */
+function startWire(e,from){ e.stopPropagation();
+  const tmp=document.createElementNS('http://www.w3.org/2000/svg','path'); tmp.setAttribute('class','tmp-edge');
+  edgesSvg.appendChild(tmp);
+  const p1=nodeAnchor(from,'out'); let target=null;
+  const toWorld=ev=>{ const r=canvas.getBoundingClientRect();
+    return {x:(ev.clientX-r.left-tx)/scale, y:(ev.clientY-r.top-ty)/scale}; };
+  let targetNode=null, lastNd=null;
+  const move=ev=>{ tmp.setAttribute('d',edgePath(p1,toWorld(ev)));
+    const el=document.elementFromPoint(ev.clientX,ev.clientY); const nd=el&&el.closest('.node');
+    if(lastNd&&lastNd!==nd) lastNd.classList.remove('wire-target','wire-bad');
+    lastNd=nd; targetNode=nd?byId(nd.id.slice(2)):null; target=null;
+    if(nd&&targetNode&&targetNode.id!==from.id){
+      if(canConnect(from,targetNode)){ nd.classList.add('wire-target'); target=nd; }
+      else nd.classList.add('wire-bad'); } };
+  const up=ev=>{ document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up);
+    tmp.remove(); if(lastNd) lastNd.classList.remove('wire-target','wire-bad');
+    if(target&&targetNode) addEdge(from,targetNode);
+    else if(targetNode&&targetNode.id!==from.id){ const acc=acceptsOf(targetNode);
+      toast('✗ type mismatch: '+outTypeOf(from)+' ⇏ '+targetNode.hd+' accepts ['+(acc?acc.join(', '):'—')+']'); } };
+  document.addEventListener('pointermove',move); document.addEventListener('pointerup',up);
+}
+function addEdge(from,to){ // `to` is a node object (typed connection)
+  if(!canConnect(from,to)){ toast('✗ cannot connect'); return; }
+  if(edges.some(e=>e.from===from.id&&e.to===to.id)){ toast('already connected'); return; }
+  const ot=outTypeOf(from);
+  edges.push({from:from.id,to:to.id,cls:edgeClassFor(ot,from),key:from.refKey}); redraw();
+  toast('✓ connected '+from.hd+' → '+to.hd+' ('+ot+')');
+}
+function cutEdge(e){ edges=edges.filter(x=>x!==e); redraw(); toast('wire cut'); }
+function deleteNode(id){ const n=byId(id); if(!n)return;
+  nodes=nodes.filter(x=>x.id!==id); edges=edges.filter(e=>e.from!==id&&e.to!==id); redraw();
+  toast('deleted '+(n.hd||id)); }
+function addRefNode(){ const url=prompt('image URL for the reference node:'); if(!url)return;
+  const id='ref-u'+(uidN++); nodes.push({id,role:'ref',hd:'reference',thumb:url,reframe:true,
+    x:COL.ref+190,y:120+Math.random()*260,w:170,refKey:id,userAdded:true}); redraw();
+  toast('reference added — drag its ● out-port onto a scene'); }
+function addSceneNode(){ const id='scene-u'+(uidN++); const n=(nodes.filter(x=>x.role==='scene').length)+1;
+  nodes.push({id,role:'scene',hd:'scene '+n+' · new',t:'new scene text',vo:'',pill:'🖼 still',
+    x:COL.scene,y:120+Math.random()*300,w:220,sceneId:id,userAdded:true});
+  edges.push({from:id,to:'out',cls:'out'}); redraw(); toast('scene added'); }
+
+/* ---- run a node / run-all macro (simulated; REAL hooks noted) ---- */
+function runNode(n){ if(!KIND[n.kind]) return; n.status='running'; redraw(); toast('running '+n.hd);
+  // REAL: POST /api/contents/'+currentData.id+'/... (script{shotCount} | image | clip | vo | preview/export)
+  setTimeout(()=>{ n.status='done'; n.ran=true; n.baseline=sig(n); // running commits the current value as the new baseline
+    // overall = the scene-split step: shotCount decides how many scene scripts are (re)generated
+    if(n.kind==='overall'){ const sc=parseInt(n.data&&n.data.shotCount,10);
+      if(sc>=1&&sc<=9 && sc!==sceneCount()){ reconcileScenes(sc); toast('scene split → '+sc+' scenes'); return; } }
+    recomputeDirty(); redraw(); toast('done · '+n.hd+' → '+KIND[n.kind].out.n); },700);
+}
+function sceneCount(){ return nodes.filter(n=>n.kind==='script').length; }
+// KEYED diff by scene number — keep 1..min, add/remove only the delta.
+// surviving scenes (their edits, overrides, generated media) are preserved.
+function reconcileScenes(N){
+  const cur=sceneCount();
+  if(N>cur){ for(let k=cur+1;k<=N;k++) addSceneChain(k,{}); }
+  else if(N<cur){ for(let k=cur;k>N;k--) removeSceneChain(k); }
+  const mv=byId('movie'); if(mv) mv.y=snap(100+Math.max(0,(N-1))*PITCH/2);
+  recomputeDirty(); redraw();
+}
+// signature of a node's editable state (config/value). null = not tracked.
+function sig(n){ if(!n) return null; if(KIND[n.kind]) return JSON.stringify(n.data||{});
+  if(n.role==='input'&&(n.hd==='persona'||n.hd==='hook')) return n.t||''; return null; }
+// dirty = a node's own config/value OR any upstream one differs from its last committed (run/load) value.
+// → reverting an edit back to the committed value clears the dirty state automatically.
+function recomputeDirty(){
+  const changed=new Set();
+  nodes.forEach(n=>{ const s=sig(n); if(s!==null){ if(n.baseline===undefined) n.baseline=s; else if(s!==n.baseline) changed.add(n.id); } });
+  const dirty=new Set(changed), stack=[...changed];
+  while(stack.length){ const cur=stack.pop(); edges.filter(e=>e.from===cur).forEach(e=>{ if(!dirty.has(e.to)){dirty.add(e.to);stack.push(e.to);} }); }
+  nodes.forEach(n=>{ if(n.status==='running') return; const isD=dirty.has(n.id);
+    n.status = isD?'dirty':(n.ran?'done':'idle');
+    if(n.el){ n.el.classList.toggle('dirty',isD); n.el.classList.toggle('done',n.status==='done'); } });
+}
+function runAll(){ const order={prompt:0,image:1,vo:1,clip:2,movie:3};
+  const seq=nodes.filter(n=>KIND[n.kind]).sort((a,b)=>(order[a.kind]??9)-(order[b.kind]??9));
+  if(!seq.length){ toast('no runnable nodes'); return; }
+  let i=0; toast('▶▶ run all — '+seq.length+' steps in dependency order');
+  (function step(){ if(i>=seq.length){ recomputeDirty(); redraw(); toast('✓ all steps complete'); return; }
+    const n=seq[i++]; n.status='running'; redraw();
+    setTimeout(()=>{ n.status='done'; n.ran=true; n.baseline=sig(n); redraw(); step(); },300); })();
+}
+
+/* ---- right-click: create node / template / function / skill ---- */
+// out-type shown per menu item so you can see what each node produces
+function menuOut(k){ if(k==='persona'||k==='hook') return 'persona/hook'; if(k==='analysis') return 'analysis'; if(k==='animref') return 'video'; if(k==='scene') return 'auto-wired'; return KIND[k]?KIND[k].out.t:'node'; }
+function showCtxMenu(cx,cy){ closeCtxMenu();
+  const items=[
+    ['Sources','h'],['analysis · reel','analysis'],['persona','persona'],['hook','hook'],['animation ref · video','animref'],
+    ['Script','h'],['overall + split','overall'],['scene script','script'],
+    ['Generate','h'],['prompt','prompt'],['image gen','image'],['clip gen','clip'],['VO','vo'],
+    ['Assemble','h'],['movie','movie'],
+    ['Custom','h'],['template','template'],['function','function'],['skill call','skill']];
+  const m=document.createElement('div'); m.className='ctxmenu'; m.id='ctxmenu';
+  m.innerHTML=items.map(([l,k])=> k==='h'?`<div class="mh">${l}</div>`
+    :`<div class="mi" data-kind="${k}"><span class="dotk" style="background:${COLOR[k]||COLOR.input||'#888'}"></span>${l}<span class="sub">${esc(menuOut(k))}</span></div>`).join('');
+  m.style.left=cx+'px'; m.style.top=cy+'px'; document.body.appendChild(m);
+  const r=canvas.getBoundingClientRect(), wx=(cx-r.left-tx)/scale, wy=(cy-r.top-ty)/scale;
+  m.querySelectorAll('.mi').forEach(mi=>mi.addEventListener('click',()=>{ createNode(mi.dataset.kind,wx,wy); closeCtxMenu(); }));
+}
+function closeCtxMenu(){ const m=$('#ctxmenu'); if(m) m.remove(); }
+function createNode(kind,x,y){ const id=kind+'-u'+(uidN++);
+  if(kind==='ref'){ const url=window.prompt('image URL for reference:'); if(!url) return;
+    nodes.push({status:'idle',id,role:'ref',hd:'reference',thumb:url,reframe:true,x,y,w:170,refKey:id,userAdded:true}); }
+  else if(kind==='persona'||kind==='hook'){ nodes.push({status:'idle',id,role:'input',hd:kind,t:'(set value)',
+    sub:kind==='persona'?'VO voice':'story shape',x,y,w:NODE_W,global:true,userAdded:true}); }
+  else if(kind==='animref'){ nodes.push({status:'idle',id,role:'animref',hd:'animation ref',t:'drop a video · or ✎ URL',sub:'motion / acting',x,y,w:NODE_W,userAdded:true,data:{clip:''}}); }
+  else nodes.push({status:'idle',id,role:kind,kind:KIND[kind]?kind:undefined,hd:(KIND[kind]&&KIND[kind].hd)||kind,x,y,w:NODE_W,userAdded:true,data:{}});
+  redraw(); toast(kind+' node created — wire it up');
+}
+canvas.addEventListener('contextmenu',e=>{ e.preventDefault(); showCtxMenu(e.clientX,e.clientY); });
+document.addEventListener('pointerdown',e=>{ if(!e.target.closest('.ctxmenu')) closeCtxMenu(); },true);
+
+/* ---- template save / export / reset ---- */
+function serialize(){ return { contentId: currentData?.id, savedAt:new Date().toISOString(),
+  nodes: nodes.map(({el,path,...n})=>n), edges: edges.map(({path,...e})=>e) }; }
+function tplKey(){ return 'nodestudio:'+(currentData?.id||'embed'); }
+function saveTemplate(){ localStorage.setItem(tplKey(), JSON.stringify(serialize())); toast('template saved to this browser'); }
+function loadTemplate(){ const raw=localStorage.getItem(tplKey()); if(!raw) return false;
+  try{ const s=JSON.parse(raw); nodes=s.nodes; edges=s.edges; redraw(); return true; }catch{ return false; } }
+function exportTemplate(){ const blob=new Blob([JSON.stringify(serialize(),null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='node-template-'+(currentData?.id||'embed')+'.json'; a.click(); toast('template exported as JSON'); }
+function resetGraph(){ localStorage.removeItem(tplKey()); if(currentData) build(currentData); toast('reset to original'); }
+
+let toastT=null;
+function toast(msg){ let t=$('#toast'); if(!t){ t=document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+  t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1600); }
+
+/* ---- drag a node ---- */
+function startDrag(e,n,el){ if(e.button!==0||e.target.closest('.port')||e.target.closest('.del')||e.target.closest('.nbtn')||e.target.closest('.detail')||e.target.closest('.voplay')||e.target.tagName==='VIDEO')return; e.stopPropagation();
+  el.setPointerCapture(e.pointerId); el.classList.add('drag');
+  const sx=e.clientX, sy=e.clientY; let moved=false;
+  // Shift+drag = move this node + all connected DOWNSTREAM nodes together (keeps a chain aligned)
+  let grp=[n];
+  if(e.shiftKey){ const seen=new Set([n.id]), st=[n.id];
+    while(st.length){ const c=st.pop(); edges.filter(ed=>ed.from===c).forEach(ed=>{ if(!seen.has(ed.to)){seen.add(ed.to);st.push(ed.to);} }); }
+    grp=[...seen].map(byId).filter(Boolean); grp.forEach(g=>g.el&&g.el.classList.add('drag')); }
+  const origs=grp.map(g=>({g,ox:g.x,oy:g.y}));
+  const move=ev=>{ if(Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)>3) moved=true;
+    const dx=snap((ev.clientX-sx)/scale), dy=snap((ev.clientY-sy)/scale);
+    origs.forEach(o=>{ o.g.x=o.ox+dx; o.g.y=o.oy+dy; if(o.g.el){o.g.el.style.left=o.g.x+'px';o.g.el.style.top=o.g.y+'px';} });
+    if(!dragRAF) dragRAF=requestAnimationFrame(()=>{renderEdges();dragRAF=null;}); };
+  const up=()=>{ grp.forEach(g=>g.el&&g.el.classList.remove('drag')); el.releasePointerCapture(e.pointerId);
+    el.removeEventListener('pointermove',move); el.removeEventListener('pointerup',up); renderEdges();
+    if(!moved) selectNode(n.id); }; // click (no drag) → select node → open inspector drawer
+  el.addEventListener('pointermove',move); el.addEventListener('pointerup',up);
+}
+
+/* ---- pan + zoom ---- */
+let scale=0.92, tx=20, ty=10;
+function applyView(){ world.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; }
+canvas.addEventListener('pointerdown',e=>{ if(e.button!==0||(e.target!==canvas&&e.target!==world&&e.target!==edgesSvg))return;
+  canvas.classList.add('panning'); const sx=e.clientX,sy=e.clientY,ox=tx,oy=ty; let moved=false;
+  const mv=ev=>{ if(Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)>3)moved=true; tx=ox+ev.clientX-sx; ty=oy+ev.clientY-sy; applyView();};
+  const up=()=>{canvas.classList.remove('panning');removeEventListener('pointermove',mv);removeEventListener('pointerup',up);
+    if(!moved && !drawerLocked) deselect(); }; // click empty canvas → deselect (unless drawer is locked)
+  addEventListener('pointermove',mv); addEventListener('pointerup',up); });
+canvas.addEventListener('wheel',e=>{ e.preventDefault(); const f=e.deltaY<0?1.08:0.926;
+  const r=canvas.getBoundingClientRect(); const mx=e.clientX-r.left, my=e.clientY-r.top;
+  const ns=Math.min(2,Math.max(0.3,scale*f));
+  tx=mx-(mx-tx)*(ns/scale); ty=my-(my-ty)*(ns/scale); scale=ns; applyView(); },{passive:false});
+applyView();
+
+/* ---- debug surface (handy in devtools console) ---- */
+window.NS={get nodes(){return nodes}, get edges(){return edges}, addEdge, deleteNode, cutEdge, build, saveTemplate, runNode, runAll, createNode};
+
+/* ---- toolbar ---- */
+$('#runAll').addEventListener('click',runAll);
+$('#tplSave').addEventListener('click',saveTemplate);
+$('#tplExport').addEventListener('click',exportTemplate);
+$('#tplReset').addEventListener('click',resetGraph);
+
+/* ---- data load + picker ---- */
+async function init(){
+  build(EMBED); // instant render from embed
+  // playbook option libraries — persona / hook / camera-move dropdowns
+  Promise.all([
+    fetch(SERVER+'/api/personas').then(r=>r.json()).then(d=>{LIB.personas=d.personas||[]}).catch(()=>{}),
+    fetch(SERVER+'/api/hooks').then(r=>r.json()).then(d=>{LIB.hooks=d.hooks||[]}).catch(()=>{}),
+    fetch(SERVER+'/api/camera-moves').then(r=>r.json()).then(d=>{LIB.moves=d.moves||[]}).catch(()=>{}),
+  ]).then(()=>{ if(selectedId) renderDrawer(); });
+  const pick=$('#picker');
+  pick.innerHTML=`<option value="embed">#27 keeping it simple (embedded)</option>`;
+  try{
+    const r=await fetch(SERVER+'/api/contents',{signal:AbortSignal.timeout(2500)});
+    if(!r.ok) throw new Error('server '+r.status);
+    const list=(await r.json()).filter(c=>c.scenes);
+    if(list.length){
+      pick.innerHTML=list.map(c=>`<option value="${c.id}">#${c.id} ${esc((c.title||'untitled').slice(0,34))}</option>`).join('');
+      // keep a marker for whichever is loaded
+      pick.value = String(list.find(c=>c.id===27)?27:list[0].id);
+      loadContent(pick.value);
+    }
+    $('#err').textContent='';
+  }catch(err){ $('#err').textContent='live server off — showing embedded #27. start webapp on :5174 for live data.'; }
+  pick.addEventListener('change',()=> pick.value==='embed'?build(EMBED):loadContent(pick.value));
+}
+async function loadContent(id){
+  try{ const r=await fetch(`${SERVER}/api/contents/${id}`); const resp=await r.json();
+    // single-content route returns {content, analysis, product}
+    const c=resp.content||resp;
+    const data={ id:c.id, title:c.title, persona:c.persona, hook:c.hook, style:c.style, final_form:c.final_form,
+      shot_count:c.shot_count, direction:c.direction, preview:c.preview, export_mp4:c.export_mp4,
+      analysisRow:resp.analysis, productInfo:resp.product,
+      product: resp.product || (c.product?JSON.parse(c.product):{}),
+      scenes: typeof c.scenes==='string'?JSON.parse(c.scenes||'[]'):(c.scenes||[]),
+      overall: typeof c.overall==='string'?JSON.parse(c.overall||'null'):(c.overall||null) };
+    build(data);
+  }catch(e){ $('#err').textContent='failed to load #'+id+' — '+e.message; }
+}
+
+/* ================= top-level tabs: Find · Analysis · Content Studio ================= */
+function switchTab(name){
+  document.body.dataset.tab=name;
+  document.querySelectorAll('header .tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  if(name==='find') renderFind();
+  if(name==='analysis') renderAnalysis();
+}
+document.querySelectorAll('header .tab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+
+// ── Find (Discover) — agent-driven reel search; list/card UI ──
+const SAMPLE_REELS=[
+  {acct:'@glow.ritual',    cap:"You're using retinol wrong",        likes:'128k', comments:'2,341', rank:1},
+  {acct:'@thebeautydecode',cap:'I tried the $24 barrier cream',      likes:'96k',  comments:'1,905', rank:2},
+  {acct:'@skinquiet',      cap:'Stop layering actives like this',    likes:'74k',  comments:'1,540', rank:3},
+  {acct:'@derm.notes',     cap:'The retinol mistake everyone makes', likes:'61k',  comments:'1,212', rank:4},
+  {acct:'@slowskincare',   cap:'3 months, zero purge — here is how', likes:'52k',  comments:'988',   rank:5},
+  {acct:'@honest.glow',    cap:'Drugstore dupe that actually works', likes:'44k',  comments:'870',   rank:6},
+];
+// candidate selection lives at 3 stages: reel · product · angle. agent proposes N, user picks one → next stage.
+const PICK={reel:0, product:0, angle:0};
+function productCandidates(){ const p=(currentData&&currentData.product)||{};
+  return [
+    {title:p.title||'matched product', price:p.price||'', image:p.image||'', badge:'agent · top match'},
+    {title:(p.title||'product')+' — value 2-pack', price:'$—', image:p.image||'', badge:'agent · alt match'},
+    {title:'budget dupe (same actives)', price:'$—', image:'', badge:'agent · alt match'},
+  ]; }
+function angleDrafts(){ const o=(currentData&&currentData.overall)||{}, reel=SAMPLE_REELS[PICK.reel]||{};
+  return [ // equal options — none is the default; user picks one
+    {name:'Myth-bust',                hook:o.hookLine||'Your routine is the problem.', angle:o.angle||'wrong way → right way → payoff', cta:o.cta||''},
+    {name:'Before / After',           hook:'I did not believe that was my face.',      angle:'3-month transformation, receipts first',    cta:o.cta||''},
+    {name:'Copycat · minimal change', hook:o.hookLine||reel.cap||'—', angle:'mirror the reference reel — same structure & pace, swap product only', cta:o.cta||''},
+  ]; }
+// overall node: LLM-inside-a-node drafts N angle/script strategies from analysis+persona+hook; user picks one (Copycat default).
+function overallVariantsHTML(n){ const vs=angleDrafts(), sel=(n.data&&n.data.strategy!=null)?n.data.strategy:-1; // no default — pick one
+  return `<div class="sh top">angle / script — strategy (agent drafts · pick one)</div>
+    <div class="ovar">`+vs.map((a,i)=>`
+      <div class="ovcard pickable${i===sel?' picked':''}" data-ovar="${i}">
+        <span class="pickmark">✓</span>
+        <div class="ov-n">${esc(a.name)}</div>
+        <div class="ov-h">"${esc(a.hook)}"</div>
+        <div class="ov-a">${esc(a.angle)}</div>
+      </div>`).join('')+`</div>`; }
+
+function renderFind(){
+  const el=$('#tab-find'); if(!el) return;
+  el.innerHTML=`<div class="page">
+    <h1>Find</h1>
+    <div class="lead">discover top-performing reels to learn a structure from</div>
+    <div class="agentbar"><span class="bot">🤖</span><span>Agent-driven — collects reels for a hashtag and ranks them by comment volume, <b>or paste your own reel</b>. Pick one → <b>Analysis</b>.</span></div>
+    <div class="searchrow">
+      <input id="findQuery" placeholder="#skincare   ·   or paste a reel URL to use your own" />
+      <select id="findSort"><option>most comments</option><option>most likes</option><option>most recent</option></select>
+      <button id="findGo">🔍 find reels</button>
+    </div>
+    <h2>results · ranked by comments — pick one</h2>
+    <div class="reelgrid">${SAMPLE_REELS.map((r,i)=>`
+      <div class="reelcard pickable${i===PICK.reel?' picked':''}" data-reel="${i}">
+        <span class="pickmark">✓ picked</span>
+        <div class="rthumb"><span class="rank">#${r.rank}</span>▶</div>
+        <div class="rbody">
+          <div class="racct">${esc(r.acct)}</div>
+          <div class="rcap">${esc(r.cap)}</div>
+          <div class="rmeta"><span>❤ ${r.likes}</span><span>💬 ${r.comments}</span></div>
+          <button class="ranalyze">→ Analyze this</button>
+        </div>
+      </div>`).join('')}</div>
+    <div class="lead" style="margin-top:16px">sample results — wire to the Discover backend to go live.</div>
+  </div>`;
+  el.querySelectorAll('[data-reel]').forEach(c=>c.addEventListener('click',e=>{
+    PICK.reel=+c.dataset.reel; renderFind();
+    if(e.target.classList.contains('ranalyze')) switchTab('analysis');
+  }));
+  const go=$('#findGo'); go&&go.addEventListener('click',()=>toast('Discover backend not wired yet — showing sample reels'));
+}
+
+// research only: facts that inform your choices (agent-extracted). angle/script is NOT decided here — that happens in the overall node.
+function productResearch(){ const p=(currentData&&currentData.product)||{};
+  return {
+    coreIdea:'Barrier-repair moisturizer — niacinamide + panthenol positioned as gentle support for a 0.1% retinol routine.',
+    whyPopular:'Cheap ($24) entry into "barrier repair"; the retinol-recovery before/after angle performs well on skincare IG.',
+    claims:['zero purge / zero flaking','visible barrier repair in ~3 months','fragrance-free, layering-friendly'],
+  }; }
+function reelPace(scenes){ // rough pace read from scene timecodes, as reference
+  const nums=scenes.map(s=>String(s.t||'').match(/\d+/g)||[]).flat().map(Number).filter(n=>!isNaN(n));
+  const total=nums.length?Math.max(...nums):0;
+  return {total, count:scenes.length, avg: scenes.length?(total/scenes.length).toFixed(1):'—'}; }
+
+// ── Analysis — RESEARCH ONLY: product facts + reel reference (structure/pace/VO). pick product. ──
+function renderAnalysis(){
+  const el=$('#tab-analysis'); if(!el) return;
+  const d=currentData||{}, scenes=d.scenes||[];
+  const reel=SAMPLE_REELS[PICK.reel]||{}, prods=productCandidates(), rx=productResearch(), pace=reelPace(scenes);
+  el.innerHTML=`<div class="page">
+    <h1>Analysis</h1>
+    <div class="lead">${esc(d.title||'reel')} · what the agent found — facts for your choices (angle/script is decided later, in the overall node)</div>
+    <div class="pickedbar"><span>📼 reel from Find:</span> <b>${esc(reel.acct||'—')}</b> <span style="color:var(--text-dim)">— ${esc(reel.cap||'')}</span></div>
+    <div class="agentbar"><span class="bot">🤖</span><span>Agent-driven research — Claude-vision reads the reel's structure/pace/VO as <b>reference</b>, and pulls product data. Read-only; pick a product, then build.</span></div>
+
+    <h2>① matched products — pick one</h2>
+    <div class="candrow">${prods.map((p,i)=>`
+      <div class="pcard pickable${i===PICK.product?' picked':''}" data-prod="${i}">
+        <span class="pickmark">✓</span>
+        ${p.image?`<img src="${esc(p.image)}" alt=""/>`:`<div style="width:52px;height:52px;border-radius:8px;background:var(--bg-surface);flex:none"></div>`}
+        <div><div class="pc-t">${esc(p.title)}</div>${p.price?`<div class="pc-p">${esc(p.price)}</div>`:''}<div class="pc-b">${esc(p.badge)}</div></div>
+      </div>`).join('')}</div>
+
+    <h2>② product research</h2>
+    <div class="card"><div class="kv2">
+      <div class="k">core idea</div><div class="v">${esc(rx.coreIdea)}</div>
+      <div class="k">why popular</div><div class="v">${esc(rx.whyPopular)}</div>
+      <div class="k">key claims</div><div class="v">${rx.claims.map(c=>`<span class="pillt" style="margin:0 5px 5px 0;display:inline-block">${esc(c)}</span>`).join('')}</div>
+    </div></div>
+
+    <h2>③ reel reference — structure · pace · VO</h2>
+    <div class="lead" style="margin-top:-4px;margin-bottom:10px">${pace.count} beats · ~${pace.total}s total · ~${pace.avg}s/beat — used as pacing/VO reference in Content Studio (style applied there)</div>
+    <table class="stab"><thead><tr><th>beat</th><th>time</th><th>on-screen text</th><th>voice-over (reference)</th><th>camera</th></tr></thead>
+      <tbody>${scenes.map((s,i)=>`<tr>
+        <td class="sc">${s.id||i+1}</td><td class="tc">${esc(s.t||'')}</td>
+        <td>${esc(s.onScreenText||'')}</td><td>${esc(s.vo||'')}</td>
+        <td>${esc(cameraMoveName(s.cameraMove))}</td></tr>`).join('')}</tbody></table>
+
+    <div style="margin-top:26px;display:flex;align-items:center;gap:14px">
+      <button class="buildbtn" id="toStudio">build in Content Studio →</button>
+      <span class="lead" style="margin:0">reel ✓ · product ${PICK.product+1}/3 · angle → chosen in the overall node</span>
+    </div>
+  </div>`;
+  el.querySelectorAll('[data-prod]').forEach(c=>c.addEventListener('click',()=>{ PICK.product=+c.dataset.prod; renderAnalysis(); }));
+  const ts=$('#toStudio'); ts&&ts.addEventListener('click',()=>{ toast('building from picked reel + product — pick the angle in the overall node'); switchTab('studio'); });
+}
+init();
+</script>
+</body>
+</html>

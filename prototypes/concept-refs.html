@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Concept — any reference, any scenes</title>
+<style>
+  :root{--bg:#1a1a1e;--card:#232328;--surf:#1e1e22;--tx:#e8e6dd;--tx2:#9c9a92;--dim:#6b6a64;
+    --bd:rgba(222,220,209,.12);--teal:#5DCAA5;--blue:#378ADD;--amber:#e0a341;--violet:#b98be0;--pink:#e08bc0;
+    --mono:'JetBrains Mono','SF Mono',ui-monospace,monospace;--body:'DM Sans',system-ui,sans-serif}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--tx);font-family:var(--body);padding:26px 30px 60px}
+  h1{font-size:19px;margin:0 0 4px} .sub{color:var(--dim);font-family:var(--mono);font-size:12px;margin-bottom:22px}
+  h2{font-size:13px;font-family:var(--mono);letter-spacing:.5px;text-transform:uppercase;color:var(--tx2);margin:24px 0 6px}
+  .panel{position:relative;background:rgba(255,255,255,.015);border:1px solid var(--bd);border-radius:14px;padding:8px}
+  svg.edges{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+  .node{position:absolute;background:var(--card);border:1px solid var(--bd);border-radius:11px;padding:8px 11px;width:var(--w,160px)}
+  .node .hd{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--tx2);display:flex;align-items:center;gap:6px}
+  .node .dot{width:8px;height:8px;border-radius:50%}
+  .node .bd{font-size:12.5px;margin-top:4px;line-height:1.3}
+  .node .mut{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:3px}
+  .thumb{height:42px;border-radius:7px 7px 0 0;margin:-8px -11px 6px;background:linear-gradient(135deg,#2c3340,#242a33);display:flex;align-items:center;justify-content:center;font-size:17px}
+  .teal{--c:var(--teal)} .teal .dot{background:var(--teal)} .teal .hd{color:var(--teal)}
+  .blue{--c:var(--blue)} .blue .dot{background:var(--blue)} .blue .hd{color:var(--blue)}
+  .violet{--c:var(--violet)} .violet .dot{background:var(--violet)} .violet .hd{color:var(--violet)}
+  .amber{--c:var(--amber);border-color:rgba(224,163,65,.5)} .amber .dot{background:var(--amber)} .amber .hd{color:var(--amber)}
+  .img{--c:var(--teal)} .img .dot{background:var(--teal)}
+  .badge{position:absolute;top:-9px;right:-9px;background:var(--surf);border:1px solid var(--bd);color:var(--tx2);font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:9px}
+  .callout{position:absolute;font-family:var(--mono);font-size:11px;line-height:1.5;max-width:250px;color:var(--dim)}
+  .callout b{color:var(--tx)}
+  .rule{margin-top:14px;background:var(--surf);border:1px solid var(--bd);border-radius:10px;padding:12px 15px;font-family:var(--mono);font-size:12.5px;line-height:1.85}
+  .rule .k{color:var(--teal)} .rule .a{color:var(--amber)} .rule b{color:var(--tx)}
+  .pill{display:inline-block;font-family:var(--mono);font-size:10px;padding:1px 7px;border-radius:6px;border:1px solid var(--bd)}
+  .leg{display:flex;gap:18px;font-family:var(--mono);font-size:11px;color:var(--tx2);margin:8px 2px 0}
+  .leg i{display:inline-block;width:16px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+</style></head>
+<body>
+  <h1>참조는 종류가 아니라 <b>배선</b>이 정한다 — 어떤 ref든, 원하는 씬에만</h1>
+  <div class="sub">product·character·environment 다 똑같음. 공유/씬별은 고정이 아니라 "어느 image에 잇느냐"의 결과.</div>
+
+  <h2>① EXPANDED — character도 씬마다 다르게</h2>
+  <div class="panel" style="height:470px">
+    <svg class="edges" viewBox="0 0 1120 470" preserveAspectRatio="none">
+      <!-- PRODUCT (teal) → all 3 : SHARED -->
+      <path d="M205,92  C340,92 385,96 560,96"   fill="none" stroke="#5DCAA5" stroke-width="2" opacity=".85"/>
+      <path d="M205,92  C340,92 385,224 560,224"  fill="none" stroke="#5DCAA5" stroke-width="2" opacity=".85"/>
+      <path d="M205,92  C340,92 385,352 560,352"  fill="none" stroke="#5DCAA5" stroke-width="2" opacity=".85"/>
+      <!-- CHARACTER A (blue) → scene 1,2 -->
+      <path d="M205,172 C360,172 400,104 560,104" fill="none" stroke="#378ADD" stroke-width="2.4" opacity=".9"/>
+      <path d="M205,172 C360,172 400,216 560,216" fill="none" stroke="#378ADD" stroke-width="2.4" opacity=".9"/>
+      <!-- CHARACTER B (violet) → scene 3 (DIFFERENT character) -->
+      <path d="M205,290 C400,290 440,352 560,360" fill="none" stroke="#b98be0" stroke-width="2.8"/>
+      <!-- ENV scene-2 (amber) → scene 2 only -->
+      <path d="M205,378 C380,378 440,236 560,236" fill="none" stroke="#e0a341" stroke-width="2.8" stroke-dasharray="7 4"/>
+    </svg>
+
+    <div class="node teal"   style="left:40px;top:66px"><div class="hd"><span class="dot"></span>PRODUCT</div><div class="bd">제품 사진</div><div class="mut">→ scene 1·2·3 (전부)</div></div>
+    <div class="node blue"   style="left:40px;top:146px"><div class="hd"><span class="dot"></span>CHARACTER A</div><div class="bd">인물 A</div><div class="mut">→ scene 1·2</div></div>
+    <div class="node violet" style="left:40px;top:264px"><div class="hd"><span class="dot"></span>CHARACTER B</div><div class="bd">인물 B (다른 사람)</div><div class="mut">→ scene 3</div></div>
+    <div class="node amber"  style="left:40px;top:352px"><div class="hd"><span class="dot"></span>ENV · scene 2</div><div class="bd">그 씬 공간</div><div class="mut">→ scene 2</div></div>
+
+    <div class="node img" style="left:560px;top:52px;--w:150px"><div class="thumb">🖼</div><div class="hd"><span class="dot"></span>image · scene 1</div><span class="badge">product · charA</span></div>
+    <div class="node img" style="left:560px;top:180px;--w:150px"><div class="thumb">🖼</div><div class="hd"><span class="dot"></span>image · scene 2</div><span class="badge">product · charA · env</span></div>
+    <div class="node img" style="left:560px;top:308px;--w:150px"><div class="thumb">🖼</div><div class="hd"><span class="dot"></span>image · scene 3</div><span class="badge">product · charB</span></div>
+
+    <div class="callout" style="left:745px;top:60px"><b style="color:var(--blue)">scene 1·2 = 인물 A</b><br/><b style="color:var(--violet)">scene 3 = 인물 B</b> — 캐릭터도 씬마다 다르게 OK.</div>
+    <div class="callout" style="left:745px;top:200px"><b style="color:var(--amber)">env는 scene 2만</b> — 씬별.<br/><b style="color:var(--teal)">product만 전 씬 공유.</b></div>
+    <div class="callout" style="left:745px;top:330px">각 image = <b>자기한테 이어진 ref들의 합.</b><br/>그게 그 씬의 "레시피".</div>
+
+    <div class="leg" style="position:absolute;left:12px;bottom:8px">
+      <span><i style="background:#5DCAA5"></i>전부로 = 공유</span>
+      <span><i style="background:#378ADD"></i>일부로 = 그 씬들</span>
+      <span><i style="background:#b98be0"></i>다른 값 = 다른 씬</span>
+      <span><i style="background:#e0a341;border-bottom:2px dashed #e0a341;height:0"></i>하나로 = 씬 전용</span>
+    </div>
+  </div>
+
+  <div class="rule">
+    핵심: <b>어떤 ref 종류도 공유/씬별로 고정 아님.</b> &nbsp;참조가 <b>어느 image들에 연결됐냐</b>가 전부 —
+    &nbsp;<span class="k">→ 3개 다 = 공유</span> · <span style="color:#378ADD">→ 2개 = 그 씬들</span> · <span class="a">→ 1개 = 씬 전용</span>.
+    &nbsp;그래서 character A(1·2) / character B(3)처럼 <b>씬마다 다른 인물</b>도 그냥 배선으로 표현.
+  </div>
+
+  <h2>② 그럼 템플릿(C)은 뭘 자동화하나</h2>
+  <div class="panel" style="height:150px">
+    <div class="callout" style="left:20px;top:18px;max-width:1050px;color:var(--tx2);font-size:12.5px;line-height:1.9">
+      템플릿 ×N = <b style="color:var(--teal)">체인 구조(script→image→clip→vo)와 "전부로 가는 공유 ref"</b>를 자동 복제.<br/>
+      <b style="color:var(--amber)">일부·특정 씬에만 가는 ref</b>(character B→3, env→2 같은)는 그 인스턴스에서 <b>유저가 이어서</b> 오버라이드.<br/>
+      → 즉 <b>"전 씬 공통"은 공짜, "이 씬만 달라"는 유저가 클릭 한 번.</b> 반복은 사라지고 개별성은 남는다.
+    </div>
+  </div>
+</body></html>

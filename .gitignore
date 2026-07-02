@@ -1,6 +1,8 @@
 # deps & build
 node_modules/
 dist/
+# large local reference media (~1GB of interview/portfolio videos — not for git)
+dev_reference/
 # runtime data & generated media (live working data — backed up by the move, not git)
 webapp/data/
 webapp/output/

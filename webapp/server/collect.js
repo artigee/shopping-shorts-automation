@@ -1,10 +1,9 @@
-// IG 수집 — Playwright가 CDP로 내 디버그 크롬에 붙어, 그 페이지 컨텍스트에서
-// IG 내부 web_info API를 내 로그인 쿠키로 호출. (콘솔 붙여넣기 2-홉 제거)
-import { chromium } from 'playwright-core'
+// IG 수집 — Playwright가 소유한 Chrome for Testing(공유 persistent context)의 페이지에서
+// IG 내부 web_info API를 로그인 쿠키로 호출. (connectOverCDP는 Chrome 149에서 불안정 → 폐기)
 import { scoreReel } from './score.js'
+import { getContext } from './browser.js'
 
 const IG_APP_ID = '936619743392459'
-const CDP_URL = process.env.CDP_URL || 'http://localhost:9222'
 
 function tagError(code, message) {
   const e = new Error(message)
@@ -58,18 +57,14 @@ async function scrapeTag(page, tag) {
 }
 
 export async function collect({ tags, minPlay = 1000, onProgress = () => {} }) {
-  let browser
+  let context
   try {
-    browser = await chromium.connectOverCDP(CDP_URL, { timeout: 4000 })
-  } catch {
-    throw tagError(
-      'CHROME_NOT_FOUND',
-      `디버그 크롬(${CDP_URL})에 못 붙음 — scripts/launch-chrome.sh 로 크롬을 먼저 띄워주세요.`
-    )
+    context = await getContext()
+  } catch (e) {
+    throw tagError(e.code || 'BROWSER_LAUNCH_FAILED', e.message)
   }
 
-  try {
-    const context = browser.contexts()[0] || (await browser.newContext())
+  {
     let page = context.pages().find((p) => p.url().includes('instagram.com'))
     if (!page) page = await context.newPage()
     if (!page.url().includes('instagram.com')) {
@@ -82,7 +77,7 @@ export async function collect({ tags, minPlay = 1000, onProgress = () => {} }) {
     if (!loggedIn) {
       throw tagError(
         'NOT_LOGGED_IN',
-        '그 크롬에서 instagram.com 에 로그인돼 있지 않습니다. (디버그 크롬 창에서 IG 로그인 후 다시 시도)'
+        'Instagram login required — log into instagram.com in the debug Chrome window (launched by scripts/launch-chrome.sh), then retry.'
       )
     }
 
@@ -106,8 +101,6 @@ export async function collect({ tags, minPlay = 1000, onProgress = () => {} }) {
     reels.forEach((m) => { m.score = scoreReel(m) })
     reels.sort((a, b) => b.score - a.score)
     return { reels, perTag }
-  } finally {
-    // CDP 연결만 끊김 — 내 실제 크롬은 안 닫힘.
-    await browser.close().catch(() => {})
+    // 공유 persistent context는 닫지 않음 (다음 호출 재사용).
   }
 }
