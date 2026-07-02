@@ -286,7 +286,7 @@ function NodeGraphInner() {
       </div>
 
       {libOpen && (
-        <div className="ng-libpanel">
+        <div className="ng-libpanel" style={{ bottom: drawerNode ? drawerH : 0 }}>
           {['product', 'character', 'environment'].map((role) => {
             const items = graph.refLib[role] || []
             return (
