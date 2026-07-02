@@ -56,7 +56,14 @@ const INPUTS = {
 Object.keys(INPUTS).forEach((k) => { if (KIND[k]) { KIND[k].inputs = INPUTS[k]; KIND[k].accepts = [...new Set(INPUTS[k].map((i) => i.type))] } })
 KIND.template.accepts = ['*']; KIND.function.accepts = ['*']; KIND.skill.accepts = ['*']; KIND.analysis.accepts = []
 function acceptsOf(n) { const k = KIND[n.kind]; return k ? (k.accepts || []) : null }
-function canConnect(from, to) { const ot = outTypeOf(from), acc = acceptsOf(to); if (!ot || !acc || from.id === to.id) return false; return acc.includes('*') || acc.includes(ot) }
+function canConnect(from, to) {
+  const ot = outTypeOf(from), acc = acceptsOf(to)
+  if (!ot || !acc || from.id === to.id) return false
+  if (!(acc.includes('*') || acc.includes(ot))) return false
+  // an array output (overall's scene[]) must be split by a scene-script node — no direct jump to a single-item consumer
+  if (KIND[from.kind]?.out?.array && !(to.kind === 'script' || acc.includes('*'))) return false
+  return true
+}
 function edgeClassFor(ot, from) { return ot === 'imageRef' ? (from.refRole || 'ref') : ot === 'audio' ? 'audio' : (ot === 'context' || ot === 'persona' || ot === 'hook' || ot === 'analysis') ? 'global' : 'flow' }
 // right-click create-node menu (faithful to prototype showCtxMenu)
 const MENU_ITEMS = [['Sources', 'h'], ['analysis · reel', 'analysis'], ['persona', 'persona'], ['hook', 'hook'], ['animation ref · video', 'animref'], ['Script', 'h'], ['overall + split', 'overall'], ['scene script', 'script'], ['Generate', 'h'], ['prompt', 'prompt'], ['image gen', 'image'], ['clip gen', 'clip'], ['VO', 'vo'], ['Assemble', 'h'], ['movie', 'movie'], ['Custom', 'h'], ['template', 'template'], ['function', 'function'], ['skill call', 'skill']]
