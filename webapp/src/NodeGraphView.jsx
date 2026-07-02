@@ -36,7 +36,15 @@ const INPUTS = {
   vo: [{ key: 'voText', type: 'text', label: 'VO text' }, { key: 'persona', type: 'persona', label: 'persona (voice)' }],
   movie: [{ key: 'clips', type: 'video', label: 'clips', multi: true }, { key: 'stills', type: 'image', label: 'stills', multi: true }, { key: 'audio', type: 'audio', label: 'VO audio', multi: true }],
 }
-Object.keys(INPUTS).forEach((k) => { if (KIND[k]) KIND[k].inputs = INPUTS[k] })
+Object.keys(INPUTS).forEach((k) => { if (KIND[k]) { KIND[k].inputs = INPUTS[k]; KIND[k].accepts = [...new Set(INPUTS[k].map((i) => i.type))] } })
+KIND.template.accepts = ['*']; KIND.function.accepts = ['*']; KIND.skill.accepts = ['*']; KIND.analysis.accepts = []
+function acceptsOf(n) { const k = KIND[n.kind]; return k ? (k.accepts || []) : null }
+function canConnect(from, to) { const ot = outTypeOf(from), acc = acceptsOf(to); if (!ot || !acc || from.id === to.id) return false; return acc.includes('*') || acc.includes(ot) }
+function edgeClassFor(ot, from) { return ot === 'imageRef' ? (from.refRole || 'ref') : ot === 'audio' ? 'audio' : (ot === 'context' || ot === 'persona' || ot === 'hook' || ot === 'analysis') ? 'global' : 'flow' }
+// right-click create-node menu (faithful to prototype showCtxMenu)
+const MENU_ITEMS = [['Sources', 'h'], ['analysis · reel', 'analysis'], ['persona', 'persona'], ['hook', 'hook'], ['animation ref · video', 'animref'], ['Script', 'h'], ['overall + split', 'overall'], ['scene script', 'script'], ['Generate', 'h'], ['prompt', 'prompt'], ['image gen', 'image'], ['clip gen', 'clip'], ['VO', 'vo'], ['Assemble', 'h'], ['movie', 'movie'], ['Custom', 'h'], ['template', 'template'], ['function', 'function'], ['skill call', 'skill']]
+const MENU_COLOR = { analysis: '#7fc7c0', persona: '#b98be0', hook: '#b98be0', animref: '#6bc7d9', overall: '#9bb8e8', script: '#c9b3ea', prompt: '#c7b3f0', image: '#5DCAA5', clip: '#F0997B', vo: '#e0c85d', movie: '#378ADD', template: '#9c9a92', function: '#8fb8e0', skill: '#d59be0' }
+const menuOut = (k) => (k === 'persona' || k === 'hook') ? 'persona/hook' : k === 'analysis' ? 'analysis' : k === 'animref' ? 'video' : KIND[k] ? KIND[k].out.t : 'node'
 
 const parse = (v) => { try { return typeof v === 'string' ? JSON.parse(v) : v } catch { return null } }
 const media = (u) => { if (!u) return null; if (u.indexOf('|/output/') >= 0) u = u.split('|')[1]; return u }
@@ -127,7 +135,9 @@ export default function NodeGraphView() {
   const [menu, setMenu] = useState(null)
   const [libOpen, setLibOpen] = useState(false)
   const [preview, setPreview] = useState(null)
+  const [wireEnd, setWireEnd] = useState(null)
   const nodeRefs = useRef({})
+  const canvasRef = useRef(null)
   const pan = useRef(null), drag = useRef(null), libUid = useRef(0)
 
   useLayoutEffect(() => { const h = document.querySelector('header')?.offsetHeight; if (h) setTop(h) }, [])
@@ -152,8 +162,9 @@ export default function NodeGraphView() {
   useLayoutEffect(() => { const h = {}; graph.nodes.forEach((n) => { const el = nodeRefs.current[n.id]; if (el) h[n.id] = el.offsetHeight }); setHeights(h) }, [graph])
 
   const anchor = (n, side) => ({ x: n.x + (side === 'out' ? NODE_W : 0), y: n.y + (heights[n.id] || 90) / 2 })
-  const paths = graph.edges.map((e, i) => { const a = nodeById[e.from], b = nodeById[e.to]; if (!a || !b) return null; const p1 = anchor(a, 'out'), p2 = anchor(b, 'in'), dx = Math.max(40, (p2.x - p1.x) * 0.5); return { key: i, d: `M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`, color: EDGE_COLOR[e.cls] || '#7d8590', dashed: e.cls === 'global', label: (e.from === 'overall' && e.to.indexOf('script-') === 0 && b.scene != null) ? { x: p2.x - 34, y: p2.y - 5, t: b.scene } : null } }).filter(Boolean)
+  const paths = graph.edges.map((e, i) => { const a = nodeById[e.from], b = nodeById[e.to]; if (!a || !b) return null; const p1 = anchor(a, 'out'), p2 = anchor(b, 'in'), dx = Math.max(40, (p2.x - p1.x) * 0.5); return { key: i, i, d: `M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`, color: EDGE_COLOR[e.cls] || '#7d8590', dashed: e.cls === 'global', editable: ['ref', 'product', 'character', 'environment'].includes(e.cls), label: (e.from === 'overall' && e.to.indexOf('script-') === 0 && b.scene != null) ? { x: p2.x - 34, y: p2.y - 5, t: b.scene } : null } }).filter(Boolean)
   const selFromArray = selNode ? graph.edges.some((e) => e.to === selNode.id && KIND[nodeById[e.from]?.kind]?.out?.array) : false
+  const wireFrom = wireEnd ? nodeById[wireEnd.fromId] : null
 
   function onWheel(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top; setView((v) => { const k = Math.min(2, Math.max(0.2, v.k * (ev.deltaY < 0 ? 1.1 : 1 / 1.1))); return { k, x: mx - (mx - v.x) * (k / v.k), y: my - (my - v.y) * (k / v.k) } }) }
   function startNodeDrag(ev, n) { if (ev.target.closest('video, button, select, a, .ng-del')) return; ev.stopPropagation(); drag.current = { id: n.id, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y, moved: false } }
@@ -168,8 +179,26 @@ export default function NodeGraphView() {
   function setNodeField(id, patch) { setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, ...patch } : n) })) }
   function setNodeScene(id, v) { if (!(v > 0)) return; setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, scene: v, hd: /^scene \d+$/.test(n.hd || '') ? 'scene ' + v : n.hd } : n) })) }
   function toggleRef(id, role, refId) { setNg((g) => ({ ...g, nodes: g.nodes.map((n) => { if (n.id !== id) return n; const refs = { product: [], character: [], environment: [], ...(n.data.refs || {}) }; const arr = refs[role] = [...(refs[role] || [])]; const i = arr.indexOf(refId); if (i >= 0) arr.splice(i, 1); else arr.push(refId); return { ...n, dirty: true, data: { ...n.data, refs } } }) })) }
-  function addNode(kind, wx, wy) { const id = kind + '-' + Math.round(wx) + '-' + Math.round(wy); setNg((g) => ({ ...g, nodes: [...g.nodes, { id, role: kind, kind, hd: kind, x: Math.round(wx / 20) * 20, y: Math.round(wy / 20) * 20, data: {}, dirty: true }] })); setMenu(null) }
+  let uidN = useRef(0)
+  function createNode(kind, wx, wy) {
+    const id = kind + '-u' + (uidN.current++), x = Math.round(wx / 20) * 20, y = Math.round(wy / 20) * 20
+    let node
+    if (kind === 'persona' || kind === 'hook') node = { id, role: 'input', hd: kind, t: '(set value)', sub: kind === 'persona' ? 'VO voice' : 'story shape', x, y, data: {} }
+    else if (kind === 'animref') node = { id, role: 'animref', hd: 'animation ref', t: 'drop a video · or ✎ URL', sub: 'motion / acting', x, y, data: { clip: '' } }
+    else node = { id, role: kind, kind: KIND[kind] ? kind : undefined, hd: kind, x, y, data: {} }
+    setNg((g) => ({ ...g, nodes: [...g.nodes, { ...node, dirty: true }] })); setMenu(null)
+  }
   function onCanvasMenu(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setMenu({ sx: ev.clientX, sy: ev.clientY, wx: (ev.clientX - r.left - view.x) / view.k, wy: (ev.clientY - r.top - view.y) / view.k }) }
+  function addEdge(fromId, toId) { setNg((g) => { if (g.edges.some((e) => e.from === fromId && e.to === toId)) return g; const from = g.nodes.find((n) => n.id === fromId); return { ...g, edges: [...g.edges, { from: fromId, to: toId, cls: edgeClassFor(outTypeOf(from), from), key: from?.refKey }] } }) }
+  function cutEdge(idx) { setNg((g) => ({ ...g, edges: g.edges.filter((_, i) => i !== idx) })) }
+  function startWire(ev, n) {
+    ev.stopPropagation(); ev.preventDefault()
+    const world = (e) => { const r = canvasRef.current.getBoundingClientRect(); return { x: (e.clientX - r.left - view.x) / view.k, y: (e.clientY - r.top - view.y) / view.k } }
+    const mv = (e) => { const p = world(e); const nd = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ng-node'); const tid = nd?.dataset.id; const valid = tid && tid !== n.id && canConnect(n, nodeById[tid]); setWireEnd({ ...p, fromId: n.id, targetId: tid && tid !== n.id ? tid : null, valid }) }
+    const up = (e) => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); const tid = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ng-node')?.dataset.id; if (tid && tid !== n.id && canConnect(n, nodeById[tid])) addEdge(n.id, tid); setWireEnd(null) }
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up)
+    setWireEnd({ ...anchor(n, 'out'), fromId: n.id, targetId: null, valid: false })
+  }
   function startDrawerResize(ev) { ev.preventDefault(); const sy = ev.clientY, h0 = drawerH; const mv = (e) => setDrawerH(Math.min(560, Math.max(140, h0 - (e.clientY - sy)))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
   function addRefAsset(role, thumb, name) { if (!thumb) return; setNg((g) => ({ ...g, refLib: { ...g.refLib, [role]: [...(g.refLib[role] || []), { id: 'lib-' + (libUid.current++), thumb, role, name: name || role }] } })) }
   function deleteRefAsset(role, id) { setNg((g) => ({ ...g, refLib: { ...g.refLib, [role]: (g.refLib[role] || []).filter((a) => a.id !== id) }, nodes: g.nodes.map((n) => (n.data && n.data.refs && n.data.refs[role]) ? { ...n, data: { ...n.data, refs: { ...n.data.refs, [role]: n.data.refs[role].filter((x) => x !== id) } } } : n) })) }
@@ -183,13 +212,22 @@ export default function NodeGraphView() {
         <select value={cid ?? ''} onChange={(e) => setCid(Number(e.target.value))}>{list.map((c) => <option key={c.id} value={c.id}>#{c.id} {(c.title || 'untitled').slice(0, 30)}</option>)}</select>
       </div>
       {err && <div className="ng-err">{err}</div>}
-      <div className="ng-canvas" onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onContextMenu={onCanvasMenu}>
+      <div className="ng-canvas" ref={canvasRef} onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onContextMenu={onCanvasMenu}>
         <div className="ng-world" style={{ transform: `translate(${view.x}px,${view.y}px) scale(${view.k})` }}>
-          <svg className="ng-edges">{paths.map((p) => (<g key={p.key}><path d={p.d} stroke={p.color} strokeWidth="1.6" fill="none" strokeDasharray={p.dashed ? '5 4' : 'none'} opacity={p.dashed ? 0.5 : 0.9} />{p.label && <text x={p.label.x} y={p.label.y} fill="#c9b3ea" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontSize="11" fontWeight="600">{p.label.t}</text>}</g>))}</svg>
+          <svg className="ng-edges">
+            {paths.map((p) => (<g key={p.key}>
+              {p.editable && <path className="ng-edge-hit" d={p.d} onClick={() => cutEdge(p.i)} />}
+              <path d={p.d} stroke={p.color} strokeWidth="1.6" fill="none" strokeDasharray={p.dashed ? '5 4' : 'none'} opacity={p.dashed ? 0.5 : 0.9} />
+              {p.label && <text x={p.label.x} y={p.label.y} fill="#c9b3ea" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontSize="11" fontWeight="600">{p.label.t}</text>}
+            </g>))}
+            {wireEnd && wireFrom && (() => { const p1 = anchor(wireFrom, 'out'), dx = Math.max(40, (wireEnd.x - p1.x) * 0.5); return <path className="ng-tmp-edge" d={`M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${wireEnd.x - dx},${wireEnd.y} ${wireEnd.x},${wireEnd.y}`} /> })()}
+          </svg>
           {graph.nodes.map((n) => {
             const c = nodeColor(n), tl = typeLabel(n)
+            const inWired = graph.edges.some((e) => e.to === n.id), outWired = graph.edges.some((e) => e.from === n.id)
+            const wt = wireEnd && wireEnd.targetId === n.id ? (wireEnd.valid ? ' wire-target' : ' wire-bad') : ''
             return (
-              <div key={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n) + (n.id === selId ? ' sel' : '') + (n.dirty ? ' dirty' : '')} style={{ left: n.x, top: n.y, width: NODE_W, color: c, borderColor: (n.id === selId ? c : c + '99') }} onPointerDown={(e) => startNodeDrag(e, n)} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu({ sx: e.clientX, sy: e.clientY, nodeId: n.id }) }}>
+              <div key={n.id} data-id={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n) + (n.id === selId ? ' sel' : '') + (n.dirty ? ' dirty' : '') + wt} style={{ left: n.x, top: n.y, width: NODE_W, color: c, borderColor: (n.id === selId ? c : c + '99') }} onPointerDown={(e) => startNodeDrag(e, n)}>
                 {tl && <span className="ng-type" style={{ color: c, borderColor: c + '66' }}>{tl}</span>}
                 <button className="ng-del" title="delete" onClick={(e) => { e.stopPropagation(); deleteNode(n.id) }}>×</button>
                 {n.kind === 'image' && (n.thumb ? <img className="ng-thumb" style={{ aspectRatio: aspectCSS(n.data?.aspect) }} src={n.thumb} loading="lazy" onError={(e) => { e.target.style.opacity = .2 }} /> : <div className="ng-thumb ph" style={{ aspectRatio: aspectCSS(n.data?.aspect) }}>{n.data?.aspect || '9:16'}</div>)}
@@ -201,8 +239,8 @@ export default function NodeGraphView() {
                 {n.sub && <div className="ng-sub">{n.sub}</div>}
                 {n.kind === 'vo' && <div className="ng-sub">{n.audio ? '🔊 VO ready' : 'no VO yet'}</div>}
                 {n.kind === 'clip' && <div className="ng-pill">{n.data?.makeVideo === 'still' ? '🖼 still' : '🎥 ' + cameraMoveName(n.data?.cameraMove, lib.moves)}</div>}
-                {hasInput(n) && <span className="ng-port in" style={{ borderColor: c }} />}
-                <span className="ng-port out" style={{ borderColor: c }} />
+                {hasInput(n) && <span className={'ng-port in' + (inWired ? ' wired' : '')} style={{ '--pc': c, borderColor: c }} />}
+                <span className={'ng-port out' + (outWired ? ' wired' : '')} style={{ '--pc': c, borderColor: c }} onPointerDown={(e) => startWire(e, n)} title="drag to connect" />
               </div>
             )
           })}
@@ -233,9 +271,10 @@ export default function NodeGraphView() {
 
       {menu && (<>
         <div className="ng-menu-bd" onPointerDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null) }} />
-        <div className="ng-menu" style={{ left: menu.sx, top: menu.sy }}>
-          {menu.nodeId ? <button onClick={() => { deleteNode(menu.nodeId); setMenu(null) }}>🗑 delete</button>
-            : ['node', 'template', 'function', 'skill'].map((k) => <button key={k} onClick={() => addNode(k, menu.wx, menu.wy)}>＋ {k}</button>)}
+        <div className="ng-ctxmenu" style={{ left: menu.sx, top: menu.sy }}>
+          {MENU_ITEMS.map(([label, k], i) => k === 'h'
+            ? <div key={i} className="mh">{label}</div>
+            : <div key={i} className="mi" onClick={() => createNode(k, menu.wx, menu.wy)}><span className="dotk" style={{ background: MENU_COLOR[k] || '#888' }} />{label}<span className="sub">{menuOut(k)}</span></div>)}
         </div>
       </>)}
 
