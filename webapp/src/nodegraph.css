@@ -40,6 +40,7 @@
 /* reference asset library (side panel) — faithful to prototype */
 .ng-libtoggle { background: #232328; color: #e8e6dd; border: 1px solid #2f2f36; border-radius: 8px; padding: 5px 11px; font-size: 12.5px; cursor: pointer; }
 .ng-libtoggle.on { border-color: #5DCAA5; color: #5DCAA5; }
+.ng-libtoggle:disabled { opacity: .32; cursor: default; }
 .ng-libpanel { position: absolute; top: 42px; left: 0; bottom: 0; width: 270px; z-index: 9; background: rgba(24,24,28,.98); border-right: 1px solid #2f2f36; overflow: auto; padding: 4px 12px 20px; transition: bottom .22s cubic-bezier(.22,.61,.36,1); }
 .ng-libzone { border: 1px solid transparent; border-radius: 10px; padding: 2px 4px 6px; }
 .ng-libzone.drag { border-color: #5DCAA5; background: rgba(93,202,165,.06); }

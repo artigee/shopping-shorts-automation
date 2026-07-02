@@ -160,6 +160,10 @@ function NodeGraphInner() {
   const nodeRefs = useRef({})
   const canvasRef = useRef(null)
   const pan = useRef(null), drag = useRef(null), libUid = useRef(0)
+  const ngRef = useRef(ng); ngRef.current = ng
+  const hist = useRef({ past: [], future: [], key: null })
+  const dragSnap = useRef(null)
+  const [histN, setHistN] = useState({ u: 0, r: 0 })
 
   useLayoutEffect(() => { const h = document.querySelector('header')?.offsetHeight; if (h) setTop(h) }, [])
   useEffect(() => {
@@ -173,7 +177,7 @@ function NodeGraphInner() {
     api('/api/contents').then((cs) => { setList(cs); setCid((prev) => prev ?? (cs.find((c) => c.id === 27)?.id ?? cs.find((c) => c.scenes)?.id ?? cs[0]?.id ?? null)) }).catch((e) => setErr(String(e.message || e)))
   }, [])
   useEffect(() => { if (cid == null) return; setData(null); setErr(null); setSel(null); api(`/api/contents/${cid}`).then((r) => setData(adapt(r))).catch((e) => setErr(String(e.message || e))) }, [cid])
-  useEffect(() => { setNg(data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }) }, [data])
+  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
 
   const graph = ng
   const nodeById = useMemo(() => { const m = {}; graph.nodes.forEach((n) => (m[n.id] = n)); return m }, [graph])
@@ -194,8 +198,38 @@ function NodeGraphInner() {
   const selFromArray = drawerNode ? graph.edges.some((e) => e.to === drawerNode.id && KIND[nodeById[e.from]?.kind]?.out?.array) : false
   const wireFrom = wireEnd ? nodeById[wireEnd.fromId] : null
 
+  // ── undo / redo (snapshot stack over the graph) ──
+  const sync = () => setHistN({ u: hist.current.past.length, r: hist.current.future.length })
+  function pushSnap(snap, coalesceKey) {
+    const h = hist.current
+    if (coalesceKey && h.key === coalesceKey && h.past.length) return   // same continuous edit → keep first snapshot
+    h.past.push(snap); if (h.past.length > 200) h.past.shift(); h.future = []; h.key = coalesceKey || null; sync()
+  }
+  function commit(updater, coalesceKey) {
+    const prev = ngRef.current
+    const next = typeof updater === 'function' ? updater(prev) : updater
+    if (next === prev) return                                            // no-op (e.g. duplicate edge)
+    pushSnap(prev, coalesceKey); ngRef.current = next; setNg(next)
+  }
+  function undo() { const h = hist.current; if (!h.past.length) return; h.future.push(ngRef.current); const p = h.past.pop(); h.key = null; ngRef.current = p; setNg(p); sync() }
+  function redo() { const h = hist.current; if (!h.future.length) return; h.past.push(ngRef.current); const n = h.future.pop(); h.key = null; ngRef.current = n; setNg(n); sync() }
+  useEffect(() => { hist.current.key = null }, [selId])                  // node switch breaks edit-coalescing
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = document.activeElement?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return                  // let text fields keep native editing
+      if (!(e.metaKey || e.ctrlKey)) return
+      const z = e.key === 'z' || e.key === 'Z'
+      if (z && e.shiftKey) { e.preventDefault(); redo() }
+      else if (z) { e.preventDefault(); undo() }
+      else if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redo() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   function onWheel(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top; setView((v) => { const k = Math.min(2, Math.max(0.2, v.k * (ev.deltaY < 0 ? 1.1 : 1 / 1.1))); return { k, x: mx - (mx - v.x) * (k / v.k), y: my - (my - v.y) * (k / v.k) } }) }
-  function startNodeDrag(ev, n) { if (ev.target.closest('video, button, select, a, .ng-del')) return; ev.stopPropagation(); drag.current = { id: n.id, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y, moved: false } }
+  function startNodeDrag(ev, n) { if (ev.target.closest('video, button, select, a, .ng-del')) return; ev.stopPropagation(); dragSnap.current = ngRef.current; drag.current = { id: n.id, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y, moved: false } }
   function onDown(ev) { if (ev.target.closest('.ng-node')) return; if (!locked) setSel(null); pan.current = { sx: ev.clientX, sy: ev.clientY, x: view.x, y: view.y } }
   function frameNode(id) {
     const n = nodeById[id]; if (!n || !canvasRef.current) return
@@ -210,12 +244,12 @@ function NodeGraphInner() {
     if (drag.current) { const d = drag.current; if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 3) d.moved = true; const dx = (ev.clientX - d.sx) / view.k, dy = (ev.clientY - d.sy) / view.k; setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === d.id ? { ...n, x: d.ox + dx, y: d.oy + dy } : n) })); return }
     if (!pan.current) return; setView((v) => ({ ...v, x: pan.current.x + (ev.clientX - pan.current.sx), y: pan.current.y + (ev.clientY - pan.current.sy) }))
   }
-  function onUp() { if (drag.current) { const d = drag.current; drag.current = null; if (!d.moved) setSel(d.id); else setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === d.id ? { ...n, x: Math.round(n.x / 20) * 20, y: Math.round(n.y / 20) * 20 } : n) })) } pan.current = null }
-  function deleteNode(id) { setNg((g) => ({ ...g, nodes: g.nodes.filter((n) => n.id !== id), edges: g.edges.filter((e) => e.from !== id && e.to !== id) })); if (selId === id) setSel(null) }
-  function setNodeData(id, patch) { setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, data: { ...n.data, ...patch } } : n) })) }
-  function setNodeField(id, patch) { setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, ...patch } : n) })) }
-  function setNodeScene(id, v) { if (!(v > 0)) return; setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, scene: v, hd: /^scene \d+$/.test(n.hd || '') ? 'scene ' + v : n.hd } : n) })) }
-  function toggleRef(id, role, refId) { setNg((g) => ({ ...g, nodes: g.nodes.map((n) => { if (n.id !== id) return n; const refs = { product: [], character: [], environment: [], ...(n.data.refs || {}) }; const arr = refs[role] = [...(refs[role] || [])]; const i = arr.indexOf(refId); if (i >= 0) arr.splice(i, 1); else arr.push(refId); return { ...n, dirty: true, data: { ...n.data, refs } } }) })) }
+  function onUp() { if (drag.current) { const d = drag.current; drag.current = null; if (!d.moved) setSel(d.id); else { pushSnap(dragSnap.current); setNg((g) => { const n = { ...g, nodes: g.nodes.map((x) => x.id === d.id ? { ...x, x: Math.round(x.x / 20) * 20, y: Math.round(x.y / 20) * 20 } : x) }; ngRef.current = n; return n }) } } pan.current = null }
+  function deleteNode(id) { commit((g) => ({ ...g, nodes: g.nodes.filter((n) => n.id !== id), edges: g.edges.filter((e) => e.from !== id && e.to !== id) })); if (selId === id) setSel(null) }
+  function setNodeData(id, patch) { commit((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, data: { ...n.data, ...patch } } : n) }), 'data:' + id + ':' + Object.keys(patch).join(',')) }
+  function setNodeField(id, patch) { commit((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, ...patch } : n) }), 'field:' + id + ':' + Object.keys(patch).join(',')) }
+  function setNodeScene(id, v) { if (!(v > 0)) return; commit((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, scene: v, hd: /^scene \d+$/.test(n.hd || '') ? 'scene ' + v : n.hd } : n) })) }
+  function toggleRef(id, role, refId) { commit((g) => ({ ...g, nodes: g.nodes.map((n) => { if (n.id !== id) return n; const refs = { product: [], character: [], environment: [], ...(n.data.refs || {}) }; const arr = refs[role] = [...(refs[role] || [])]; const i = arr.indexOf(refId); if (i >= 0) arr.splice(i, 1); else arr.push(refId); return { ...n, dirty: true, data: { ...n.data, refs } } }) })) }
   let uidN = useRef(0)
   function createNode(kind, wx, wy) {
     const id = kind + '-u' + (uidN.current++), x = Math.round(wx / 20) * 20, y = Math.round(wy / 20) * 20
@@ -223,11 +257,11 @@ function NodeGraphInner() {
     if (kind === 'persona' || kind === 'hook') node = { id, role: 'input', hd: kind, t: '(set value)', sub: kind === 'persona' ? 'VO voice' : 'story shape', x, y, data: {} }
     else if (kind === 'animref') node = { id, role: 'animref', hd: 'animation ref', t: 'drop a video · or ✎ URL', sub: 'motion / acting', x, y, data: { clip: '' } }
     else node = { id, role: kind, kind: KIND[kind] ? kind : undefined, hd: kind, x, y, data: {} }
-    setNg((g) => ({ ...g, nodes: [...g.nodes, { ...node, dirty: true }] })); setMenu(null)
+    commit((g) => ({ ...g, nodes: [...g.nodes, { ...node, dirty: true }] })); setMenu(null)
   }
   function onCanvasMenu(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setMenu({ sx: ev.clientX, sy: ev.clientY, wx: (ev.clientX - r.left - view.x) / view.k, wy: (ev.clientY - r.top - view.y) / view.k }) }
-  function addEdge(fromId, toId) { setNg((g) => { if (g.edges.some((e) => e.from === fromId && e.to === toId)) return g; const from = g.nodes.find((n) => n.id === fromId); return { ...g, edges: [...g.edges, { from: fromId, to: toId, cls: edgeClassFor(outTypeOf(from), from), key: from?.refKey }] } }) }
-  function cutEdge(idx) { setNg((g) => ({ ...g, edges: g.edges.filter((_, i) => i !== idx) })) }
+  function addEdge(fromId, toId) { commit((g) => { if (g.edges.some((e) => e.from === fromId && e.to === toId)) return g; const from = g.nodes.find((n) => n.id === fromId); return { ...g, edges: [...g.edges, { from: fromId, to: toId, cls: edgeClassFor(outTypeOf(from), from), key: from?.refKey }] } }) }
+  function cutEdge(idx) { commit((g) => ({ ...g, edges: g.edges.filter((_, i) => i !== idx) })) }
   function startWire(ev, n) {
     ev.stopPropagation(); ev.preventDefault()
     const world = (e) => { const r = canvasRef.current.getBoundingClientRect(); return { x: (e.clientX - r.left - view.x) / view.k, y: (e.clientY - r.top - view.y) / view.k } }
@@ -237,8 +271,8 @@ function NodeGraphInner() {
     setWireEnd({ ...anchor(n, 'out'), fromId: n.id, targetId: null, valid: false })
   }
   function startDrawerResize(ev) { ev.preventDefault(); const sy = ev.clientY, h0 = drawerH; const mv = (e) => setDrawerH(Math.min(560, Math.max(140, h0 - (e.clientY - sy)))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
-  function addRefAsset(role, thumb, name) { if (!thumb) return; setNg((g) => ({ ...g, refLib: { ...g.refLib, [role]: [...(g.refLib[role] || []), { id: 'lib-' + (libUid.current++), thumb, role, name: name || role }] } })) }
-  function deleteRefAsset(role, id) { setNg((g) => ({ ...g, refLib: { ...g.refLib, [role]: (g.refLib[role] || []).filter((a) => a.id !== id) }, nodes: g.nodes.map((n) => (n.data && n.data.refs && n.data.refs[role]) ? { ...n, data: { ...n.data, refs: { ...n.data.refs, [role]: n.data.refs[role].filter((x) => x !== id) } } } : n) })) }
+  function addRefAsset(role, thumb, name) { if (!thumb) return; commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: [...(g.refLib[role] || []), { id: 'lib-' + (libUid.current++), thumb, role, name: name || role }] } })) }
+  function deleteRefAsset(role, id) { commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: (g.refLib[role] || []).filter((a) => a.id !== id) }, nodes: g.nodes.map((n) => (n.data && n.data.refs && n.data.refs[role]) ? { ...n, data: { ...n.data, refs: { ...n.data.refs, [role]: n.data.refs[role].filter((x) => x !== id) } } } : n) })) }
   function dropRefs(ev, role) { ev.preventDefault(); ev.currentTarget.classList.remove('drag'); const files = [...(ev.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/')); files.forEach((f) => addRefAsset(role, URL.createObjectURL(f), f.name)); if (!files.length) { const uri = ev.dataTransfer?.getData('text/uri-list') || ev.dataTransfer?.getData('text/plain') || ''; if (/^https?:/.test(uri)) addRefAsset(role, uri.trim(), role) } }
   const hoverPreview = { onMouseEnter: (e) => setPreview({ url: e.target.src, x: e.clientX, y: e.clientY }), onMouseMove: (e) => setPreview((p) => p ? { ...p, x: e.clientX, y: e.clientY } : p), onMouseLeave: () => setPreview(null) }
 
@@ -246,6 +280,8 @@ function NodeGraphInner() {
     <div className="ng-wrap" style={{ top }}>
       <div className="ng-bar">
         <button className={'ng-libtoggle' + (libOpen ? ' on' : '')} onClick={() => setLibOpen((o) => !o)} title="reference asset library">▤ refs</button>
+        <button className="ng-libtoggle" onClick={undo} disabled={!histN.u} title="undo (⌘Z)">↶</button>
+        <button className="ng-libtoggle" onClick={redo} disabled={!histN.r} title="redo (⇧⌘Z)">↷</button>
         <select value={cid ?? ''} onChange={(e) => setCid(Number(e.target.value))}>{list.map((c) => <option key={c.id} value={c.id}>#{c.id} {(c.title || 'untitled').slice(0, 30)}</option>)}</select>
       </div>
       {err && <div className="ng-err">{err}</div>}
