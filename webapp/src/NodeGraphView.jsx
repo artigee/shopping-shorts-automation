@@ -43,29 +43,30 @@ const hasInput = (n) => !(n.role === 'input' || n.kind === 'analysis')
 function buildGraph(data) {
   const nodes = [], edges = []
   const scenes = data.scenes || []
-  const ctx = { persona: data.persona || '—', hook: data.hook || '—', angle: data.overall?.angle || '—' }
+  const o = data.overall || {}
+  const ctx = { persona: data.persona || '—', hook: data.hook || '—', angle: o.angle || '—' }
   const midY = 100 + Math.max(0, scenes.length - 1) * PITCH / 2
-  const mk = (o) => { nodes.push(o); return o }
-  const ar = data.analysisRow || {}
+  const mk = (x) => { nodes.push(x); return x }
+  const ar = data.analysisRow || {}, p = data.product || {}
 
-  mk({ id: 'in-0', role: 'input', hd: 'persona', t: ctx.persona, sub: 'VO voice', x: COL.input, y: 100 })
-  mk({ id: 'in-1', role: 'input', hd: 'hook', t: ctx.hook, sub: 'story shape', x: COL.input, y: 240 })
-  mk({ id: 'analysis', role: 'analysis', kind: 'analysis', hd: 'reel', x: COL.input, y: 400, thumb: ar.reel_thumbnail || null, t: ar.reel_username ? '@' + ar.reel_username : '' })
-  mk({ id: 'overall', role: 'overall', kind: 'overall', hd: 'overall', x: COL.overall, y: midY, t: ctx.angle })
-  mk({ id: 'movie', role: 'movie', kind: 'movie', hd: 'final movie', x: COL.movie, y: midY, video: media(data.export_mp4 || data.preview), sub: (data.final_form === 'movie' ? 'movie' : 'card') + ' · ' + scenes.length + ' scenes' })
+  mk({ id: 'in-0', role: 'input', hd: 'persona', t: ctx.persona, sub: 'VO voice', x: COL.input, y: 100, data: { value: data.persona || '' } })
+  mk({ id: 'in-1', role: 'input', hd: 'hook', t: ctx.hook, sub: 'story shape', x: COL.input, y: 240, data: { value: data.hook || '' } })
+  mk({ id: 'analysis', role: 'analysis', kind: 'analysis', hd: 'reel', x: COL.input, y: 400, thumb: ar.reel_thumbnail || null, t: ar.reel_username ? '@' + ar.reel_username : '', data: { '@': ar.reel_username, caption: ar.reel_caption, category: ar.category, url: ar.reel_url, product: p.title, price: p.price } })
+  mk({ id: 'overall', role: 'overall', kind: 'overall', hd: 'overall', x: COL.overall, y: midY, t: ctx.angle, data: { angle: o.angle || '', hookLine: o.hookLine || '', cta: o.cta || '', vo: o.vo || '', beats: Array.isArray(o.beats) ? o.beats.join('\n') : (o.beats || '') } })
+  mk({ id: 'movie', role: 'movie', kind: 'movie', hd: 'final movie', x: COL.movie, y: midY, video: media(data.export_mp4 || data.preview), sub: (data.final_form === 'movie' ? 'movie' : 'card') + ' · ' + scenes.length + ' scenes', data: { final_form: data.final_form || 'card', scenes: scenes.length } })
   edges.push({ from: 'analysis', to: 'overall', cls: 'global' }, { from: 'in-0', to: 'overall', cls: 'global' }, { from: 'in-1', to: 'overall', cls: 'global' })
 
   scenes.forEach((s, i) => {
     const k = i + 1, y = 100 + (k - 1) * PITCH
-    mk({ id: 'script-' + k, role: 'script', kind: 'script', hd: 'scene ' + k, x: COL.script, y, t: s.onScreenText || '' })
-    mk({ id: 'prompt-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y, t: (s.imagePrompt || '').slice(0, 90) })
-    mk({ id: 'promptV-' + k, role: 'prompt', kind: 'prompt', promptType: 'vo', hd: 'scene ' + k, x: COL.prompt, y: y + 150, t: (s.voEn || s.vo || '').slice(0, 90) })
-    mk({ id: 'image-' + k, role: 'image', kind: 'image', hd: 'scene ' + k, x: COL.image, y, thumb: media(s.image) })
-    mk({ id: 'vo-' + k, role: 'vo', kind: 'vo', hd: 'scene ' + k, x: COL.vo, y, audio: media(s.audio) })
+    mk({ id: 'script-' + k, role: 'script', kind: 'script', hd: 'scene ' + k, x: COL.script, y, scene: k, t: s.onScreenText || '', data: { onScreenText: s.onScreenText || '', vo: s.vo || '' } })
+    mk({ id: 'prompt-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y, scene: k, t: (s.imagePrompt || '').slice(0, 90), data: { prompt: s.imagePrompt || '' } })
+    mk({ id: 'promptV-' + k, role: 'prompt', kind: 'prompt', promptType: 'vo', hd: 'scene ' + k, x: COL.prompt, y: y + 150, scene: k, t: (s.voEn || s.vo || '').slice(0, 90), data: { prompt: s.voEn || s.vo || '' } })
+    mk({ id: 'image-' + k, role: 'image', kind: 'image', hd: 'scene ' + k, x: COL.image, y, scene: k, thumb: media(s.image), data: { imagePrompt: s.imagePrompt || '', aspect: '9:16', image: s.image || '' } })
+    mk({ id: 'vo-' + k, role: 'vo', kind: 'vo', hd: 'scene ' + k, x: COL.vo, y, scene: k, audio: media(s.audio), data: { voiceId: data.persona || 'default', audio: s.audio || '' } })
     const clip = s.makeVideo !== false
     if (clip) {
-      mk({ id: 'promptM-' + k, role: 'prompt', kind: 'prompt', promptType: 'motion', hd: 'scene ' + k, x: COL.prompt, y: y + 75, t: (s.motionPrompt || '').slice(0, 90) })
-      mk({ id: 'clip-' + k, role: 'clip', kind: 'clip', hd: 'scene ' + k, x: COL.clip, y, video: media(s.video), image: media(s.image), cameraMove: s.cameraMove })
+      mk({ id: 'promptM-' + k, role: 'prompt', kind: 'prompt', promptType: 'motion', hd: 'scene ' + k, x: COL.prompt, y: y + 75, scene: k, t: (s.motionPrompt || '').slice(0, 90), data: { prompt: s.motionPrompt || '' } })
+      mk({ id: 'clip-' + k, role: 'clip', kind: 'clip', hd: 'scene ' + k, x: COL.clip, y, scene: k, video: media(s.video), image: media(s.image), cameraMove: s.cameraMove, data: { cameraMove: s.cameraMove || '', makeVideo: s.makeVideo === false ? 'still' : 'animate', duration: s.durationSec || 4 } })
     }
     edges.push({ from: 'overall', to: 'script-' + k, cls: 'flow' }, { from: 'in-0', to: 'script-' + k, cls: 'global' }, { from: 'in-1', to: 'script-' + k, cls: 'global' })
     edges.push({ from: 'script-' + k, to: 'prompt-' + k, cls: 'flow' }, { from: 'prompt-' + k, to: 'image-' + k, cls: 'flow' })
@@ -87,9 +88,13 @@ export default function NodeGraphView() {
   const [view, setView] = useState({ x: 30, y: 20, k: 0.62 })
   const [heights, setHeights] = useState({})
   const [top, setTop] = useState(96) // fill the whole window below the webapp header
+  const [selId, setSel] = useState(null)
+  const [drawerH, setDrawerH] = useState(240)
+  const [menu, setMenu] = useState(null) // context menu {sx, sy, wx, wy, nodeId?}
   const nodeRefs = useRef({})
   const pan = useRef(null)
   const drag = useRef(null)
+  const dh = useRef(null) // drawer resize
 
   useLayoutEffect(() => { const h = document.querySelector('header')?.offsetHeight; if (h) setTop(h) }, [])
 
@@ -131,14 +136,15 @@ export default function NodeGraphView() {
     })
   }
   function startNodeDrag(ev, n) {
-    if (ev.target.closest('video, button, select, a')) return
+    if (ev.target.closest('video, button, select, a, .ng-del')) return
     ev.stopPropagation()
-    drag.current = { id: n.id, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y }
+    drag.current = { id: n.id, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y, moved: false }
   }
   function onDown(ev) { if (ev.target.closest('video, select, button')) return; pan.current = { sx: ev.clientX, sy: ev.clientY, x: view.x, y: view.y } }
   function onMove(ev) {
     if (drag.current) {
       const d = drag.current, dx = (ev.clientX - d.sx) / view.k, dy = (ev.clientY - d.sy) / view.k
+      if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 3) d.moved = true
       setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === d.id ? { ...n, x: d.ox + dx, y: d.oy + dy } : n) }))
       return
     }
@@ -147,11 +153,37 @@ export default function NodeGraphView() {
   }
   function onUp() {
     if (drag.current) {
-      const id = drag.current.id; drag.current = null
-      setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, x: Math.round(n.x / 20) * 20, y: Math.round(n.y / 20) * 20 } : n) }))
+      const d = drag.current; drag.current = null
+      if (!d.moved) setSel(d.id) // click (no drag) → select → open drawer
+      else setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === d.id ? { ...n, x: Math.round(n.x / 20) * 20, y: Math.round(n.y / 20) * 20 } : n) }))
     }
     pan.current = null
   }
+  function deleteNode(id) {
+    setNg((g) => ({ nodes: g.nodes.filter((n) => n.id !== id), edges: g.edges.filter((e) => e.from !== id && e.to !== id) }))
+    if (selId === id) setSel(null)
+  }
+  function updateField(id, key, val) {
+    setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, data: { ...n.data, [key]: val } } : n) }))
+  }
+  function startDrawerResize(ev) {
+    ev.preventDefault()
+    const sy = ev.clientY, h0 = drawerH
+    const mv = (e) => setDrawerH(Math.min(560, Math.max(120, h0 - (e.clientY - sy))))
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up)
+  }
+  function addNode(kind, wx, wy) {
+    const id = kind + '-' + Math.round(wx) + '-' + Math.round(wy)
+    setNg((g) => ({ ...g, nodes: [...g.nodes, { id, role: kind, kind, hd: kind, x: Math.round(wx / 20) * 20, y: Math.round(wy / 20) * 20, data: {}, dirty: true }] }))
+    setMenu(null)
+  }
+  function onCanvasMenu(ev) {
+    ev.preventDefault()
+    const r = ev.currentTarget.getBoundingClientRect()
+    setMenu({ sx: ev.clientX, sy: ev.clientY, wx: (ev.clientX - r.left - view.x) / view.k, wy: (ev.clientY - r.top - view.y) / view.k })
+  }
+  const selNode = nodeById[selId]
 
   return (
     <div className="ng-wrap" style={{ top }}>
@@ -161,7 +193,7 @@ export default function NodeGraphView() {
         </select>
       </div>
       {err && <div className="ng-err">{err}</div>}
-      <div className="ng-canvas" onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
+      <div className="ng-canvas" onWheel={onWheel} onPointerDown={(e) => { if (!e.target.closest('.ng-node')) setSel(null); onDown(e) }} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onContextMenu={onCanvasMenu}>
         <div className="ng-world" style={{ transform: `translate(${view.x}px,${view.y}px) scale(${view.k})` }}>
           <svg className="ng-edges">
             {paths.map((p) => <path key={p.key} d={p.d} stroke={p.color} strokeWidth="1.6" fill="none" strokeDasharray={p.dashed ? '5 4' : 'none'} opacity={p.dashed ? 0.5 : 0.9} />)}
@@ -169,10 +201,11 @@ export default function NodeGraphView() {
           {graph.nodes.map((n) => {
             const c = nodeColor(n), tl = typeLabel(n)
             return (
-              <div key={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n)} style={{ left: n.x, top: n.y, width: NODE_W, borderColor: c + '99' }} onPointerDown={(e) => startNodeDrag(e, n)}>
+              <div key={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n) + (n.id === selId ? ' sel' : '') + (n.dirty ? ' dirty' : '')} style={{ left: n.x, top: n.y, width: NODE_W, borderColor: (n.id === selId ? c : c + '99') }} onPointerDown={(e) => startNodeDrag(e, n)} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu({ sx: e.clientX, sy: e.clientY, nodeId: n.id }) }}>
                 {tl && <span className="ng-type" style={{ color: c, borderColor: c + '66' }}>{tl}</span>}
+                <button className="ng-del" title="delete" onClick={(e) => { e.stopPropagation(); deleteNode(n.id) }}>×</button>
                 {n.kind === 'image' && (n.thumb ? <img className="ng-thumb" src={n.thumb} loading="lazy" onError={(e) => { e.target.style.opacity = .2 }} /> : <div className="ng-thumb ph">9:16</div>)}
-                {n.kind === 'clip' && (n.video ? <video className="ng-thumb" src={n.video} muted loop playsInline preload="metadata" /> : n.image ? <img className="ng-thumb" style={{ opacity: .4 }} src={n.image} /> : null)}
+                {n.kind === 'clip' && (n.video ? <video className="ng-thumb" src={n.video} muted loop playsInline preload="metadata" onMouseOver={(e) => e.target.play()} onMouseOut={(e) => e.target.pause()} /> : n.image ? <img className="ng-thumb" style={{ opacity: .4 }} src={n.image} /> : null)}
                 {n.kind === 'movie' && n.video && <video className="ng-thumb" src={n.video} controls playsInline preload="metadata" />}
                 {n.kind === 'analysis' && n.thumb && <img className="ng-thumb" src={n.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} />}
                 <div className="ng-hd" style={{ color: c }}><span className="ng-dot" style={{ background: c }} />{n.hd}</div>
@@ -187,6 +220,39 @@ export default function NodeGraphView() {
           })}
         </div>
       </div>
+
+      {menu && (
+        <>
+          <div className="ng-menu-bd" onPointerDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null) }} />
+          <div className="ng-menu" style={{ left: menu.sx, top: menu.sy }}>
+            {menu.nodeId
+              ? <button onClick={() => { deleteNode(menu.nodeId); setMenu(null) }}>🗑 delete</button>
+              : ['node', 'template', 'function', 'skill'].map((k) => <button key={k} onClick={() => addNode(k, menu.wx, menu.wy)}>＋ {k}</button>)}
+          </div>
+        </>
+      )}
+
+      {selNode && (
+        <div className="ng-drawer" style={{ height: drawerH }}>
+          <div className="ng-drawer-grip" onPointerDown={startDrawerResize} />
+          <div className="ng-drawer-head">
+            {typeLabel(selNode) && <span className="ng-type static" style={{ color: nodeColor(selNode), borderColor: nodeColor(selNode) + '66' }}>{typeLabel(selNode)}</span>}
+            <b>{selNode.hd}</b>
+            <span className="ng-id">#{selNode.id}{selNode.dirty ? ' · stale' : ''}</span>
+            <span style={{ flex: 1 }} />
+            <button className="ng-x" onClick={() => setSel(null)}>✕</button>
+          </div>
+          <div className="ng-drawer-body">
+            {Object.entries(selNode.data || {}).map(([k, v]) => (
+              <label key={k} className="ng-field">
+                <span>{k}</span>
+                <textarea value={v ?? ''} rows={String(v || '').length > 60 ? 3 : 1} onChange={(e) => updateField(selNode.id, k, e.target.value)} />
+              </label>
+            ))}
+            {(!selNode.data || !Object.keys(selNode.data).length) && <div className="ng-id">no editable fields</div>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
