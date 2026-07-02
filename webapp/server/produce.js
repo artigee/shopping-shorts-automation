@@ -63,7 +63,7 @@ This is the FULL story / context — it may be richer and longer than the final 
 ${personaBlock(persona)}${hookBlock(hook)}${banBlock()}
 ${guideBlock(base, guidance, 'overall script')}
 [Reel analysis (structure reference only)]
-${JSON.stringify(analysis).slice(0, 4000)}
+${JSON.stringify(analysis).slice(0, 6500)}
 
 [My product]
 ${productLine(productName, product)}
@@ -107,7 +107,7 @@ ${JSON.stringify(overall).slice(0, 3000)}
 ${productLine(productName, product)}
 
 [Structure reference]
-${JSON.stringify(analysis?.structure || analysis).slice(0, 1500)}
+${JSON.stringify(analysis?.structure || analysis).slice(0, 2200)}
 
 Rules:
 - ${countRule}. If the count is very small (1-3), FOLD roles together — 1 scene = hook + product + CTA in one; 2-3 scenes = combine beats. Scene 1 = the HOOK (apply the hook shape). The LAST scene MUST be the CTA: its onScreenText is the comment keyword caption (e.g. "Comment WANT IT 👇") AND its vo IS the spoken ask — casually tell the viewer to comment the keyword to get the link (e.g. "Comment WANT IT and I'll send it your way" / "Say the word, it's in your DMs"). Do NOT make the last vo just a verdict/sign-off with no ask — the spoken CTA must be there (casual, not a hard sell). SELECT and SHARPEN the strongest beats from the story across exactly this many shots — compress, don't transcribe.
@@ -176,7 +176,7 @@ ${productLine(productName, product)}
 ${product?.features ? '[Product features/mechanics] ' + String(product.features).slice(0, 500) : ''}
 
 [Reference reel analysis]
-${JSON.stringify(analysis || {}).slice(0, 1500)}
+${JSON.stringify(analysis || {}).slice(0, 2500)}
 
 [Available personas (key: name — register)]
 ${(personas || []).map((p) => `${p.key}: ${p.name} — ${p.register || ''}`).join('\n')}

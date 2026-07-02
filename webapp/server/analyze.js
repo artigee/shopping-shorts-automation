@@ -110,7 +110,7 @@ function stripFence(t = '') {
 // ── 3) Claude 비전 분석 → 구조화 JSON ──
 export async function analyzeFrames({ frames, caption, duration, productName, lang = 'English (US)' }) {
   const prompt = `You analyze Amazon-affiliate shopping shorts. Below are time-ordered keyframes of one Instagram shopping reel plus its caption. Analyze its STRUCTURE so we can remake it (pick-and-assemble), and output JSON.
-Write all human-readable text fields (openingLine, why, pacing, cta, onScreenText, vo, beats, need) natively in ${lang} (the target audience's language — preserve regional nuance; do not translate). Keep JSON keys/enums in English.
+Write all human-readable text fields (openingLine, why, scrollStopper, emotionalTrigger, who, painPoint, objection, pacing, turningPoint, productIntegration, cta, whyItConverts, lookFeel, lighting, palette, textStyle, editing, onScreenText, vo, purpose, emotion, beats, need, viralFactors) natively in ${lang} (the target audience's language — preserve regional nuance; do not translate). Keep JSON keys/enums in English.
 
 Product: ${productName || '(unspecified)'}
 Video length: ${Math.round(duration)}s
@@ -119,12 +119,15 @@ Caption: ${(caption || '').replace(/\s+/g, ' ').slice(0, 600)}
 Keyframes (in order):
 ${frames.map((f, i) => `[${i + 1}] ${f}`).join('\n')}
 
-Output ONLY JSON (no explanation):
+Output ONLY JSON (no explanation). Ground every field in the keyframes + caption — no audio track is available, so infer VO/narration from on-screen text, visuals and caption; never invent sound or music. Be specific and concrete, not generic:
 {
- "hook": {"family":"curiosity|list|urgency|social-proof|transformation","openingLine":"the first 1-2s hook line (in ${lang})","why":"one line: why it holds attention"},
- "structure": {"format":"single|roundup","beats":["beat1","beat2","..."],"pacing":"cut speed/rhythm, one line","cta":"final CTA / funnel form"},
- "sceneScript": [{"t":"0-2s","shot":"shot (angle/movement)","onScreenText":"on-screen caption (in ${lang})","vo":"VO narration (in ${lang})","durationSec":2}],
- "assets": [{"scene":1,"need":"footage/image needed","type":"footage|image|ai"}]
+ "hook": {"family":"curiosity|list|urgency|social-proof|transformation","openingLine":"the first 1-2s hook line (in ${lang})","why":"one line: why it holds attention","scrollStopper":"the exact visual or text element in the opening frame that stops the scroll","emotionalTrigger":"the core emotion/tension it taps (e.g. fear of wasting money, desire to transform)"},
+ "audience": {"who":"who this speaks to (buyer profile)","painPoint":"the problem or desire it targets","objection":"the main doubt it must overcome"},
+ "structure": {"format":"single|roundup","beats":["beat1","beat2","..."],"pacing":"cut speed/rhythm, one line","turningPoint":"the single pivotal reveal/turn and roughly when it lands","productIntegration":"how & when the product enters — natural vs salesy","cta":"final CTA / funnel form","whyItConverts":"the core persuasion mechanic that drives the click"},
+ "visualStyle": {"lookFeel":"overall aesthetic in a phrase","lighting":"lighting style","palette":"dominant colors","textStyle":"on-screen caption style & placement","editing":"cut style / transitions / effects"},
+ "sceneScript": [{"t":"0-2s","shot":"shot (angle/movement)","onScreenText":"on-screen caption (in ${lang})","vo":"VO narration (in ${lang})","purpose":"this scene's role in the flow","emotion":"the beat's emotional tone","durationSec":2}],
+ "assets": [{"scene":1,"need":"footage/image needed","type":"footage|image|ai"}],
+ "viralFactors": ["3-6 concrete, reusable reasons this format holds attention & converts (in ${lang})"]
 }`
   const out = await run('claude', ['-p', prompt, '--model', CLI_MODEL], { timeout: 120000 })
   const obj = JSON.parse(stripFence(out))
