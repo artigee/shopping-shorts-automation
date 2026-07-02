@@ -201,7 +201,9 @@ function NodeGraphInner() {
   useLayoutEffect(() => { const h = {}; graph.nodes.forEach((n) => { const el = nodeRefs.current[n.id]; if (el) h[n.id] = el.offsetHeight }); setHeights(h) }, [graph])
 
   const anchor = (n, side) => ({ x: n.x + (side === 'out' ? NODE_W : 0), y: n.y + (heights[n.id] || 90) / 2 })
-  const paths = graph.edges.map((e, i) => { const a = nodeById[e.from], b = nodeById[e.to]; if (!a || !b) return null; const p1 = anchor(a, 'out'), p2 = anchor(b, 'in'), dx = Math.max(40, (p2.x - p1.x) * 0.5); return { key: i, i, d: `M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`, color: EDGE_COLOR[e.cls] || '#7d8590', dashed: e.cls === 'global', editable: ['ref', 'product', 'character', 'environment'].includes(e.cls), label: (e.from === 'overall' && e.to.indexOf('script-') === 0 && b.scene != null) ? { x: p2.x - 34, y: p2.y - 5, t: b.scene } : null } }).filter(Boolean)
+  const paths = graph.edges.map((e, i) => { const a = nodeById[e.from], b = nodeById[e.to]; if (!a || !b) return null; const p1 = anchor(a, 'out'), p2 = anchor(b, 'in'), dx = Math.max(40, (p2.x - p1.x) * 0.5); return { key: i, i, d: `M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`, color: EDGE_COLOR[e.cls] || '#7d8590', dashed: e.cls === 'global', editable: ['ref', 'product', 'character', 'environment'].includes(e.cls), label: (e.from === 'overall' && e.to.indexOf('script-') === 0 && b.scene != null) ? { x: p2.x - 34, y: p2.y - 5, t: b.scene } : null, from: e.from, to: e.to } }).filter(Boolean)
+  // spotlight: selecting a node keeps it + its direct neighbors bright, dims the rest
+  const near = selId ? (() => { const s = new Set([selId]); graph.edges.forEach((e) => { if (e.from === selId || e.to === selId) { s.add(e.from); s.add(e.to) } }); return s })() : null
   const selFromArray = drawerNode ? graph.edges.some((e) => e.to === drawerNode.id && KIND[nodeById[e.from]?.kind]?.out?.array) : false
   const wireFrom = wireEnd ? nodeById[wireEnd.fromId] : null
 
@@ -245,7 +247,7 @@ function NodeGraphInner() {
     setFraming(true)
     setView((v) => ({ ...v, x: r.width / 2 - cx * v.k, y: (r.height - dh) / 2 - cy * v.k }))
     setSel(id)
-    setTimeout(() => setFraming(false), 300)
+    setTimeout(() => setFraming(false), 480)
   }
   function onMove(ev) {
     if (drag.current) { const d = drag.current; if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 3) d.moved = true; const dx = (ev.clientX - d.sx) / view.k, dy = (ev.clientY - d.sy) / view.k; setNg((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === d.id ? { ...n, x: d.ox + dx, y: d.oy + dy } : n) })); return }
@@ -294,11 +296,11 @@ function NodeGraphInner() {
       {err && <div className="ng-err">{err}</div>}
       <div className="ng-canvas" ref={canvasRef} onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onContextMenu={onCanvasMenu}>
         {!data && <div className="ng-loading">loading #{cid}…</div>}
-        <div className="ng-world" style={{ transform: `translate(${view.x}px,${view.y}px) scale(${view.k})`, transition: framing ? 'transform .28s ease' : 'none' }}>
+        <div className="ng-world" style={{ transform: `translate(${view.x}px,${view.y}px) scale(${view.k})`, transition: framing ? 'transform .46s cubic-bezier(.22,.61,.36,1)' : 'none' }}>
           <svg className="ng-edges">
             {paths.map((p) => (<g key={p.key}>
               {p.editable && <path className="ng-edge-hit" d={p.d} onClick={() => cutEdge(p.i)} />}
-              <path d={p.d} stroke={p.color} strokeWidth="1.6" fill="none" strokeDasharray={p.dashed ? '5 4' : 'none'} opacity={p.dashed ? 0.5 : 0.9} />
+              {(() => { const hot = selId && (p.from === selId || p.to === selId); const op = selId ? (hot ? 0.98 : 0.06) : (p.dashed ? 0.5 : 0.9); return <path d={p.d} stroke={p.color} strokeWidth={hot ? 2.6 : 1.6} fill="none" strokeDasharray={p.dashed ? '5 4' : 'none'} opacity={op} style={{ transition: 'opacity .16s, stroke-width .12s' }} /> })()}
               {p.label && <text x={p.label.x} y={p.label.y} fill="#c9b3ea" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontSize="11" fontWeight="600">{p.label.t}</text>}
             </g>))}
             {wireEnd && wireFrom && (() => { const p1 = anchor(wireFrom, 'out'), dx = Math.max(40, (wireEnd.x - p1.x) * 0.5); return <path className="ng-tmp-edge" d={`M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${wireEnd.x - dx},${wireEnd.y} ${wireEnd.x},${wireEnd.y}`} /> })()}
@@ -308,7 +310,7 @@ function NodeGraphInner() {
             const inWired = graph.edges.some((e) => e.to === n.id), outWired = graph.edges.some((e) => e.from === n.id)
             const wt = wireEnd && wireEnd.targetId === n.id ? (wireEnd.valid ? ' wire-target' : ' wire-bad') : ''
             return (
-              <div key={n.id} data-id={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n) + (n.id === selId ? ' sel' : '') + (n.dirty ? ' dirty' : '') + wt} style={{ left: n.x, top: n.y, width: NODE_W, color: c, borderColor: (n.id === selId ? c : c + '99') }} onPointerDown={(e) => startNodeDrag(e, n)}>
+              <div key={n.id} data-id={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n) + (n.id === selId ? ' sel' : '') + (near && !near.has(n.id) ? ' dim' : '') + (n.dirty ? ' dirty' : '') + wt} style={{ left: n.x, top: n.y, width: NODE_W, color: c, '--nc': c, borderColor: (n.id === selId ? c : c + '99') }} onPointerDown={(e) => startNodeDrag(e, n)}>
                 {tl && <span className="ng-type" style={{ color: c, borderColor: c + '66' }}>{tl}</span>}
                 <button className="ng-del" title="delete" onClick={(e) => { e.stopPropagation(); deleteNode(n.id) }}>×</button>
                 {n.kind === 'image' && (n.thumb ? <img className="ng-thumb" style={{ aspectRatio: aspectCSS(n.data?.aspect) }} src={n.thumb} loading="lazy" onError={(e) => { e.target.style.opacity = .2 }} /> : <div className="ng-thumb ph" style={{ aspectRatio: aspectCSS(n.data?.aspect) }}>{n.data?.aspect || '9:16'}</div>)}
@@ -460,11 +462,6 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
             <div className={'ng-fed' + (fedBy.length ? '' : ' manual')}>{fedBy.length ? '◦ from ' + fedBy.map((s) => s.hd).join(', ') : '✎ manual'}</div>
             <textarea className="ng-big" value={d[ed.field] || ''} onChange={(e) => onField(ed.field, e.target.value)} />
           </>}
-          <div className="ng-sh top">inputs</div>
-          {(k.inputs && k.inputs.length) ? k.inputs.map((slot) => {
-            const listS = slot.frame ? incoming.filter((s) => outTypeOf(s) === 'image' && ((s.data && s.data.frameRole) || 'start') === slot.frame) : incoming.filter((s) => outTypeOf(s) === slot.type)
-            return <div key={slot.key} className="ng-slot"><div className="ng-slot-h"><span>{slot.label || slot.key}</span><em>{slot.type}{slot.multi ? '[]' : ''}</em></div><div className="ng-wired">{listS.length ? listS.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>) : <span className="ng-none">— none —</span>}</div></div>
-          }) : <div className="ng-wired"><span className="ng-none">— no inputs —</span></div>}
           {n.kind === 'image' && <>
             <div className="ng-sh top">references (from library)</div>
             {['product', 'character', 'environment'].map((role) => {
@@ -478,10 +475,14 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
           <div className="ng-sh">properties</div>
           {fromArray && <div className="ng-prop"><label>index</label><select value={n.scene ?? ''} onChange={(e) => onScene(parseInt(e.target.value, 10))} style={{ color: '#c9b3ea', maxWidth: 110 }}>{n.scene == null && <option value="">— pick —</option>}{Array.from({ length: 100 }, (_, i) => i + 1).map((v) => <option key={v} value={v}>{v}</option>)}</select></div>}
           {cfg.length ? cfg.map((cc) => <div key={cc.f} className="ng-prop"><label>{cc.f}</label><Field c={cc} d={d} onField={onField} /></div>) : <div className="ng-prop"><span className="ng-fixed">— none —</span></div>}
-          <div className="ng-sh top">output</div>
-          <div className="ng-wired"><span className="ng-chip">{k.out.t === 'image' || k.out.t === 'video' ? '🎞' : '⤷'} {k.out.n}<em>{k.out.t}</em></span></div>
-          {outgoing && outgoing.length > 0 && <><div className="ng-sh top">→ feeds ({outgoing.length})</div>
-            <div className="ng-wired">{outgoing.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>)}</div></>}
+          <div className="ng-sh top">connections</div>
+          <div className="ng-connlabel">← inputs <em>from</em></div>
+          {(k.inputs && k.inputs.length) ? k.inputs.map((slot) => {
+            const listS = slot.frame ? incoming.filter((s) => outTypeOf(s) === 'image' && ((s.data && s.data.frameRole) || 'start') === slot.frame) : incoming.filter((s) => outTypeOf(s) === slot.type)
+            return <div key={slot.key} className="ng-slot"><div className="ng-slot-h"><span>{slot.label || slot.key}</span><em>{slot.type}{slot.multi ? '[]' : ''}</em></div><div className="ng-wired">{listS.length ? listS.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>) : <span className="ng-none">— none —</span>}</div></div>
+          }) : <div className="ng-wired"><span className="ng-none">— no inputs —</span></div>}
+          <div className="ng-connlabel">→ output <em>{k.out.n} · {k.out.t}</em></div>
+          <div className="ng-wired">{outgoing && outgoing.length ? outgoing.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>) : <span className="ng-none">— not connected —</span>}</div>
           <div className="ng-sh top">context</div>
           <div className="ng-ctxrow">persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div>
           <div className="ng-ctxrow">{ctx.product}</div>

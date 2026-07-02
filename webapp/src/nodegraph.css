@@ -10,8 +10,10 @@
 .ng-world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 .ng-edges { position: absolute; top: 0; left: 0; width: 3000px; height: 4000px; overflow: visible; pointer-events: none; }
 
-.ng-node { position: absolute; box-sizing: border-box; background: #232328; border: 1px solid #2f2f36; border-radius: 11px; padding: 8px 10px; font-size: 12px; cursor: grab; }
+.ng-node { position: absolute; box-sizing: border-box; background: #232328; border: 1px solid #2f2f36; border-radius: 11px; padding: 8px 10px; font-size: 12px; cursor: grab; transition: border-color .12s, box-shadow .16s, opacity .18s; }
 .ng-node:active { cursor: grabbing; }
+.ng-node:hover { border-color: rgba(222,220,209,.30); }
+.ng-node.dim { opacity: .3; }
 .ng-type { position: absolute; top: -10px; left: 9px; background: #1e1e22; border: 1px solid; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 8.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; padding: 1px 7px; border-radius: 6px; white-space: nowrap; z-index: 2; }
 .ng-thumb { display: block; height: 150px; aspect-ratio: 9/16; object-fit: cover; margin: 2px auto 6px; border-radius: 8px; background: linear-gradient(150deg, #2b3340, #20262e); }
 .ng-thumb.ph { display: flex; align-items: center; justify-content: center; color: #6b6a64; font-family: ui-monospace, monospace; font-size: 9px; }
@@ -32,7 +34,7 @@
 .ng-edge-hit { stroke: transparent; stroke-width: 14; fill: none; pointer-events: stroke; cursor: pointer; }
 .ng-edge-hit:hover + path { stroke: #e0655e !important; }
 
-.ng-node.sel { box-shadow: 0 0 0 1.5px currentColor, 0 6px 22px rgba(0,0,0,.4); }
+.ng-node.sel { box-shadow: 0 0 0 2px var(--nc, #5DCAA5), 0 10px 30px -8px var(--nc, #5DCAA5); z-index: 16; }
 .ng-node.dirty::after { content: 'stale'; position: absolute; top: -9px; right: 22px; background: #e0a341; color: #17171a; font-family: ui-monospace, monospace; font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 6px; }
 .ng-del { position: absolute; top: -9px; right: -9px; width: 18px; height: 18px; border-radius: 50%; background: #1e1e22; border: 1px solid #3a3a42; color: #9c9a92; font-size: 12px; line-height: 1; cursor: pointer; padding: 0; z-index: 3; }
 .ng-del:hover { border-color: #e0655e; color: #e0655e; }
@@ -116,6 +118,8 @@
 .ng-slot { margin-bottom: 8px; }
 .ng-slot-h { display: flex; justify-content: space-between; font-family: ui-monospace, monospace; font-size: 10.5px; color: #9c9a92; margin-bottom: 3px; }
 .ng-slot-h em { color: #6b6a64; font-style: normal; }
+.ng-connlabel { font-family: ui-monospace, monospace; font-size: 11px; color: #c9b3ea; margin: 10px 0 5px; }
+.ng-connlabel em { color: #6b6a64; font-style: normal; font-size: 9.5px; margin-left: 5px; text-transform: uppercase; letter-spacing: .4px; }
 .ng-refblk { margin-bottom: 9px; }
 .ng-refchips { display: flex; flex-wrap: wrap; gap: 6px; }
 .ng-refchip { display: inline-flex; align-items: center; gap: 5px; background: #17171a; border: 1px solid #2f2f36; border-radius: 7px; padding: 2px 7px 2px 2px; font-size: 10.5px; color: #9c9a92; cursor: pointer; }
