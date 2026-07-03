@@ -113,6 +113,12 @@
 .ng-big { width: 100%; min-height: 130px; box-sizing: border-box; background: #17171a; border: 1px solid #2f2f36; border-radius: 8px; color: #e8e6dd; font-family: ui-monospace, monospace; font-size: 13px; line-height: 1.55; padding: 11px 13px; resize: vertical; }
 .ng-big:focus { border-color: #4f9fe0; outline: none; }
 .ng-big.ro { background: #131316; color: #b7b5ac; cursor: default; }
+.ng-srcbox { background: #14161c; border: 1px solid #2f2f36; border-radius: 8px; padding: 9px 11px; }
+.ng-srcbox .ng-kvtext { margin: 0 0 5px; }
+.ng-srcbox .ng-kvtext:last-child { margin-bottom: 0; }
+.ng-srcbox .ng-kvtext b { display: inline-block; min-width: 34px; font-family: ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; }
+.ng-instruct { width: 100%; min-height: 76px; box-sizing: border-box; background: #17171a; border: 1px solid #4a4470; border-radius: 8px; color: #e8e6dd; font-family: ui-monospace, monospace; font-size: 12.5px; line-height: 1.5; padding: 9px 11px; resize: vertical; }
+.ng-instruct:focus { border-color: #7d6bd0; outline: none; }
 .ng-prop { align-items: flex-start; }
 .ng-prop textarea.ng-smalltext { flex: 1; min-width: 0; min-height: 52px; box-sizing: border-box; background: #17171a; border: 1px solid #2f2f36; border-radius: 6px; color: #e8e6dd; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.5; padding: 6px 8px; resize: vertical; }
 .ng-prop textarea.ng-smalltext:focus { border-color: #4f9fe0; outline: none; }

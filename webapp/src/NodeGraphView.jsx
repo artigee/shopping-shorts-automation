@@ -586,6 +586,33 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
         <div className="ng-col right"><div className="ng-sh">context</div><div className="ng-ctxrow">persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div><div className="ng-ctxrow">angle {ctx.angle}</div></div>
       </div>
     )
+  } else if (n.kind === 'prompt') {
+    // image-prompt / motion-prompt / VO-text: ① input(scene script) ② instruction ③ output(read-only)
+    const scr = incoming.find((x) => x.kind === 'script')
+    const outLabel = typeof n.id === 'string' && n.id.startsWith('promptV-') ? 'VO text' : (typeof n.id === 'string' && n.id.startsWith('promptM-')) ? 'motion' : 'image prompt'
+    body = (
+      <div className="ng-db">
+        <div className="ng-col">
+          <div className="ng-sh">① input · from scene script</div>
+          <div className="ng-srcbox">
+            {scr ? <>
+              {scr.data?.title ? <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>title</b> {scr.data.title}</div> : null}
+              {scr.data?.vo ? <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>VO</b> {scr.data.vo}</div> : null}
+              {!scr.data?.title && !scr.data?.vo ? <span className="ng-none">— scene script empty —</span> : null}
+            </> : <span className="ng-none">— not linked to a scene script —</span>}
+          </div>
+          <div className="ng-sh top">② instruction <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· steer the LLM (optional)</em></div>
+          <textarea className="ng-instruct" value={d.guidance || ''} placeholder="e.g. tighter close-up · warmer tone · slower motion — then ▶ re-run" onChange={(e) => onField('guidance', e.target.value)} onBlur={onCommit} />
+        </div>
+        <div className="ng-col right">
+          <div className="ng-sh">③ output prompt <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· {outLabel} · read-only, feeds downstream</em></div>
+          <textarea className="ng-big ro" value={d.prompt || ''} readOnly placeholder="— run to generate —" />
+          <div className="ng-sh top">→ feeds</div>
+          <div className="ng-wired">{outgoing && outgoing.length ? outgoing.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>) : <span className="ng-none">— not connected —</span>}</div>
+          <div className="ng-ctxrow" style={{ marginTop: 10 }}>persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div>
+        </div>
+      </div>
+    )
   } else {
     const ed = k.editor
     const fedBy = incoming.filter((s) => outTypeOf(s) === 'text')
