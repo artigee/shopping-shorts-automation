@@ -776,6 +776,13 @@ app.put('/api/contents/:id/ref-lib', (req, res) => {
   res.json({ ok: true })
 })
 
+// 노드 이름 등 그래프 커스터마이즈 저장 (편집한 노드 이름 보존)
+app.put('/api/contents/:id/node-meta', (req, res) => {
+  const nodeMeta = (req.body && req.body.nodeMeta) || null
+  db.prepare(`UPDATE contents SET node_meta = ?, updated_at = datetime('now') WHERE id = ?`).run(nodeMeta ? JSON.stringify(nodeMeta) : null, req.params.id)
+  res.json({ ok: true })
+})
+
 // ④ 씬 스크립트 생성 (편집된 전체 스크립트를 씬 단위로 분해; 없으면 자동 생성). body.guidance로 guided regeneration.
 app.post('/api/contents/:id/script', async (req, res) => {
   const { c, a, p, err } = loadForGen(req.params.id)

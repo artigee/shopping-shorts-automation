@@ -95,7 +95,7 @@ function adapt(resp) {
     id: c.id, title: c.title, persona: c.persona, hook: c.hook, style: c.style, final_form: c.final_form,
     shot_count: c.shot_count, direction: c.direction, preview: c.preview, export_mp4: c.export_mp4,
     analysisRow: resp.analysis || {}, product: resp.product || parse(c.product) || {},
-    scenes: parse(c.scenes) || [], overall: parse(c.overall) || null, refLibSaved: parse(c.ref_lib) || null, mediaVer: Date.now(),
+    scenes: parse(c.scenes) || [], overall: parse(c.overall) || null, refLibSaved: parse(c.ref_lib) || null, nodeMetaSaved: parse(c.node_meta) || null, mediaVer: Date.now(),
   }
 }
 
@@ -151,6 +151,7 @@ function buildGraph(data) {
     else edges.push({ from: 'image-' + k, to: 'movie', cls: 'flow' })
     edges.push({ from: 'vo-' + k, to: 'movie', cls: 'audio' })
   })
+  if (data.nodeMetaSaved) nodes.forEach((n) => { const nm = data.nodeMetaSaved[n.id]; if (nm) n.hd = nm })   // 편집한 노드 이름 복원
   return { nodes, edges, refLib }
 }
 
@@ -187,6 +188,7 @@ function NodeGraphInner() {
   const ngRef = useRef(ng); ngRef.current = ng
   const srcSig = useRef(null)               // 로드 당시 소스 분석 시그니처(analyzed_at)
   const loadedRefKey = useRef('')           // 로드 당시 refLib 시그니처 (변경 감지용)
+  const loadedNameKey = useRef('')          // 로드 당시 노드 이름 시그니처
   const hist = useRef({ past: [], future: [], key: null })
   const dragSnap = useRef(null)
   const [histN, setHistN] = useState({ u: 0, r: 0 })
@@ -337,13 +339,20 @@ function NodeGraphInner() {
       commitRun(n.id, (x) => ({ ...x, dirty: false }))
     } catch (e) { setErr(String(e.message || e)) }
   }
-  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; loadedRefKey.current = JSON.stringify(g.refLib); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
+  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; loadedRefKey.current = JSON.stringify(g.refLib); loadedNameKey.current = g.nodes.map((n) => n.id + '=' + n.hd).join('|'); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
   // 레퍼런스 라이브러리 정리(추가/이동/삭제)를 자동 저장 — 로드값과 다를 때만
   const refLibKey = JSON.stringify(ng.refLib)
   useEffect(() => {
     if (cid == null || !data || refLibKey === loadedRefKey.current) return
     postJSON(`/api/contents/${cid}/ref-lib`, { refLib: ng.refLib }, 'PUT').catch(() => {})
   }, [refLibKey])
+  // 편집한 노드 이름 자동 저장 (디바운스) — 로드값과 다를 때만
+  const nameKey = ng.nodes.map((n) => n.id + '=' + n.hd).join('|')
+  useEffect(() => {
+    if (cid == null || !data || nameKey === loadedNameKey.current) return
+    const t = setTimeout(() => { const meta = {}; ng.nodes.forEach((n) => { meta[n.id] = n.hd }); postJSON(`/api/contents/${cid}/node-meta`, { nodeMeta: meta }, 'PUT').catch(() => {}) }, 700)
+    return () => clearTimeout(t)
+  }, [nameKey])
 
   const graph = ng
   const nodeById = useMemo(() => { const m = {}; graph.nodes.forEach((n) => (m[n.id] = n)); return m }, [graph])
