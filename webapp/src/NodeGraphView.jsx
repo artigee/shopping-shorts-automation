@@ -289,7 +289,12 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       try {
         const r = await postJSON(`/api/contents/${cid}/recommend-${n.hd}`, { guidance: n.data.guidance || '' })
         const v = n.hd === 'persona' ? r.persona : r.hook
-        if (v) { await postJSON(`/api/contents/${cid}/${n.hd}`, { [n.hd]: v }); commitRun(n.id, (x) => ({ ...x, dirty: false, t: v })) }
+        const style = n.hd === 'persona' ? (r.voStyle || '') : ''   // persona 추천은 스피킹 스타일도 함께 제안 (refine 노트는 사용자 소유 → 유지)
+        if (v) {
+          await postJSON(`/api/contents/${cid}/${n.hd}`, { [n.hd]: v })
+          if (style) await postJSON(`/api/contents/${cid}/vo-style`, { voStyle: style, voStyleNote: n.data.voStyleNote || '' })
+          commitRun(n.id, (x) => ({ ...x, dirty: false, t: v, ...(style ? { data: { ...x.data, voStyle: style } } : {}) }))
+        }
       } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
       return
     }
@@ -878,7 +883,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
             </select>
             {opt ? <div className="ng-fed" style={{ marginTop: 9 }}>{opt.register || opt.when_to_use || ''}</div> : <div className="ng-fed manual" style={{ marginTop: 9 }}>— choose one, or ▶ re-run to recommend —</div>}
             {isP ? (() => { const sk = d.voStyle || '', so = (lib.voStyles || []).find((x) => x.key === sk); return <>
-              <div className="ng-sh top">④ speaking style <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· how this voice paces the VO</em></div>
+              <div className="ng-sh top">④ speaking style <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· how this voice paces the VO · ▶ re-run recommends</em></div>
               <select className="ng-bigsel" value={sk} onChange={(e) => onField('__vostyle', e.target.value)}>
                 <option value="">— natural (persona default) —</option>{(lib.voStyles || []).map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
               </select>

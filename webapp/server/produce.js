@@ -299,14 +299,17 @@ Output ONLY JSON: {"persona":"<key>","personaWhy":"one short reason","hook":"<ke
 }
 
 // 페르소나만 추천 (product + audience + reel voice + instruction)
-export async function recommendPersona({ productName, product, analysis, personas, guidance }) {
-  const prompt = `Recommend the single best VO PERSONA for a US-market shopping short — the voice that makes the most scroll-stopping short for THIS product and its likely buyer.
+export async function recommendPersona({ productName, product, analysis, personas, voStyles, guidance }) {
+  const hasStyles = Array.isArray(voStyles) && voStyles.length
+  const prompt = `Recommend the single best VO PERSONA${hasStyles ? ' and the best SPEAKING STYLE (how that persona paces the line)' : ''} for a US-market shopping short — the combination that makes the most scroll-stopping short for THIS product and its likely buyer.
 [Product] ${productLine(productName, product)}${product?.features ? '\n[Features] ' + String(product.features).slice(0, 400) : ''}
-[Reel voice + audience (reference)] ${JSON.stringify({ voice: analysis?.voice, audience: analysis?.audience, hook: analysis?.hook }).slice(0, 1400)}
+[Reel voice + audience + pacing (reference)] ${JSON.stringify({ voice: analysis?.voice, audience: analysis?.audience, hook: analysis?.hook, pacing: analysis?.structure?.pacing }).slice(0, 1600)}
 [Available personas (key: name — register)]
-${(personas || []).map((p) => `${p.key}: ${p.name} — ${p.register || ''}`).join('\n')}
+${(personas || []).map((p) => `${p.key}: ${p.name} — ${p.register || ''}`).join('\n')}${hasStyles ? `
+[Available speaking styles (key: name — how it paces the VO)]
+${voStyles.map((s) => `${s.key}: ${s.name} — ${(s.directive || '').trim().split('\n')[0]}`).join('\n')}` : ''}
 ${guidance && guidance.trim() ? '[INSTRUCTION — honor above all] ' + guidance.trim() : ''}
-Pick ONE persona key from the list (exact key). Output ONLY JSON: {"persona":"<key>","why":"one short reason"}`
+Pick ONE persona key${hasStyles ? ' and ONE speaking-style key' : ''} from the list(s) (exact keys). The style should match the reel's pacing and the persona's register. Output ONLY JSON: {"persona":"<key>","why":"one short reason"${hasStyles ? ',"voStyle":"<key>","voStyleWhy":"one short reason"' : ''}}`
   const out = await runClaude(prompt, { model: 'haiku', timeout: 60000 })
   const r = JSON.parse(stripFence(out)); if (!r?.persona) throw new Error('persona 추천 파싱 실패'); return r
 }
