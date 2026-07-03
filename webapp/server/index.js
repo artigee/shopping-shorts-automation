@@ -431,8 +431,8 @@ app.post('/api/reels/:id/analysis', (req, res) => {
   if (!r) return res.status(404).json({ error: '없는 릴스' })
   const title = (req.body && req.body.title) || (r.caption ? r.caption.replace(/\s+/g, ' ').slice(0, 28) : '@' + r.username)
   const id = Number(db.prepare(`INSERT INTO analyses
-      (title, category, reel_code, reel_url, reel_thumbnail, reel_username, reel_caption, reel_comments, reel_play)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      (title, category, reel_code, reel_url, reel_thumbnail, reel_username, reel_caption, reel_comments, reel_play, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'discover')`)
     .run(title, (req.body && req.body.category) || '기타', r.code, r.url, r.thumbnail, r.username, r.caption, r.comments, r.play).lastInsertRowid)
   res.json(db.prepare('SELECT * FROM analyses WHERE id = ?').get(id))
 })
@@ -516,7 +516,7 @@ app.post('/api/analyses/from-url', async (req, res) => {
     }
   }
   const title = (product?.title || `Reel ${code}`).slice(0, 60)
-  const id = Number(db.prepare(`INSERT INTO analyses (title, reel_code, reel_url, product) VALUES (?, ?, ?, ?)`)
+  const id = Number(db.prepare(`INSERT INTO analyses (title, reel_code, reel_url, product, source) VALUES (?, ?, ?, ?, 'url')`)
     .run(title, code, url, product ? JSON.stringify(product) : null).lastInsertRowid)
   res.json(db.prepare('SELECT * FROM analyses WHERE id = ?').get(id))
 })
@@ -525,7 +525,7 @@ app.post('/api/analyses/from-url', async (req, res) => {
 
 app.get('/api/contents', (req, res) => {
   res.json(db.prepare(`
-    SELECT c.*, a.title AS analysis_title, a.reel_thumbnail, a.reel_username, (a.analysis IS NOT NULL) AS has_analysis,
+    SELECT c.*, a.title AS analysis_title, a.reel_thumbnail, a.reel_username, (a.analysis IS NOT NULL) AS has_analysis, a.source AS origin,
            json_extract(c.product, '$.title') AS product_name, json_extract(c.product, '$.image') AS product_image
     FROM contents c LEFT JOIN analyses a ON a.id = c.analysis_id
     ORDER BY c.id DESC`).all())

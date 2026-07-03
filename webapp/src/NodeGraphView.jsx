@@ -683,7 +683,7 @@ function Board({ list, running, onOpen, reload }) {
           const imgs = sc.filter((s) => s && (s.image || s.imageSrc)).length
           const title = c.title || c.product_name || c.analysis_title || 'untitled'
           return (
-            <div key={c.id} className="pcard ng-pcard" onClick={() => onOpen(c.id)} title="open graph">
+            <div key={c.id} className={'pcard ng-pcard' + (c.origin === 'url' ? ' ng-origin-url' : ' ng-origin-discover')} onClick={() => onOpen(c.id)} title={c.origin === 'url' ? 'manually added from URL' : 'from Discover'}>
               {running?.has(c.id) && <span className="ng-card-run">● running</span>}
               <div className="ng-card-acts" onPointerDown={(e) => e.stopPropagation()}>
                 <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => dup(e, c.id)} title="duplicate">⧉</button>
@@ -697,7 +697,7 @@ function Board({ list, running, onOpen, reload }) {
                   <div className="pmet" style={{ marginTop: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
                     <span className="badge" style={{ color: 'var(--mut)', whiteSpace: 'nowrap' }}>{sc.length} sc · {imgs}/{sc.length} img</span>
                     {hasMovie ? <span className="badge" style={{ color: 'var(--green)' }}>🎬 movie</span> : hasOverall ? <span className="badge" style={{ color: 'var(--blue)' }}>overall</span> : <span className="badge" style={{ color: 'var(--acc)' }}>draft</span>}
-                    {c.content_mode && <span className="badge" style={{ color: '#b9a3e6' }}>{c.content_mode.replace('_', ' ')}</span>}
+                    <span className="badge" style={{ color: c.origin === 'url' ? '#e0a341' : '#7fb3e8' }}>{c.origin === 'url' ? '🔗 url' : '🔎 discover'}</span>
                   </div>
                 </div>
               </div>
