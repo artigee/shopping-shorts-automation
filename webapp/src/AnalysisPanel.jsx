@@ -1,22 +1,54 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { postJSON } from './util.js'
 import { useT } from './i18n.jsx'
 import Dots from './Dots.jsx'
 
 // 분석 결과 표시 + 실행. data.analysis(JSON) 을 읽고, runUrl 로 영상분석 실행.
+// 분석은 잡(에이전트)으로 돌아가므로 상태를 폴링하고, 화면 재진입 시 진행 중 잡에 재접속한다.
 export default function AnalysisPanel({ data, runUrl, onUpdated, readOnly }) {
   const { t } = useT()
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState(null)
+  const [job, setJob] = useState(null)          // 진행 중 잡 {status,progress,message}
+  const poll = useRef(null)
 
   let a = null
   try { a = data?.analysis ? JSON.parse(data.analysis) : null } catch { a = null }
 
-  async function run() {
-    setLoading(true); setErr(null)
-    try { await postJSON(runUrl, {}); onUpdated?.() }
-    catch (e) { setErr(String(e.message || e)) } finally { setLoading(false) }
+  // runUrl(/api/analyses/12/analyze) → ref(analyses:12) — 잡 재접속용
+  const ref = (() => { const m = /\/api\/(\w+)\/([\w-]+)\//.exec(runUrl || ''); return m ? `${m[1]}:${m[2]}` : null })()
+
+  function stopPoll() { if (poll.current) { clearInterval(poll.current); poll.current = null } }
+  function startPoll(jobId) {
+    setLoading(true); stopPoll()
+    poll.current = setInterval(async () => {
+      try {
+        const jb = await (await fetch(`/api/jobs/${jobId}`)).json()
+        setJob(jb)
+        if (jb.status === 'done') { stopPoll(); setJob(null); setLoading(false); onUpdated?.() }
+        else if (jb.status === 'failed') { stopPoll(); setJob(null); setLoading(false); setErr(jb.error || 'analysis failed') }
+      } catch { /* 네트워크 순간 오류는 무시하고 계속 폴링 */ }
+    }, 1500)
   }
+
+  // 마운트/재진입 시: 이 대상에 진행 중 잡이 있으면 스피너를 그 잡에 재연결
+  useEffect(() => {
+    if (!ref) return
+    let cancelled = false
+    fetch(`/api/jobs?ref=${ref}&active=1`).then((r) => r.json()).then(({ job: jb }) => { if (!cancelled && jb) startPoll(jb.id) }).catch(() => {})
+    return () => { cancelled = true; stopPoll() }
+  }, [ref])
+
+  async function run() {
+    setErr(null)
+    try {
+      const resp = await postJSON(runUrl, {})
+      if (resp && resp.jobId) startPoll(resp.jobId)   // 잡 기반 (analyze)
+      else onUpdated?.()                              // 레거시 동기 응답
+    } catch (e) { setErr(String(e.message || e)) }
+  }
+
+  const busyLabel = (job && job.message ? job.message + (job.progress ? ` · ${job.progress}%` : '') : t('영상 다운로드→프레임→비전 분석 중 (~1분)'))
 
   return (
     <div className="vbox" style={{ marginTop: 14 }}>
@@ -25,13 +57,13 @@ export default function AnalysisPanel({ data, runUrl, onUpdated, readOnly }) {
         <span style={{ flex: 1 }} />
         {!readOnly && (
           <button className="ghost" onClick={run} disabled={loading}>
-            {loading ? <Dots label={t('영상 다운로드→프레임→비전 분석 중 (~1분)')} /> : a ? t('🔄 재분석') : t('▶ 영상 분석 실행')}
+            {loading ? <Dots label={busyLabel} /> : a ? t('🔄 재분석') : t('▶ 영상 분석 실행')}
           </button>
         )}
       </div>
       {!readOnly && <p className="muted hint" style={{ margin: '6px 2px' }}>{t('ⓘ 디버그 크롬이 떠 있어야 영상을 받습니다. 릴스 영상→키프레임→Claude 비전으로 분석.')}</p>}
       {err && <div className="errbox statusbox" style={{ marginTop: 6 }}>{err}</div>}
-      {loading && <div className="muted" style={{ padding: 14 }}><Dots label={t('영상 다운로드→프레임→비전 분석 중 (~1분)')} /></div>}
+      {loading && <div className="muted" style={{ padding: 14 }}><Dots label={busyLabel} /></div>}
 
       {a && !loading && (
         <div className="analysis">

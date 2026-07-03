@@ -168,6 +168,25 @@ ensureColumn('contents', 'shot_count', 'INTEGER')    // 씬(샷) 목표 개수 (
 ensureColumn('contents', 'export_mp4', 'TEXT')       // Remotion 정식 익스포트 mp4 경로
 ensureColumn('contents', 'character_ref', 'TEXT')    // 캐릭터(인물) 레퍼런스 — 모든 씬 이미지에 동일 인물 적용 (url 또는 hfmedia:)
 
+// 에이전트 잡 — 장시간 LLM 작업(analyze/generate 등)을 요청과 분리해 내구성 있게 추적.
+// status: queued | running | done | failed. ref_type/ref_id = 작업 대상(예: analyses:12).
+db.exec(`
+CREATE TABLE IF NOT EXISTS jobs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent      TEXT NOT NULL,           -- 에이전트 이름 (analyze, overall, scenes ...)
+  ref_type   TEXT,                    -- 대상 종류 (analyses | contents ...)
+  ref_id     TEXT,                    -- 대상 id
+  status     TEXT NOT NULL DEFAULT 'queued',
+  progress   INTEGER DEFAULT 0,       -- 0-100
+  message    TEXT,                    -- 현재 단계 사람이 읽는 라벨
+  error      TEXT,
+  result     TEXT,                    -- JSON (선택)
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+)`)
+// 서버 재시작 시 매달려 있던 running 잡은 인프로세스라 유실됨 → stale 로 표시.
+db.prepare(`UPDATE jobs SET status='failed', error='server restarted', updated_at=datetime('now') WHERE status IN ('queued','running')`).run()
+
 // 앱 전역 설정 (key-value) — 예: 생성 언어/지역
 db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`)
 export function getSetting(key, def = null) { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? r.value : def }

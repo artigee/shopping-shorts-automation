@@ -4,6 +4,7 @@ import cors from 'cors'
 import fs from 'node:fs'
 import path from 'node:path'
 import { db, dbStats, getSetting, setSetting } from './db.js'
+import { startJob, getJob, activeJob, listJobs } from './jobs.js'
 import { collect } from './collect.js'
 import { extractProducts, identifyReel } from './extract.js'
 import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon.js'
@@ -450,12 +451,17 @@ app.put('/api/analyses/:id', (req, res) => {
 app.delete('/api/analyses/:id', (req, res) => { db.prepare('DELETE FROM analyses WHERE id = ?').run(req.params.id); res.json({ ok: true }) })
 
 // 영상 분석 실행 (릴스 스냅샷으로)
-app.post('/api/analyses/:id/analyze', async (req, res) => {
+// Reel Analysis 에이전트 — 요청과 분리된 잡으로 실행. 즉시 { jobId } 반환, UI가 상태 폴링.
+app.post('/api/analyses/:id/analyze', (req, res) => {
   const a = db.prepare('SELECT * FROM analyses WHERE id = ?').get(req.params.id)
   if (!a) return res.status(404).json({ error: '없는 분석' })
-  try {
+  const existing = activeJob('analyses', a.id)
+  if (existing) return res.json({ jobId: existing.id, already: true })
+  const job = startJob({ agent: 'analyze', refType: 'analyses', refId: a.id, message: 'queued…' }, async (progress) => {
+    progress('릴스 영상 받는 중…', 15)
     const result = await analyzeReel({ code: a.reel_code, url: a.reel_url, caption: a.reel_caption, productName: a.title, lang: genLang() })
     // Analyze가 제품까지 한 번에: 식별 → 비전으로 "생김새" 매칭 (best-effort)
+    progress('제품 매칭 중…', 70)
     let product = a.product ? JSON.parse(a.product) : null   // 직접 입력으로 이미 제품이 있으면 그걸 사용
     let candidates = a.candidates ? JSON.parse(a.candidates) : []
     let matchMeta = a.match_meta ? JSON.parse(a.match_meta) : null
@@ -469,12 +475,22 @@ app.post('/api/analyses/:id/analyze', async (req, res) => {
         } else matchMeta = { asin: null, confidence: 0, reason: 'product not identifiable from reel' }
       } catch (e) { matchMeta = { asin: null, confidence: 0, reason: 'match failed: ' + (e.message || '').slice(0, 100) } }
     } else matchMeta = matchMeta || { asin: product.asin || null, confidence: 1, reason: 'manually provided product' }
+    progress('저장 중…', 95)
     db.prepare(`UPDATE analyses SET analysis = ?, product = ?, candidates = ?, match_meta = ?, analyzed_at = datetime('now') WHERE id = ?`)
       .run(JSON.stringify(result), product ? JSON.stringify(product) : null, JSON.stringify(candidates), matchMeta ? JSON.stringify(matchMeta) : null, a.id)
-    res.json({ ...result, product, candidates, match: matchMeta })
-  } catch (e) {
-    res.status(500).json({ error: e.message || String(e), code: e.code || null })
-  }
+    return { ok: true }
+  })
+  res.json({ jobId: job.id })
+})
+
+// 잡 상태 — UI가 폴링 / 재접속. GET /api/jobs/:id, GET /api/jobs?ref=analyses:12&active=1
+app.get('/api/jobs/:id', (req, res) => { const job = getJob(req.params.id); if (!job) return res.status(404).json({ error: 'no job' }); res.json(job) })
+app.get('/api/jobs', (req, res) => {
+  const { ref, status, active } = req.query
+  let refType, refId
+  if (ref) { const [t, i] = String(ref).split(':'); refType = t; refId = i }
+  if (active && refType) return res.json({ job: activeJob(refType, refId) || null })
+  res.json({ jobs: listJobs({ status, refType, refId }) })
 })
 
 // 직접 추가 — 발굴(Discover) 없이 릴스 URL + (선택)제품 링크로 분석 자산 생성. 릴스를 직접 가져와 리믹스.
