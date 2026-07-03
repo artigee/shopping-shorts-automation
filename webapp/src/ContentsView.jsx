@@ -15,7 +15,7 @@ function Section({ title, sub, right, open, onToggle, gold, children }) {
     </div>
   )
 }
-import { api, postJSON } from './util.js'
+import { api, postJSON, pollJob } from './util.js'
 import { useT } from './i18n.jsx'
 import Dots from './Dots.jsx'
 
@@ -95,6 +95,7 @@ function ContentDetail({ data, onClose, onChange, goProducts }) {
   const [scenes, setScenes] = useState(() => { try { return content.scenes ? JSON.parse(content.scenes) : [] } catch { return [] } })
   const [form, setForm] = useState(content.final_form || 'card')
   const [busy, setBusy] = useState('')
+  const [busyMsg, setBusyMsg] = useState('')   // 잡 진행 라벨
   const [err, setErr] = useState(null)
   const [hf, setHf] = useState(null)   // Higgsfield 키 설정 여부
   const [genIdx, setGenIdx] = useState(-1)
@@ -258,12 +259,29 @@ function ContentDetail({ data, onClose, onChange, goProducts }) {
     catch (e) { setErr(String(e.message || e)) } finally { setExporting(false) }
   }
 
-  // ③ 전체 스크립트 — 재생성 = 저장된 이전 단계(분석+제품) 기반. 직접 편집은 onBlur 자동저장.
+  // ③ 전체 스크립트(엔진) — 잡으로 실행. 재생성 = 저장된 이전 단계(분석+제품) 기반. 직접 편집은 onBlur 자동저장.
   async function genOverall() {
-    setBusy('overall'); setErr(null)
-    try { const o = await postJSON(`/api/contents/${content.id}/overall`, {}); setOverall(o) }
-    catch (e) { setErr(String(e.message || e)) } finally { setBusy('') }
+    setBusy('overall'); setBusyMsg(''); setErr(null)
+    try {
+      const resp = await postJSON(`/api/contents/${content.id}/overall`, {})
+      if (resp && resp.jobId) { const o = await pollJob(resp.jobId, (jb) => setBusyMsg(jb.message || '')); if (o) setOverall(o) }
+      else setOverall(resp)   // 레거시 동기 응답
+    }
+    catch (e) { setErr(String(e.message || e)) } finally { setBusy(''); setBusyMsg('') }
   }
+  // 마운트 시: 이 콘텐츠에 진행 중 overall 잡이 있으면 스피너를 재연결
+  useEffect(() => {
+    let cancelled = false
+    api(`/api/jobs?ref=contents:${content.id}&active=1&agent=overall`).then(({ job }) => {
+      if (cancelled || !job) return
+      setBusy('overall')
+      pollJob(job.id, (jb) => !cancelled && setBusyMsg(jb.message || ''))
+        .then((o) => { if (!cancelled && o) setOverall(o) })
+        .catch((e) => { if (!cancelled) setErr(String(e.message || e)) })
+        .finally(() => { if (!cancelled) { setBusy(''); setBusyMsg('') } })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [content.id])
   function editO(f, v) { setOverall((o) => ({ ...(o || {}), [f]: v })) }
   async function saveOverall() { try { await postJSON(`/api/contents/${content.id}/overall`, { overall }, 'PUT') } catch {} }
 
@@ -400,7 +418,7 @@ function ContentDetail({ data, onClose, onChange, goProducts }) {
 
         {/* 1. 전체 스크립트 */}
         <Section title={`1. ${t('전체 스크립트')}`} open={open.overall} onToggle={() => toggle('overall')}
-          right={<button className="primary" onClick={() => genOverall()} disabled={!ready || !!busy}>{busy === 'overall' ? <Dots label={t('생성')} /> : overall ? t('🔄 재생성') : t('▶ 생성')}</button>}>
+          right={<button className="primary" onClick={() => genOverall()} disabled={!ready || !!busy}>{busy === 'overall' ? <Dots label={busyMsg || t('생성')} /> : overall ? t('🔄 재생성') : t('▶ 생성')}</button>}>
           {overall ? (
             <div className="vbox" style={{ gap: 6 }}>
               <label className="fld"><span>{t('각도(angle)')}</span><input value={overall.angle || ''} onChange={(e) => editO('angle', e.target.value)} onBlur={saveOverall} /></label>

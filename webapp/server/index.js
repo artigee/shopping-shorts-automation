@@ -489,7 +489,7 @@ app.get('/api/jobs', (req, res) => {
   const { ref, status, active } = req.query
   let refType, refId
   if (ref) { const [t, i] = String(ref).split(':'); refType = t; refId = i }
-  if (active && refType) return res.json({ job: activeJob(refType, refId) || null })
+  if (active && refType) return res.json({ job: activeJob(refType, refId, req.query.agent) || null })
   res.json({ jobs: listJobs({ status, refType, refId }) })
 })
 
@@ -728,16 +728,22 @@ function loadForGen(id) {
 }
 
 // ③ 전체 스크립트 생성 (구조만 빌려 선택 제품으로 새로 작성). body.guidance 있으면 현재 버전을 그 지시대로 수정.
-app.post('/api/contents/:id/overall', async (req, res) => {
+// Overall Script 에이전트 — 파이프라인의 엔진. 잡으로 실행: 즉시 { jobId }, 뒤에서 생성·저장.
+app.post('/api/contents/:id/overall', (req, res) => {
   const { c, a, p, err } = loadForGen(req.params.id)
   if (err) return res.status(c ? 400 : 404).json({ error: err })
+  const existing = activeJob('contents', c.id, 'overall')
+  if (existing) return res.json({ jobId: existing.id, already: true })
   const guidance = (req.body && req.body.guidance || '').trim()
   const base = guidance && c.overall ? JSON.parse(c.overall) : null
-  try {
+  const job = startJob({ agent: 'overall', refType: 'contents', refId: c.id, message: 'writing overall…' }, async (progress) => {
+    progress('스토리 스크립트 작성 중… (~1분)', 30)
     const overall = await generateOverall({ analysis: JSON.parse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, hook: c.hook, lang: genLang() })
+    progress('저장 중…', 90)
     db.prepare(`UPDATE contents SET overall = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(overall), c.id)
-    res.json(overall)
-  } catch (e) { res.status(500).json({ error: e.message || String(e) }) }
+    return overall
+  })
+  res.json({ jobId: job.id })
 })
 // 전체 스크립트 수동 편집 저장
 app.put('/api/contents/:id/overall', (req, res) => {

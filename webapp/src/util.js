@@ -23,3 +23,21 @@ export async function postJSON(path, body, method = 'POST') {
     body: JSON.stringify(body),
   })
 }
+
+// 잡(에이전트) 상태를 폴링 — done이면 파싱된 result를, failed면 에러. onProgress(job)로 진행 표시.
+export function pollJob(jobId, onProgress, interval = 1500) {
+  return new Promise((resolve, reject) => {
+    let errs = 0
+    const tick = async () => {
+      try {
+        const jb = await api(`/api/jobs/${jobId}`)
+        errs = 0
+        onProgress?.(jb)
+        if (jb.status === 'done') return resolve(jb.result ? JSON.parse(jb.result) : null)
+        if (jb.status === 'failed') return reject(new Error(jb.error || 'job failed'))
+        setTimeout(tick, interval)
+      } catch (e) { if (++errs > 5) return reject(e); setTimeout(tick, interval) }
+    }
+    tick()
+  })
+}

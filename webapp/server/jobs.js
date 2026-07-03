@@ -18,8 +18,10 @@ const j = (id) => db.prepare('SELECT * FROM jobs WHERE id = ?').get(id)
 
 export function getJob(id) { return j(id) }
 
-export function activeJob(refType, refId) {
-  return db.prepare(`SELECT * FROM jobs WHERE ref_type=? AND ref_id=? AND status IN ('queued','running') ORDER BY id DESC LIMIT 1`).get(refType, String(refId))
+export function activeJob(refType, refId, agent) {
+  const extra = agent ? ' AND agent=?' : ''
+  const args = agent ? [refType, String(refId), agent] : [refType, String(refId)]
+  return db.prepare(`SELECT * FROM jobs WHERE ref_type=? AND ref_id=?${extra} AND status IN ('queued','running') ORDER BY id DESC LIMIT 1`).get(...args)
 }
 
 export function listJobs({ status, refType, refId, limit = 50 } = {}) {
