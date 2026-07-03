@@ -526,14 +526,12 @@ function Board({ list, running, onOpen, reload }) {
               <div className="pbody">
                 {thumb ? <img className="pthumb" src={thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} /> : <div className="pthumb ng-pthumb-ph">#{c.id}</div>}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="pname" style={{ fontSize: 14, margin: '0 0 4px' }}>{title}</div>
+                  <div className="pname">{title}</div>
                   <div className="pmet"><span className="muted">{c.persona || '—'} · {c.hook || '—'}</span></div>
-                  <div className="ng-card-stat" style={{ marginTop: 7 }}>
-                    <span>{sc.length} sc</span>
-                    <span className={hasOverall ? 'on' : ''}>overall</span>
-                    <span className={imgs ? 'on' : ''}>{imgs}/{sc.length} img</span>
-                    <span className={hasMovie ? 'on' : ''}>movie</span>
-                    {c.content_mode && <span className="mode">{c.content_mode.replace('_', ' ')}</span>}
+                  <div className="pmet" style={{ marginTop: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                    <span className="badge" style={{ color: 'var(--mut)', whiteSpace: 'nowrap' }}>{sc.length} sc · {imgs}/{sc.length} img</span>
+                    {hasMovie ? <span className="badge" style={{ color: 'var(--green)' }}>🎬 movie</span> : hasOverall ? <span className="badge" style={{ color: 'var(--blue)' }}>overall</span> : <span className="badge" style={{ color: 'var(--acc)' }}>draft</span>}
+                    {c.content_mode && <span className="badge" style={{ color: '#b9a3e6' }}>{c.content_mode.replace('_', ' ')}</span>}
                   </div>
                 </div>
               </div>
