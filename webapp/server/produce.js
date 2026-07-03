@@ -1,7 +1,7 @@
 // 콘텐츠 제작 — 릴스 분석(설계도) + 선택 제품 → ① 전체 스크립트 → ② 씬 스크립트 (Claude CLI).
 // 핵심: 원본 릴스의 "구조"만 이해해 빌리고, 카피는 선택 제품으로 "새로" 작성 (복붙 금지).
 import { spawn } from 'node:child_process'
-import { personaBlock, hookBlock, banBlock, rulesBlock } from './playbook.js'
+import { personaBlock, hookBlock, banBlock, rulesBlock, contentSafetyBlock } from './playbook.js'
 
 const CLI_MODEL = process.env.PRODUCE_CLI_MODEL || 'sonnet' // 스크립트 품질 → sonnet
 
@@ -54,13 +54,13 @@ const directionBlock = (d) => (d && d.trim() ? `\n[DIRECTION — apply this crea
 const VO_ARC = 'disbelief → mechanism reveal → anti-climax/ease → earned payoff → casual close (each line a DIFFERENT energy)'
 
 // ③ 전체 스크립트 — 구조만 빌려 선택 제품으로 새로 작성 (복붙 금지). US 마켓 → 영어로 작성.
-export async function generateOverall({ analysis, productName, product, base, guidance, direction, persona, hook, lang = 'English (US, American audience)' }) {
+export async function generateOverall({ analysis, productName, product, base, guidance, direction, persona, hook, contentMode, hasFootage = false, lang = 'English (US, American audience)' }) {
   const prompt = `You are a top short-form (Instagram Reels/TikTok) ad copywriter for the ${lang} market.
 KEEP the original reel's STRUCTURE only — hook archetype, beat order, pacing, CTA mechanic. DISCARD the original's exact words (its captions and voiceover); never copy its sentences. On that skeleton write a COMPLETELY NEW shorts script that sells [My product], natively in ${lang} — idioms, rhythm, regional nuance native to that audience; do NOT translate from another language.
 This OVERALL script is the product's story/context. The single most important field is "vo".
 [VO = the through-line] Write "vo" as ONE continuous spoken monologue in the PERSONA below — one person thinking out loud, moving through the energy ARC: ${VO_ARC}. REACT and reveal the mechanism; do NOT just explain or list features. Specific sensory detail and real numbers, never generic ad language.
 This is the FULL story / context — it may be richer and longer than the final short. Write it complete and good; the SCENE step will distill it down to fit the video length. Do NOT pre-truncate here.
-${personaBlock(persona)}${hookBlock(hook)}${banBlock()}
+${personaBlock(persona)}${hookBlock(hook)}${banBlock()}${contentSafetyBlock(contentMode, { hasFootage })}
 ${guideBlock(base, guidance, 'overall script')}
 [Reel analysis (structure reference only)]
 ${JSON.stringify(analysis).slice(0, 6500)}
@@ -85,7 +85,7 @@ Output ONLY JSON (no explanation):
 }
 
 // ④ 씬 스크립트 — (편집됐을 수 있는) 전체 스크립트를 씬 단위로 분해 + 씬별 이미지 프롬프트. guidance 있으면 그 지시대로 수정.
-export async function generateScenes({ analysis, productName, product, overall, base, guidance, direction, shotCount, persona, hook, lang = 'English (US, American audience)' }) {
+export async function generateScenes({ analysis, productName, product, overall, base, guidance, direction, shotCount, persona, hook, contentMode, hasFootage = false, lang = 'English (US, American audience)' }) {
   const countRule = shotCount ? `Produce EXACTLY ${shotCount} scenes` : 'Produce 5-8 scenes'
   const prompt = `You are CRAFTING an impactful ${lang}-market shopping short — you are NOT splitting text into N pieces.
 The [Overall script] is your STORY SOURCE: the full narration (facts, persona voice, the beats). Use it as material, but do NOT chop its monologue into shots. From [Structure reference] keep only the skeleton (beat order, pacing, shot types, CTA mechanic); discard the original's words.
@@ -98,7 +98,7 @@ STRONG STORY RULE: the AI image/video can't show transformations (folding, unfol
 - onScreenText (per scene) = the on-screen TITLE: a SHORT punchy claim or spec (<= ~5 words) that carries the FACT.
 - TITLE and VO must NEVER say the same thing. TEST: delete the vo — if the title still delivers the same info, the vo FAILED; rewrite it to react, not narrate. Do NOT inflate the title back into a full sentence.
 - EAR-CATCHING (see storytelling rules): line 1 is a cold open that lands in 1.5s (no "so/okay so"). VARY line length — at least TWO vo lines are short 2-5 word fragments. One clean TURN. Cut filler. Keep each line short enough to actually say within its scene's seconds.
-${personaBlock(persona)}${hookBlock(hook)}${banBlock()}${rulesBlock()}
+${personaBlock(persona)}${hookBlock(hook)}${banBlock()}${rulesBlock()}${contentSafetyBlock(contentMode, { hasFootage })}
 ${directionBlock(direction)}${guideBlock(base, guidance, 'scene script')}
 [Overall script]
 ${JSON.stringify(overall).slice(0, 3000)}

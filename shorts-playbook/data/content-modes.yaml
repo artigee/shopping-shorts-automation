@@ -1,0 +1,30 @@
+# Content modes — the guardrail chosen BEFORE persona/hook.
+# default_safe: pick this class unless real first-hand footage is attached.
+curated_find:
+  label: Curated Find
+  default_safe: true
+  use_when: not personally used
+  allow: ["trending", "worth checking", "people are comparing"]
+  ban: ["I used", "it fixed", "guaranteed"]
+deal_alert:
+  label: Deal Alert
+  default_safe: true
+  use_when: discount / coupon focus
+  allow: ["on sale", "coupon available", "price drop"]
+  ban: ["efficacy claims"]
+direct_review:
+  label: Direct Review
+  requires_footage: true
+  use_when: actually bought / filmed / used it
+  allow: ["I tried", "my routine", "after using"]
+  ban: ["medical / treatment claims", "guaranteed results"]
+review_summary:
+  label: Review Summary
+  use_when: summarizing public reviews
+  allow: ["many reviewers mention", "commonly reported"]
+  ban: ["speaking as your own experience"]
+comparison:
+  label: Comparison
+  use_when: comparing similar products
+  allow: ["compared with", "check before buying"]
+  ban: ["unsupported superiority"]

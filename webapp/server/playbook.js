@@ -106,3 +106,24 @@ export function rulesBlock() {
   if (!parts.length) return ''
   return `\n[SHORTS-PLAYBOOK RULES — follow these exactly]\n${parts.join('\n\n---\n\n')}\n`
 }
+
+// ── 콘텐츠 모드 라이브러리 ──
+export function getContentModes() {
+  const y = readYaml('data/content-modes.yaml')
+  return Object.entries(y).map(([key, v]) => ({ key, ...v }))
+}
+export function getContentMode(key) {
+  if (!key) return null
+  const y = readYaml('data/content-modes.yaml')
+  return y[key] ? { key, ...y[key] } : null
+}
+
+// 콘텐츠 모드 + 클레임 안전 가드레일 — 스크립트가 "말해도 되는 범위"를 고정한다.
+// mode 미지정 시 안전 기본값(Curated Find)으로 강제. hasFootage=true여야 Direct Review 허용.
+export function contentSafetyBlock(mode, { hasFootage = false } = {}) {
+  const m = getContentMode(mode)
+  const safe = m && (m.default_safe || (m.requires_footage && hasFootage))
+  const active = safe ? m : (getContentMode('curated_find') || { key: 'curated_find', label: 'Curated Find', allow: ['trending', 'worth checking'], ban: ['I used', 'it fixed', 'guaranteed'] })
+  const ref = readText('references/content-safety.md').trim().slice(0, 1800)
+  return `\n[CONTENT MODE — ${active.label} (${active.key})]\nStay inside this mode's voice. ALLOWED tone: ${(active.allow || []).join(', ')}. NEVER say: ${(active.ban || []).join(', ')}.\n[CLAIM SAFETY] No medical/treatment verbs, no guaranteed outcomes, no first-person result claims unless Direct Review is active${!hasFootage ? ' (it is NOT — no first-hand footage attached, so downgrade every result claim to an observation: "marketed as…", "people are discussing…", "results can vary")' : ''}. Keep the reference reel's FUNCTION but change wording/visuals/persona/framing — an Inspired Structure Script, never a copy.\n${ref ? '[CONTENT-SAFETY REFERENCE]\n' + ref + '\n' : ''}`
+}

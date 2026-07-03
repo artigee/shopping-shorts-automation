@@ -27,8 +27,17 @@ When you tear down a reference reel, extract the skeleton. **Never lift the sour
 5. **Write/confirm titles** per `references/title-rules.md`. Title carries the claim; VO carries the reaction. They must never say the same thing.
 6. **Validate** — run `scripts/check_vo.py <beatsheet.json>`. It must PASS the ban-list and the VO≠caption redundancy test before the script is considered done. Fix and re-run on failure.
 
+## Content Mode & Claim Safety (choose the mode BEFORE persona/hook)
+
+Before any VO is written, pick a **Content Mode** and stay inside its allowed voice — this gates what the script is legally / platform-safely allowed to SAY. See `references/content-safety.md` and `data/content-modes.yaml`.
+
+- **Default to a SAFE mode (Curated Find / Deal Alert), never Direct Review.** Direct Review ("I tried it", "my routine", "after using") is only allowed when real first-hand footage/asset is attached.
+- **Claim safety:** no medical/treatment verbs, no guaranteed outcomes, no first-person result claims outside Direct Review. Downgrade result claims to observations ("marketed as…", "people are discussing…", "results can vary"). Health/beauty is high-risk — soften by default.
+- **Originality transform:** keep the reference reel's *function* (hook archetype, beat order, pacing, CTA mechanic); change wording, visuals, persona, product framing. It's an *Inspired Structure Script*, never a copy.
+
 ## Non-negotiables (the short list)
 
+- Content Mode is chosen first; the script never says more than that mode allows (claim safety is enforced, not advisory).
 - VO is written as a continuous monologue first, then split. Never authored beat-by-beat.
 - VO reacts; the caption states. If deleting the VO loses no information, the VO failed — rewrite it.
 - VO and captions are authored natively in US English. Never translated from working notes in another language.
@@ -37,6 +46,7 @@ When you tear down a reference reel, extract the skeleton. **Never lift the sour
 
 ## Files
 
+- `references/content-safety.md` — Content Mode, Claim Safety rewrites, Originality Transform, Platform Export
 - `references/vo-rules.md` — react-don't-narrate, the energy arc, monologue-first
 - `references/title-rules.md` — compression + the title≠VO split test
 - `references/storytelling.md` — impact/ear-catching rules: cold open, open loop, time budget, no-transformation, no signature-phrase reuse, casual-CTA
@@ -45,6 +55,7 @@ When you tear down a reference reel, extract the skeleton. **Never lift the sour
 - `data/personas.yaml` — the VO voice library (skeptic_won_over, tired_parent, broke_foodie, lazy_genius, honest_tester)
 - `data/hooks.yaml` — story shapes (disbelief_reveal, price_shock, social_proof, usage_review, …) — the second lever beside persona
 - `data/camera-moves.yaml` — image→video camera moves; one slow move per shot
+- `data/content-modes.yaml` — the 5 content modes + allowed/banned voice per mode (the claim-safety gate)
 - `data/banlist.txt` — forbidden phrases (the generic tells)
 - `data/beat-sheet.schema.json` — the data contract
 - `examples/dash-my-pint.md` — worked gadget example: flat VO vs good VO, side by side
