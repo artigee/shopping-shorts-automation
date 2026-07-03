@@ -179,6 +179,7 @@ function NodeGraphInner() {
   const [modes, setModes] = useState([])                  // 콘텐츠 모드(claim-safety) 목록
   const [contentMode, setContentMode] = useState('')      // 현재 콘텐츠 모드
   const [runningIds, setRunningIds] = useState(new Set()) // 실행 중 잡이 있는 콘텐츠 id (보드 뱃지)
+  const [genOpen, setGenOpen] = useState(false)           // 배치 생성 선택 메뉴 열림
   const nodeRefs = useRef({})
   const canvasRef = useRef(null)
   const pan = useRef(null), drag = useRef(null), libUid = useRef(0)
@@ -454,13 +455,18 @@ function NodeGraphInner() {
           {modes.map((m) => <option key={m.key} value={m.key}>◇ {m.label}{m.requires_footage ? ' (needs footage)' : ''}</option>)}
         </select>
         <span className="ng-barsep" />
-        <select className="ng-gensel" value="" disabled={!!running} title="batch generate (sequential, one at a time)" onChange={(e) => { const k = e.target.value; if (k === 'all') runBatchAll(); else if (k) runBatchKind(k) }}>
-          <option value="">⚙ generate…</option>
-          <option value="all">▶ all (images → clips → VO)</option>
-          <option value="images">▶ all images</option>
-          <option value="clips">▶ all clips</option>
-          <option value="vo">▶ all VO</option>
-        </select>
+        <div className="ng-genwrap">
+          <button className={'ng-libtoggle' + (genOpen ? ' on' : '')} disabled={!!running} onClick={() => setGenOpen((o) => !o)} title="batch generate (sequential, one at a time)">⚙ generate ▾</button>
+          {genOpen && <>
+            <div className="ng-genbd" onClick={() => setGenOpen(false)} />
+            <div className="ng-genmenu">
+              <div className="ng-genitem" onClick={() => { setGenOpen(false); runBatchAll() }}>▶ all<span>images → clips → VO</span></div>
+              <div className="ng-genitem" onClick={() => { setGenOpen(false); runBatchKind('images') }}>▶ all images<span>every scene</span></div>
+              <div className="ng-genitem" onClick={() => { setGenOpen(false); runBatchKind('clips') }}>▶ all clips<span>needs images first</span></div>
+              <div className="ng-genitem" onClick={() => { setGenOpen(false); runBatchKind('vo') }}>▶ all VO<span>every scene</span></div>
+            </div>
+          </>}
+        </div>
       </div>
       {sourceStale && (
         <div className="ng-stale">
