@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react'
 import CollectView from './CollectView.jsx'
 import AnalysesView from './AnalysesView.jsx'
 import ProductSelectView from './ProductSelectView.jsx'
-import ContentsView from './ContentsView.jsx'
 import NodeGraphView from './NodeGraphView.jsx'
 import { useT } from './i18n.jsx'
 
@@ -12,7 +11,7 @@ export default function App() {
   const [health, setHealth] = useState(null)
   const [analysisOpenId, setAnalysisOpenId] = useState(null)
   const [productOpenId, setProductOpenId] = useState(null)
-  const [contentOpenId, setContentOpenId] = useState(null)
+  const [graphOpenId, setGraphOpenId] = useState(null)
 
   const [genLang, setGenLang] = useState('')   // 글로벌 생성 언어/지역
   const refreshHealth = useCallback(() => {
@@ -29,7 +28,7 @@ export default function App() {
 
   const goAnalyses = (id) => { setAnalysisOpenId(id || null); setTab('analyses') }
   const goProducts = (id) => { setProductOpenId(id || null); setTab('products') }
-  const goContents = (id) => { setContentOpenId(id || null); setTab('contents') }
+  const goGraph = (id) => { setGraphOpenId(id || null); setTab('nodegraph') }
 
   return (
     <>
@@ -52,17 +51,15 @@ export default function App() {
           <button className={tab === 'collect' ? 'tab on' : 'tab'} onClick={() => setTab('collect')}>{t('① 발굴')}</button>
           <button className={tab === 'analyses' ? 'tab on' : 'tab'} onClick={() => setTab('analyses')}>{t('② 릴스 분석')}</button>
           <button className={tab === 'products' ? 'tab on' : 'tab'} onClick={() => setTab('products')}>{t('③ 제품 선택')}</button>
-          <button className={tab === 'contents' ? 'tab on' : 'tab'} onClick={() => setTab('contents')}>{t('④ 콘텐츠 제작')}</button>
-          <button className={tab === 'nodegraph' ? 'tab on' : 'tab'} onClick={() => setTab('nodegraph')}>⑤ Content Gen</button>
+          <button className={tab === 'nodegraph' ? 'tab on' : 'tab'} onClick={() => setTab('nodegraph')}>④ Content Gen</button>
         </div>
       </header>
 
       <div className="wrap">
         {tab === 'collect' && <CollectView onChange={refreshHealth} goAnalyses={goAnalyses} />}
         {tab === 'analyses' && <AnalysesView openId={analysisOpenId} onOpenHandled={() => setAnalysisOpenId(null)} goProducts={goProducts} />}
-        {tab === 'products' && <ProductSelectView openId={productOpenId} onOpenHandled={() => setProductOpenId(null)} goContents={goContents} />}
-        {tab === 'contents' && <ContentsView openId={contentOpenId} onOpenHandled={() => setContentOpenId(null)} goProducts={goProducts} />}
-        {tab === 'nodegraph' && <NodeGraphView />}
+        {tab === 'products' && <ProductSelectView openId={productOpenId} onOpenHandled={() => setProductOpenId(null)} goContents={goGraph} />}
+        {tab === 'nodegraph' && <NodeGraphView openId={graphOpenId} onOpenHandled={() => setGraphOpenId(null)} />}
       </div>
     </>
   )

@@ -137,7 +137,7 @@ function ProductSelectDetail({ data, onClose, onChange, goContents }) {
         <div className="hrow">
           <h3 style={{ margin: 0 }}>🛒 {t('제품 선택')}</h3>
           <span style={{ flex: 1 }} />
-          <button className="primary" disabled={!product} title={product ? '' : t('먼저 제품을 선택하세요.')} onClick={() => goContents?.(content.id)}>{t('④ 콘텐츠 제작 →')}</button>
+          <button className="primary" disabled={!product} title={product ? '' : t('먼저 제품을 선택하세요.')} onClick={() => goContents?.(content.id)}>{t('④ Content Gen →')}</button>
           <button className="ghost" onClick={onClose}>{t('닫기')}</button>
         </div>
 

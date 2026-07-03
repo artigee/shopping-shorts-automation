@@ -155,8 +155,8 @@ function buildGraph(data) {
   return { nodes, edges, refLib }
 }
 
-export default function NodeGraphView() { return <ErrorBoundary><NodeGraphInner /></ErrorBoundary> }
-function NodeGraphInner() {
+export default function NodeGraphView({ openId, onOpenHandled }) { return <ErrorBoundary><NodeGraphInner openId={openId} onOpenHandled={onOpenHandled} /></ErrorBoundary> }
+function NodeGraphInner({ openId, onOpenHandled }) {
   const [list, setList] = useState([])
   const [cid, setCid] = useState(null)
   const [data, setData] = useState(null)
@@ -204,6 +204,7 @@ function NodeGraphInner() {
   useEffect(() => {
     api('/api/contents').then((cs) => setList(cs)).catch((e) => setErr(String(e.message || e)))   // cid=null → 카드 보드로 시작
   }, [])
+  useEffect(() => { if (openId != null) { setCid(openId); onOpenHandled?.() } }, [openId])   // ③ Select Product → 이 콘텐츠를 그래프로 열기
   const reloadList = () => api('/api/contents').then((cs) => setList(cs)).catch(() => {})
   // 보드에서 실행 중(잡) 콘텐츠 뱃지 — 4s 폴링
   useEffect(() => {
