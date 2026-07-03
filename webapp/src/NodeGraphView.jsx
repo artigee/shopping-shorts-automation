@@ -186,7 +186,7 @@ function NodeGraphInner() {
     ]).then(([personas, hooks, moves]) => setLib({ personas, hooks, moves }))
   }, [])
   useEffect(() => {
-    api('/api/contents').then((cs) => { setList(cs); setCid((prev) => prev ?? (cs.find((c) => c.id === 27)?.id ?? cs.find((c) => c.scenes)?.id ?? cs[0]?.id ?? null)) }).catch((e) => setErr(String(e.message || e)))
+    api('/api/contents').then((cs) => setList(cs)).catch((e) => setErr(String(e.message || e)))   // cid=null → 카드 보드로 시작
   }, [])
   useEffect(() => { if (cid == null) return; setData(null); setErr(null); setSel(null); setSourceStale(false); api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setContentMode(r.content?.content_mode || ''); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }, [cid])
   useEffect(() => { api('/api/content-modes').then((r) => setModes(r.modes || [])).catch(() => {}) }, [])
@@ -373,7 +373,10 @@ function NodeGraphInner() {
 
   return (
     <div className="ng-wrap" style={{ top }}>
+      {cid == null ? <Board list={list} onOpen={setCid} /> : <>
       <div className="ng-bar">
+        <button className="ng-libtoggle" onClick={() => { setSel(null); setCid(null) }} title="back to the board">← board</button>
+        <span className="ng-barsep" />
         <button className={'ng-libtoggle' + (libOpen ? ' on' : '')} onClick={() => setLibOpen((o) => !o)} title="reference asset library">▤ refs</button>
         <button className="ng-libtoggle" onClick={undo} disabled={!histN.u} title="undo (⌘Z)">↶</button>
         <button className="ng-libtoggle" onClick={redo} disabled={!histN.r} title="redo (⇧⌘Z)">↷</button>
@@ -467,6 +470,41 @@ function NodeGraphInner() {
         onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} onDelete={() => deleteNode(drawerNode.id)} hoverPreview={hoverPreview}
         incoming={graph.edges.filter((e) => e.to === drawerNode.id).map((e) => nodeById[e.from]).filter(Boolean)}
         outgoing={graph.edges.filter((e) => e.from === drawerNode.id).map((e) => nodeById[e.to]).filter(Boolean)} />}
+      </>}
+    </div>
+  )
+}
+
+// ── BOARD — collapsed content cards (grid); click to open the full graph ──
+function Board({ list, onOpen }) {
+  return (
+    <div className="ng-board">
+      <div className="ng-board-head">Content Gen <span>· {list.length} project{list.length === 1 ? '' : 's'} · click a card to open its graph</span></div>
+      <div className="ng-cards">
+        {list.map((c) => {
+          let sc = []; try { sc = c.scenes ? JSON.parse(c.scenes) : [] } catch { sc = [] }
+          const thumb = c.product_image || c.reel_thumbnail || null
+          const hasOverall = !!c.overall, hasMovie = !!c.preview || !!c.export_mp4
+          const imgs = sc.filter((s) => s && (s.image || s.imageSrc)).length
+          return (
+            <div key={c.id} className="ng-card" onClick={() => onOpen(c.id)} title="open graph">
+              <div className="ng-card-thumb">{thumb ? <img src={thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} /> : <span>#{c.id}</span>}</div>
+              <div className="ng-card-body">
+                <div className="ng-card-title">{c.title || c.product_name || c.analysis_title || 'untitled'}</div>
+                <div className="ng-card-sub">{c.persona || '—'} · {c.hook || '—'}</div>
+                <div className="ng-card-stat">
+                  <span>{sc.length} scene{sc.length === 1 ? '' : 's'}</span>
+                  <span className={hasOverall ? 'on' : ''}>overall</span>
+                  <span className={imgs ? 'on' : ''}>{imgs}/{sc.length} img</span>
+                  <span className={hasMovie ? 'on' : ''}>movie</span>
+                  {c.content_mode && <span className="mode">{c.content_mode.replace('_', ' ')}</span>}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+        {!list.length && <div className="ng-card-empty">No content yet — create one from ④ / the pipeline.</div>}
+      </div>
     </div>
   )
 }
