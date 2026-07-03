@@ -567,7 +567,14 @@ function NodeGraphInner() {
       {drawerNode && <Drawer n={drawerNode} closing={closing && !selId} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
         fromArray={selFromArray} onScene={(v) => setNodeScene(drawerNode.id, v)} locked={locked} onLock={() => setLocked((l) => !l)} onFrame={frameNode}
         onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (fmtDur(runSecs) + (running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ' · running…')) : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)}
-        onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })} onField={(f, v) => f === '__nodeval' ? setNodeField(drawerNode.id, { t: v }) : setNodeData(drawerNode.id, { [f]: v })}
+        onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })}
+        onField={(f, v) => {
+          if (f === '__nodeval') {   // persona/hook 선택 → 노드 값 + 하류 stale + 콘텐츠에 저장(생성에 반영)
+            commitRun(drawerNode.id, (x) => ({ ...x, t: v }))
+            if (drawerNode.hd === 'persona') postJSON(`/api/contents/${cid}/persona`, { persona: v }).catch(() => {})
+            else if (drawerNode.hd === 'hook') postJSON(`/api/contents/${cid}/hook`, { hook: v }).catch(() => {})
+          } else setNodeData(drawerNode.id, { [f]: v })
+        }}
         onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} onDelete={() => deleteNode(drawerNode.id)} hoverPreview={hoverPreview}
         incoming={graph.edges.filter((e) => e.to === drawerNode.id).map((e) => nodeById[e.from]).filter(Boolean)}
         outgoing={graph.edges.filter((e) => e.from === drawerNode.id).map((e) => nodeById[e.to]).filter(Boolean)} />}
