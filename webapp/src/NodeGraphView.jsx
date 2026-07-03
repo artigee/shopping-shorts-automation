@@ -446,6 +446,7 @@ function NodeGraphInner() {
         <button className="ng-libtoggle" onClick={undo} disabled={!histN.u} title="undo (⌘Z)">↶</button>
         <button className="ng-libtoggle" onClick={redo} disabled={!histN.r} title="redo (⇧⌘Z)">↷</button>
         <button className={'ng-libtoggle' + (sourceStale ? ' stale' : '')} onClick={refreshSource} title="reload graph from the latest source analysis (discards local graph edits)">↻ source{sourceStale ? ' •' : ''}</button>
+        <button className="ng-libtoggle" onClick={refreshSceneMedia} disabled={cid == null || !!running} title="refresh image/clip/VO thumbnails to the latest generated files (keeps your layout)">↻ media</button>
         <select value={cid ?? ''} onChange={(e) => setCid(Number(e.target.value))}>{list.map((c) => <option key={c.id} value={c.id}>#{c.id} {(c.title || 'untitled').slice(0, 30)}</option>)}</select>
         <span className="ng-barsep" />
         <select value={contentMode} onChange={(e) => saveContentMode(e.target.value)} title={(() => { const m = modes.find((x) => x.key === contentMode); return m ? `${m.use_when} · allow: ${(m.allow || []).join(', ')} · never: ${(m.ban || []).join(', ')}` : 'safe default (Curated Find) — result claims softened to observations' })()}>
