@@ -241,6 +241,31 @@ function NodeGraphInner() {
       })
     } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
   }
+  // 편집 저장 — 노드의 텍스트를 백엔드에 반영(자산은 보존)하고, 편집 노드 dirty 해제 + 하류 dirty 전파.
+  // scene-script / VO text / motion prompt / image prompt는 재생성이 아니라 "편집"이 소스가 된다.
+  async function persistNode(n) {
+    if (cid == null || !n) return
+    try {
+      if (n.kind === 'overall') {
+        const d = n.data || {}, r = await api(`/api/contents/${cid}`), cur = parse(r.content?.overall) || {}
+        const overall = { ...cur, angle: d.angle || '', hookLine: d.hookLine || '', vo: d.vo || '', cta: d.cta || '', beats: (d.beats || '').split('/').map((s) => s.trim()).filter(Boolean) }
+        await postJSON(`/api/contents/${cid}/overall`, { overall }, 'PUT')
+        commitRun(n.id, (x) => ({ ...x, dirty: false })); return
+      }
+      const idx = n.scene ? n.scene - 1 : null
+      if (idx == null || typeof n.id !== 'string') return
+      let patch = null
+      if (n.id.startsWith('script-')) patch = { onScreenText: n.data.title || '', vo: n.data.vo || '' }
+      else if (n.id.startsWith('promptV-')) patch = { voEn: n.data.prompt || '' }
+      else if (n.id.startsWith('promptM-')) patch = { motionPrompt: n.data.prompt || '' }
+      else if (n.id.startsWith('prompt-')) patch = { imagePrompt: n.data.prompt || '' }
+      if (!patch) return
+      const r = await api(`/api/contents/${cid}`), cur = parse(r.content?.scenes) || []   // 최신 씬 → 자산 클로버 방지
+      const scenes = cur.map((s, i) => i === idx ? { ...s, ...patch } : s)
+      await postJSON(`/api/contents/${cid}/scenes`, { scenes }, 'PUT')
+      commitRun(n.id, (x) => ({ ...x, dirty: false }))
+    } catch (e) { setErr(String(e.message || e)) }
+  }
   useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
 
   const graph = ng
@@ -433,7 +458,7 @@ function NodeGraphInner() {
 
       {drawerNode && <Drawer n={drawerNode} closing={closing && !selId} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
         fromArray={selFromArray} onScene={(v) => setNodeScene(drawerNode.id, v)} locked={locked} onLock={() => setLocked((l) => !l)} onFrame={frameNode}
-        onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (running.msg || 'running…') : null} runBusy={!!running}
+        onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (running.msg || 'running…') : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)}
         onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })} onField={(f, v) => f === '__nodeval' ? setNodeField(drawerNode.id, { t: v }) : setNodeData(drawerNode.id, { [f]: v })}
         onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} onDelete={() => deleteNode(drawerNode.id)} hoverPreview={hoverPreview}
         incoming={graph.edges.filter((e) => e.to === drawerNode.id).map((e) => nodeById[e.from]).filter(Boolean)}
@@ -443,28 +468,30 @@ function NodeGraphInner() {
 }
 
 // ── DRAWER — faithful to node-studio.html drawerHTML ──
-function Field({ c, d, onField }) {
+function Field({ c, d, onField, onCommit }) {
   const cur = d[c.f] ?? ''
   if (c.fixed) return <span className="ng-fixed">{c.fixed}</span>
   let choices = c.choices
   if (c.cameraLib) choices = ['', 'auto'].concat((c._moves || []).map((m) => m.key))
   if (choices && choices.length) {
     const nameOf = (v) => { if (c.cameraLib) { if (v === '') return 'default (slow push-in)'; if (v === 'auto') return '✨ auto'; const m = (c._moves || []).find((x) => x.key === v); return m ? m.name : v } return v }
-    return <select value={cur} onChange={(e) => onField(c.f, e.target.value)}>{choices.map((v) => <option key={v} value={v}>{nameOf(v)}</option>)}</select>
+    return <select value={cur} onChange={(e) => { onField(c.f, e.target.value); onCommit?.() }}>{choices.map((v) => <option key={v} value={v}>{nameOf(v)}</option>)}</select>
   }
-  return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} />
+  return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} onBlur={onCommit} />
 }
 
-function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, incoming, outgoing }) {
+function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, incoming, outgoing }) {
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
-  const runnable = k && !k.source
+  // re-run은 실제 재생성 엔드포인트가 있는 노드만: overall · image-prompt(prompt-) · image · clip · vo.
+  // scene-script / VO text(promptV-) / motion prompt(promptM-)는 "편집"이 소스 → re-run 없음(편집 저장으로 반영).
+  const canRun = !!k && !k.source && (n.kind === 'overall' || n.kind === 'image' || n.kind === 'clip' || n.kind === 'vo' || (typeof n.id === 'string' && n.id.startsWith('prompt-')))
   const header = (
     <div className="ng-dh">
       <span className="ng-k" style={{ background: c }} />
       <input className="ng-title-edit" value={n.hd} spellCheck={false} onChange={(e) => onRename(e.target.value)} />
       <span className="ng-kind">#{n.id}</span>
       {k && <span className="ng-out">→ {k.out.n} ({k.out.t})</span>}
-      {runnable && <button className={'ng-run' + (runMsg ? ' running' : '')} onClick={onRun} disabled={runBusy} title={runMsg || 'run this node'}>▶ re-run</button>}
+      {canRun && <button className={'ng-run' + (runMsg ? ' running' : '')} onClick={onRun} disabled={runBusy} title={runMsg || 'run this node'}>▶ re-run</button>}
       <span className="ng-wctrl">
         <button className={'ng-icn' + (locked ? ' on' : '')} onClick={onLock} title={locked ? 'locked — stays open' : 'lock — keep open when clicking elsewhere'}>{locked ? '📌' : '📍'}</button>
         <button className="ng-icn" onClick={onClose} title="close">✕</button>
@@ -563,7 +590,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
           {ed && <>
             <div className="ng-sh">{ed.label}</div>
             <div className={'ng-fed' + (fedBy.length ? '' : ' manual')}>{fedBy.length ? '◦ from ' + fedBy.map((s) => s.hd).join(', ') : '✎ manual'}</div>
-            <textarea className="ng-big" value={d[ed.field] || ''} onChange={(e) => onField(ed.field, e.target.value)} />
+            <textarea className="ng-big" value={d[ed.field] || ''} onChange={(e) => onField(ed.field, e.target.value)} onBlur={onCommit} />
           </>}
           {n.kind === 'image' && <>
             <div className="ng-sh top">references (from library)</div>
@@ -577,7 +604,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
         <div className="ng-col right">
           <div className="ng-sh">properties</div>
           {fromArray && <div className="ng-prop"><label>index</label><select value={n.scene ?? ''} onChange={(e) => onScene(parseInt(e.target.value, 10))} style={{ color: '#c9b3ea', maxWidth: 110 }}>{n.scene == null && <option value="">— pick —</option>}{Array.from({ length: 100 }, (_, i) => i + 1).map((v) => <option key={v} value={v}>{v}</option>)}</select></div>}
-          {cfg.length ? cfg.map((cc) => <div key={cc.f} className="ng-prop"><label>{cc.f}</label><Field c={cc} d={d} onField={onField} /></div>) : <div className="ng-prop"><span className="ng-fixed">— none —</span></div>}
+          {cfg.length ? cfg.map((cc) => <div key={cc.f} className="ng-prop"><label>{cc.f}</label><Field c={cc} d={d} onField={onField} onCommit={onCommit} /></div>) : <div className="ng-prop"><span className="ng-fixed">— none —</span></div>}
           <div className="ng-sh top">connections</div>
           <div className="ng-connlabel">← inputs <em>from</em></div>
           {(k.inputs && k.inputs.length) ? k.inputs.map((slot) => {
