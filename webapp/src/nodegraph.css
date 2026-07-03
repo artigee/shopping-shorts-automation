@@ -14,6 +14,9 @@
 .ng-node:active { cursor: grabbing; }
 .ng-node:hover { border-color: rgba(222,220,209,.30); }
 .ng-node.dim { opacity: .3; }
+.ng-node.running { box-shadow: 0 0 0 2px #5DCAA5, 0 0 22px -4px #5DCAA5; animation: ng-pulse 1s ease-in-out infinite; }
+@keyframes ng-pulse { 0%, 100% { box-shadow: 0 0 0 2px #5DCAA5, 0 0 14px -6px #5DCAA5; } 50% { box-shadow: 0 0 0 2px #5DCAA5, 0 0 26px -2px #5DCAA5; } }
+.ng-run:disabled { opacity: .7; cursor: default; }
 .ng-type { position: absolute; top: -10px; left: 9px; background: #1e1e22; border: 1px solid; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 8.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; padding: 1px 7px; border-radius: 6px; white-space: nowrap; z-index: 2; }
 .ng-thumb { display: block; height: 150px; aspect-ratio: 9/16; object-fit: cover; margin: 2px auto 6px; border-radius: 8px; background: linear-gradient(150deg, #2b3340, #20262e); }
 .ng-thumb.ph { display: flex; align-items: center; justify-content: center; color: #6b6a64; font-family: ui-monospace, monospace; font-size: 9px; }

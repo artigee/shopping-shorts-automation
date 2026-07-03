@@ -1,5 +1,5 @@
 import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { api } from './util.js'
+import { api, postJSON, pollJob } from './util.js'
 import './nodegraph.css'
 
 // crash guard — a render error in the graph must not blank the whole app (black screen);
@@ -165,6 +165,7 @@ function NodeGraphInner() {
   const [locked, setLocked] = useState(false)
   const [framing, setFraming] = useState(false)
   const [sourceStale, setSourceStale] = useState(false)   // 소스 분석이 재분석돼 그래프가 오래됨
+  const [running, setRunning] = useState(null)            // { id, msg } — 노드 실행(잡) 진행
   const nodeRefs = useRef({})
   const canvasRef = useRef(null)
   const pan = useRef(null), drag = useRef(null), libUid = useRef(0)
@@ -196,6 +197,17 @@ function NodeGraphInner() {
     return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(iv) }
   }, [cid])
   function refreshSource() { if (cid == null) return; api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setSourceStale(false); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }
+  // 노드 실행 — overall 노드는 overall 잡을 돌려 결과를 노드에 반영 (진행률 표시). 그 외 종류는 아직 미연결.
+  async function runNode(n) {
+    if (cid == null || running) return
+    if (n.kind !== 'overall') { setErr(`'${n.kind}' 실행은 아직 노드 그래프에 연결 안 됨 (overall 먼저).`); return }
+    setErr(null); setRunning({ id: n.id, msg: 'starting…' })
+    try {
+      const resp = await postJSON(`/api/contents/${cid}/overall`, {})
+      const o = resp && resp.jobId ? await pollJob(resp.jobId, (jb) => setRunning({ id: n.id, msg: jb.message || '' })) : resp
+      if (o) setNg((g) => { const nn = { ...g, nodes: g.nodes.map((x) => x.id === n.id ? { ...x, dirty: false, data: { ...x.data, angle: o.angle ?? x.data.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || '') } } : x) }; ngRef.current = nn; return nn })
+    } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
+  }
   useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
 
   const graph = ng
@@ -330,7 +342,7 @@ function NodeGraphInner() {
             const inWired = graph.edges.some((e) => e.to === n.id), outWired = graph.edges.some((e) => e.from === n.id)
             const wt = wireEnd && wireEnd.targetId === n.id ? (wireEnd.valid ? ' wire-target' : ' wire-bad') : ''
             return (
-              <div key={n.id} data-id={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n) + (n.id === selId ? ' sel' : '') + (near && !near.has(n.id) ? ' dim' : '') + (n.dirty ? ' dirty' : '') + wt} style={{ left: n.x, top: n.y, width: NODE_W, color: c, '--nc': c, borderColor: (n.id === selId ? c : c + '99') }} onPointerDown={(e) => startNodeDrag(e, n)}>
+              <div key={n.id} data-id={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n) + (n.id === selId ? ' sel' : '') + (near && !near.has(n.id) ? ' dim' : '') + (n.dirty ? ' dirty' : '') + (running && running.id === n.id ? ' running' : '') + wt} style={{ left: n.x, top: n.y, width: NODE_W, color: c, '--nc': c, borderColor: (n.id === selId ? c : c + '99') }} onPointerDown={(e) => startNodeDrag(e, n)}>
                 {tl && <span className="ng-type" style={{ color: c, borderColor: c + '66' }}>{tl}</span>}
                 <button className="ng-del" title="delete" onClick={(e) => { e.stopPropagation(); deleteNode(n.id) }}>×</button>
                 {n.kind === 'image' && (n.thumb ? <img className="ng-thumb" style={{ aspectRatio: aspectCSS(n.data?.aspect) }} src={n.thumb} loading="lazy" onError={(e) => { e.target.style.opacity = .2 }} /> : <div className="ng-thumb ph" style={{ aspectRatio: aspectCSS(n.data?.aspect) }}>{n.data?.aspect || '9:16'}</div>)}
@@ -383,6 +395,7 @@ function NodeGraphInner() {
 
       {drawerNode && <Drawer n={drawerNode} closing={closing && !selId} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
         fromArray={selFromArray} onScene={(v) => setNodeScene(drawerNode.id, v)} locked={locked} onLock={() => setLocked((l) => !l)} onFrame={frameNode}
+        onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (running.msg || 'running…') : null} runBusy={!!running}
         onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })} onField={(f, v) => f === '__nodeval' ? setNodeField(drawerNode.id, { t: v }) : setNodeData(drawerNode.id, { [f]: v })}
         onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} onDelete={() => deleteNode(drawerNode.id)} hoverPreview={hoverPreview}
         incoming={graph.edges.filter((e) => e.to === drawerNode.id).map((e) => nodeById[e.from]).filter(Boolean)}
@@ -404,7 +417,7 @@ function Field({ c, d, onField }) {
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} />
 }
 
-function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, incoming, outgoing }) {
+function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, incoming, outgoing }) {
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
   const runnable = k && !k.source
   const header = (
@@ -413,7 +426,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
       <input className="ng-title-edit" value={n.hd} spellCheck={false} onChange={(e) => onRename(e.target.value)} />
       <span className="ng-kind">#{n.id}</span>
       {k && <span className="ng-out">→ {k.out.n} ({k.out.t})</span>}
-      {runnable && <button className="ng-run" title="run (next block)">▶ re-run</button>}
+      {runnable && <button className="ng-run" onClick={onRun} disabled={runBusy} title="run this node">{runMsg ? '⏳ ' + runMsg : '▶ re-run'}</button>}
       <span className="ng-wctrl">
         <button className={'ng-icn' + (locked ? ' on' : '')} onClick={onLock} title={locked ? 'locked — stays open' : 'lock — keep open when clicking elsewhere'}>{locked ? '📌' : '📍'}</button>
         <button className="ng-icn" onClick={onClose} title="close">✕</button>
