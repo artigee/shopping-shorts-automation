@@ -8,8 +8,8 @@ A line must be SPEAKABLE in its scene. Calm pace ≈ 2.5 words/second. So a scen
 ### The duration rule (total → per-shot → words)
 
 - **Total length** defaults to the **reference reel's measured length** (editable). The sum of the shots' seconds should land close to it.
-- **Allocate per shot by the reel's PACING, never an even split.** Mirror where the reel lingers vs cuts fast: the hook is punchy/short; the key reveal/payoff and the CTA can hold a beat longer; connective beats get fewer seconds. A good weighted distribution first, then minor manual tweaks.
-- **Words follow duration**, not the reverse: each shot's VO ≤ `durationSec × 2.5` words. Set the shot's seconds from the beat's weight, then write the VO to fit.
+- **Estimate a WEIGHT per shot, not seconds.** Weight = how much screen time the shot deserves vs the others, judged by ROLE (hook punchy/low; setup/connective low; reveal/turn + payoff high; CTA slightly high), the HOOK shape, the PERSONA's cadence, and the reel's PACING — never an even split. The app converts weights → seconds so they sum to the total (clamped per shot).
+- **Words follow the weight's share:** each shot's VO ≤ `(total × weight ÷ Σweights) × 2.5` words. Heavier shots get more words; the hook and connective shots are terse.
 - ❌ (4s) "I did not believe a travel cot was going to be the thing I actually use every single trip — we have a graveyard of gear that sounded good at two in the morning." (~32 words — impossible in 4s)
 - ✅ (4s) "Swore I'd never use a travel cot. Four trips later." (~10 words)
 

@@ -100,6 +100,29 @@ Output ONLY JSON (no explanation):
 }
 
 // ④ 씬 스크립트 — (편집됐을 수 있는) 전체 스크립트를 씬 단위로 분해 + 씬별 이미지 프롬프트. guidance 있으면 그 지시대로 수정.
+// 가중치(weight) → 실제 초(durationSec) 분배. 총합 = totalSec, 각 [min,max] 클램프, 정수, 나머지 분배로 합 맞춤.
+export function allocateDurations(weights, totalSec, min = 2, max = 10) {
+  const n = weights.length
+  if (!n) return []
+  const w = weights.map((x) => (Number(x) > 0 ? Number(x) : 1))
+  const sumW = w.reduce((a, b) => a + b, 0) || n
+  const total = Math.max(min * n, Math.min(max * n, Math.round(Number(totalSec) || min * n)))
+  const f = w.map((x) => Math.max(min, Math.min(max, total * x / sumW)))     // 클램프된 실수 배분
+  const d = f.map((x) => Math.max(min, Math.min(max, Math.round(x))))
+  const order = f.map((x, i) => ({ i, frac: x - Math.floor(x) })).sort((a, b) => b.frac - a.frac).map((o) => o.i)   // 반올림 나머지 큰 순
+  let diff = total - d.reduce((a, b) => a + b, 0), guard = 0
+  while (diff !== 0 && guard++ < 500) {
+    let moved = false
+    for (const i of order) {
+      if (diff === 0) break
+      if (diff > 0 && d[i] < max) { d[i]++; diff--; moved = true }
+      else if (diff < 0 && d[i] > min) { d[i]--; diff++; moved = true }
+    }
+    if (!moved) break
+  }
+  return d
+}
+
 export async function generateScenes({ analysis, productName, product, overall, base, guidance, direction, shotCount, persona, hook, contentMode, hasFootage = false, lang = 'English (US, American audience)' }) {
   const countRule = shotCount ? `Produce EXACTLY ${shotCount} scenes` : 'Produce 5-8 scenes'
   const reelLen = Math.round(Number(analysis?._meta?.duration) || 0)
@@ -128,21 +151,19 @@ ${productLine(productName, product)}
 [Structure reference]
 ${JSON.stringify(analysis?.structure || analysis).slice(0, 2200)}
 
-[DURATION PLAN — allocate by the reel's rhythm, NEVER an even split]
-- Target TOTAL ≈ ${totalSec}s (the reference reel's length). The sum of all durationSec must land close to this.
-- Follow the reference reel's PACING, not an even split.${reelPacing ? ' Reel pacing: ' + reelPacing + '.' : ''}${reelBeats ? ' Reel beat lengths: ' + reelBeats + '.' : ''} Mirror where the reel LINGERS vs cuts fast — the hook is punchy/short; the key reveal or payoff, and the CTA, can hold a beat longer. Give the strongest moments more seconds and the connective beats fewer.
-- Each durationSec is an INTEGER number of seconds (typically 2-5). The VO MUST be sayable within it at ~2.5 words/second → words ≤ durationSec × 2.5.
+[DURATION PLAN — you give a WEIGHT per shot; the app computes the seconds]
+- Give each scene a "weight" (~0.5-2.0): how much SCREEN TIME this shot deserves vs the others — judged by its ROLE (hook = punchy/low; setup/connective = low; the reveal/turn and the payoff = high; CTA = slightly high), the HOOK shape, the PERSONA's cadence, and the reel's PACING, NEVER an even split.${reelPacing ? ' Reel pacing: ' + reelPacing + '.' : ''}${reelBeats ? ' Reel beat lengths: ' + reelBeats + '.' : ''} Do NOT output seconds — only the relative weight.
+- The app turns weights into actual seconds summing to ≈${totalSec}s (clamped 2-10s each). Write each scene's VO to fit its SHARE ≈ ${totalSec} × weight ÷ (sum of weights) seconds of speech (~2.5 words/second): heavier shots get more words; the hook and connective shots are terse.
 
 Rules:
 - ${countRule}. If the count is very small (1-3), FOLD roles together — 1 scene = hook + product + CTA in one; 2-3 scenes = combine beats. Scene 1 = the HOOK (apply the hook shape). The LAST scene MUST be the CTA: its onScreenText is the comment keyword caption (e.g. "Comment WANT IT 👇") AND its vo IS the spoken ask — casually tell the viewer to comment the keyword to get the link (e.g. "Comment WANT IT and I'll send it your way" / "Say the word, it's in your DMs"). Do NOT make the last vo just a verdict/sign-off with no ask — the spoken CTA must be there (casual, not a hard sell). SELECT and SHARPEN the strongest beats from the story across exactly this many shots — compress, don't transcribe.
 - Each scene field (TEXT ONLY — no visuals):
-  t: timecode (e.g. "0-2s")
-  durationSec: integer seconds per the DURATION PLAN above (reel-paced, sum ≈ ${totalSec}s; VO fits at ~2.5 words/s)
+  weight: relative pacing weight per the DURATION PLAN above (a number ~0.5-2.0; the app converts it to seconds)
   onScreenText: on-screen TITLE — short claim/spec (<= ~5 words), carries the FACT, NEVER the same as vo
-  vo: a FRESH tight spoken line distilled from the story (NOT a verbatim slice) — reacts / reveals mechanism / sensory; in persona; fits the scene's seconds; DIFFERENT job than the title
+  vo: a FRESH tight spoken line distilled from the story (NOT a verbatim slice) — reacts / reveals mechanism / sensory; in persona; length fits its weight's share; DIFFERENT job than the title
 
 Output ONLY a JSON array (no explanation):
-[{"t":"0-2s","durationSec":2,"onScreenText":"...","vo":"..."}]`
+[{"weight":1.0,"onScreenText":"...","vo":"..."}]`
   const runParse = async (pr) => { for (let k = 0; k < 2; k++) { const out = await runClaude(pr); try { const j = JSON.parse(stripFence(out)); if (Array.isArray(j) && j.length) return j } catch { /* 다음 시도 */ } } return null }
   let scenes = await runParse(prompt)
   if (!scenes) throw new Error('씬 스크립트 응답 파싱 실패 — 다시 [재생성] 눌러주세요.')
@@ -155,7 +176,10 @@ Output ONLY a JSON array (no explanation):
     if (!fixed) break
     scenes = fixed
   }
-  return scenes.map((s, i) => ({ id: i + 1, makeVideo: false, ...s }))
+  // 가중치 → 실제 초 분배 (총합 = totalSec) + 타임코드
+  const durs = allocateDurations(scenes.map((s) => s.weight), totalSec, 2, 10)
+  let acc = 0
+  return scenes.map((s, i) => { const d = durs[i] || 2, t = `${acc}-${acc + d}s`; acc += d; return { id: i + 1, makeVideo: false, ...s, weight: Number(s.weight) || 1, durationSec: d, t } })
 }
 
 // 한 씬의 스크립트(Title + VO)만 재생성 — overall(input) + instruction(guidance) 기반, 나머지 씬과 겹치지 않게
