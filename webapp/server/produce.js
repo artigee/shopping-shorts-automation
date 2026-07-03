@@ -192,15 +192,26 @@ Output ONLY the prompt text (one paragraph), ending with "vertical 9:16, photore
 }
 
 // 씬의 캐릭터·제품 "동작/행동" 모션 (image→video 클립용). 카메라 무빙 아님 — 카메라는 clip의 cameraMove가 담당.
-export async function generateMotionPrompt({ scene = {}, product, lang = 'English (US)' }) {
+export async function generateMotionPrompt({ scene = {}, product, guidance, lang = 'English (US)' }) {
+  const gBlk = guidance && guidance.trim() ? `\n[INSTRUCTION — honor this above all] ${guidance.trim()}` : ''
   const prompt = `Write ONE short motion line (<= ~18 words) describing the SUBJECT motion for turning this shopping-short still into a short vertical video clip: what the PERSON does (a small natural gesture / bit of acting) and/or how the PRODUCT moves or is handled in-frame. This is NOT camera movement — describe ONLY character & product behavior. No transformations (folding / assembling / setup). Keep it subtle, realistic, and grounded in the scene beat.
 [Scene Title] ${scene.onScreenText || ''}
 [Scene VO] ${scene.vo || ''}
 [Image] ${(scene.imagePrompt || '').slice(0, 300)}
-Product: ${product?.title || ''}
+Product: ${product?.title || ''}${gBlk}
 Output ONLY the motion line — no quotes, and no camera terms (pan, zoom, dolly, push-in, tilt, orbit) — in ${lang}.`
   const out = await runClaude(prompt, { model: 'haiku', timeout: 60000 })
   return (out || '').trim().split('\n')[0].replace(/^["']|["']$/g, '').slice(0, 200)
+}
+
+// VO 텍스트를 지시(guidance)에 맞게 LLM으로 조정 (음성용 영어 라인). guidance 없으면 호출 안 함(번역/복사).
+export async function generateVoText({ vo, guidance, lang = 'English (US)' }) {
+  const prompt = `Rewrite this short-video VOICEOVER line for the spoken voice, in ${lang}. Keep it tight, spoken, same core intent; apply the instruction. It must still sound like one person talking.
+[VO] ${vo}
+[Instruction] ${(guidance || '').trim()}
+Output ONLY the rewritten line — no quotes.`
+  const out = await runClaude(prompt, { model: 'haiku', timeout: 60000 })
+  return (out || '').trim().split('\n')[0].replace(/^["']|["']$/g, '').slice(0, 400)
 }
 
 // 제품 + 릴스 분석을 보고 가장 잘 맞는 PERSONA + HOOK 추천 (이유 포함)

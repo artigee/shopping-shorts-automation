@@ -35,7 +35,7 @@ const KIND = {
   overall: { out: { t: 'text', n: 'scene[] · N ordered', array: true }, editor: { field: 'vo', label: 'overall VO — the through-line' },
     config: [{ f: 'shotCount', ph: 'auto | 1-9  (# scene scripts)' }, { f: 'direction', ph: 'hook·shot direction' }, { f: 'angle' }, { f: 'hookLine' }, { f: 'cta' }, { f: 'beats' }, { f: 'guidance', ph: 'steer re-run' }] },
   script: { out: { t: 'text', n: 'Title + VO' }, editor: { field: 'vo', label: 'scene VO' }, config: [{ f: 'title', ph: 'on-screen title' }, { f: 'guidance', ph: 'steer re-run' }] },
-  prompt: { out: { t: 'text', n: 'prompt text' }, editor: { field: 'prompt', label: 'prompt' }, config: [{ f: 'guidance', ph: 'idea / instruction' }] },
+  prompt: { out: { t: 'text', n: 'prompt text' }, editor: { field: 'prompt', label: 'output prompt (generated · editable)' }, config: [{ f: 'guidance', label: 'input prompt', ph: 'instruction to the LLM — e.g. closer shot · warmer tone · punchier' }] },
   image: { out: { t: 'image', n: 'scene .png' }, config: [{ f: 'frameRole', choices: ['start', 'end'] }, { f: 'aspect', choices: ['9:16', '4:5', '1:1', '16:9'] }, { f: 'model', choices: ['auto', 'nano_banana_pro', 'marketing_studio_image'] }, { f: 'style', ph: 'all-scene style' }, { f: 'seed', ph: 'random' }, { f: 'guidance', ph: 'steer re-run' }] },
   clip: { out: { t: 'video', n: 'clip .mp4' }, config: [{ f: 'makeVideo', choices: ['animate', 'still'] }, { f: 'cameraMove', cameraLib: true }, { f: 'duration' }, { f: 'model', choices: ['kling3_0', 'seedance', 'hailuo', 'wan', 'kling3_0_turbo'] }] },
   vo: { out: { t: 'audio', n: '.mp3' }, config: [{ f: 'voiceId' }, { f: 'lang', fixed: 'US EN' }] },
@@ -230,7 +230,8 @@ function NodeGraphInner() {
     if (!ep || k == null) { setErr(`'${n.hd}' re-run isn't wired (supported: overall · image-prompt · motion · VO-text · image · clip · vo).`); return }
     setRunning({ id: n.id, msg: 'running…' })
     try {
-      await postJSON(`/api/contents/${cid}/scene/${k}/${ep}`, {})   // 씬 스크립트 기반 생성
+      const body = (ep === 'prompt' || ep === 'motion' || ep === 'votext') ? { guidance: n.data.guidance || '' } : {}
+      await postJSON(`/api/contents/${cid}/scene/${k}/${ep}`, body)   // 씬 스크립트 + input prompt(guidance) 기반 생성
       const r = await api(`/api/contents/${cid}`)                   // 새 씬 데이터 가져와 (buildGraph와 동일 필드로) 노드 갱신
       const s = (parse(r.content?.scenes) || [])[k] || {}
       commitRun(n.id, (x) => {
@@ -608,7 +609,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
         <div className="ng-col right">
           <div className="ng-sh">properties</div>
           {fromArray && <div className="ng-prop"><label>index</label><select value={n.scene ?? ''} onChange={(e) => onScene(parseInt(e.target.value, 10))} style={{ color: '#c9b3ea', maxWidth: 110 }}>{n.scene == null && <option value="">— pick —</option>}{Array.from({ length: 100 }, (_, i) => i + 1).map((v) => <option key={v} value={v}>{v}</option>)}</select></div>}
-          {cfg.length ? cfg.map((cc) => <div key={cc.f} className="ng-prop"><label>{cc.f}</label><Field c={cc} d={d} onField={onField} onCommit={onCommit} /></div>) : <div className="ng-prop"><span className="ng-fixed">— none —</span></div>}
+          {cfg.length ? cfg.map((cc) => <div key={cc.f} className="ng-prop"><label>{cc.label || cc.f}</label><Field c={cc} d={d} onField={onField} onCommit={onCommit} /></div>) : <div className="ng-prop"><span className="ng-fixed">— none —</span></div>}
           <div className="ng-sh top">connections</div>
           <div className="ng-connlabel">← inputs <em>from</em></div>
           {(k.inputs && k.inputs.length) ? k.inputs.map((slot) => {
