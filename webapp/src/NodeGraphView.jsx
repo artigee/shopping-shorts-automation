@@ -861,12 +861,13 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
               {!eng.data?.hookLine && !eng.data?.vo ? <span className="ng-none">— Script Engine empty (run it first) —</span> : null}
             </> : <span className="ng-none">— not linked to Script Engine —</span>}
           </div>
-          <div className="ng-sh top">② instruction <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· steer the LLM (optional)</em></div>
+          <div className="ng-sh top">② duration <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· suggested by pacing · override to reshape</em></div>
+          <div className="ng-prop"><input type="number" min="1" max="15" step="1" value={d.durationSec ?? ''} placeholder="s" onChange={(e) => onField('durationSec', e.target.value)} onBlur={onCommit} style={{ maxWidth: 74 }} /><span className="ng-fixed" style={{ fontSize: 10.5 }}>seconds → re-run rewrites VO to fit (+ drives clip)</span></div>
+          <div className="ng-sh top">③ instruction <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· steer the LLM (optional)</em></div>
           <textarea className="ng-instruct" value={d.guidance || ''} placeholder="e.g. punchier hook · mention the price · shorter VO — then ▶ re-run" onChange={(e) => onField('guidance', e.target.value)} onBlur={onCommit} />
         </div>
         <div className="ng-col right">
-          <div className="ng-sh">③ output · scene script <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· editable</em></div>
-          <div className="ng-prop"><label>duration (s)</label><input type="number" min="1" max="15" step="1" value={d.durationSec ?? ''} placeholder="e.g. 3" onChange={(e) => onField('durationSec', e.target.value)} onBlur={onCommit} style={{ maxWidth: 90 }} /><span className="ng-fixed" style={{ fontSize: 10 }}>drives VO length + clip</span></div>
+          <div className="ng-sh">④ output · scene script <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· editable</em></div>
           <div className="ng-prop"><label>title</label><input value={d.title || ''} placeholder="on-screen title" onChange={(e) => onField('title', e.target.value)} onBlur={onCommit} /></div>
           <div className="ng-slot-h" style={{ marginTop: 8 }}><span>VO</span></div>
           <textarea className="ng-big" style={{ minHeight: 90 }} value={d.vo || ''} placeholder="spoken line" onChange={(e) => onField('vo', e.target.value)} onBlur={onCommit} />
