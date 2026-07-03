@@ -522,7 +522,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     <div className="ng-wrap" style={{ top }}>
       {cid == null ? <Board list={list} running={runningIds} onOpen={setCid} reload={reloadList} /> : <>
       <div className="ng-bar">
-        <button className="ng-libtoggle" onClick={() => { setSel(null); setCid(null) }} title="back to the board">← board</button>
+        <button className="ng-libtoggle ng-backbtn" onClick={() => { setSel(null); setCid(null) }} title="back to the board">← Board</button>
         <span className="ng-barsep" />
         <button className={'ng-libtoggle' + (libOpen ? ' on' : '')} onClick={() => setLibOpen((o) => !o)} title="reference asset library">▤ refs</button>
         <button className="ng-libtoggle" onClick={undo} disabled={!histN.u} title="undo (⌘Z)">↶</button>

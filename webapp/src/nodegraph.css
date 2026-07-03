@@ -42,6 +42,8 @@
 .ng-recbtn:hover:not(:disabled) { background: rgba(201,179,234,.18); border-color: #c9b3ea; }
 .ng-recbtn:disabled { opacity: .5; cursor: default; }
 .ng-barsep { width: 1px; align-self: stretch; background: #2f2f36; margin: 2px 4px; }
+.ng-backbtn { background: #2f2f36; color: #fff; border-color: #55555f; font-weight: 600; font-size: 13px; padding: 6px 14px; }
+.ng-backbtn:hover { background: #3a3a44; border-color: #7a7a86; color: #fff; }
 
 /* ── board of content cards (app theme — matches ①②③④ tabs) ── */
 .ng-board { position: absolute; inset: 0; overflow: auto; padding: 18px 22px 40px; background: var(--bg, #0d0e12); }
