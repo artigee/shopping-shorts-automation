@@ -47,6 +47,7 @@ Before any VO is written, pick a **Content Mode** and stay inside its allowed vo
 ## Files
 
 - `references/content-safety.md` — Content Mode, Claim Safety rewrites, Originality Transform, Platform Export
+- `references/image-rules.md` — image/clip visuals: tease the product (no readable label close-ups → drives DM), no legible/garbled text on objects, ground each shot in its scene
 - `references/vo-rules.md` — react-don't-narrate, the energy arc, monologue-first
 - `references/title-rules.md` — compression + the title≠VO split test
 - `references/storytelling.md` — impact/ear-catching rules: cold open, open loop, time budget, no-transformation, no signature-phrase reuse, casual-CTA

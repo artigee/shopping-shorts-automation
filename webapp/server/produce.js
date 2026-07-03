@@ -183,10 +183,11 @@ ${cosmetic
 - GROUND the image in THIS scene's Title + VO — depict that specific moment. Do NOT default to a generic "product beautifully assembled, problem solved" beauty shot; each scene's image is DIFFERENT and matches its own beat. If the VO is disbelief/doubt/a problem, show THAT tension or context — not the resolved happy ending (the payoff is a LATER scene).
 - SHOW, don't tell: describe only what the camera literally sees — subject, setting, action, framing, light. Do NOT write emotional narration or conclusions ("quiet triumph", "problem solved", "relief", "the answer found", "radiates"); those are not visual.
 - Depict the product accurately at its TRUE real-world size (no shrinking a large product into a tiny prop).
-- People and faces (including a baby's face) are fine — show them naturally; vary the camera angle scene to scene for visual interest. The product stays the hero of the frame.
+- PRODUCT VISIBILITY (Instagram shopping short — IMPORTANT): the product is PRESENT but NOT a clear, readable hero. Do NOT do a tight, legible close-up of the product or its label. Keep it secondary / teased — held casually, partially cropped, turned so the label faces away, or softly out of focus — while the PERSON, skin, reaction or result is the real focus. A too-clear product/label shot removes the reason to reach out; we want viewers to comment/DM for the affiliate link, not read everything off the label. Use tight product close-ups sparingly and never on readable label text.
+- NO READABLE TEXT anywhere — this means overlay captions AND legible letters/logos/label text on the product or any object. AI renders label text garbled and mirrored, so keep every product label turned away, cropped, or out of focus so NO text is legible; if a brand name or label would be readable, angle or blur it out of legibility.
+- People and faces (including a baby's face) are fine — show them naturally; vary the camera angle scene to scene for visual interest.
 - Tone stays clean and light (never distressing: no crying/upset child, no exhausted despair, no bleak grime) — but a tension/problem beat still reads as tension, not as the solved finale.
-- NO text in the image.
-Output ONLY the prompt text (one paragraph), ending with "vertical 9:16, photorealistic, no text, no letters, no captions".`
+Output ONLY the prompt text (one paragraph), ending with "vertical 9:16, photorealistic, no text, no letters, no readable labels, no captions".`
   const out = await runClaude(prompt, { timeout: 90000 })   // sonnet — grounds the visual in the scene's beat
   return stripFence(out).trim().replace(/^["']|["']$/g, '')
 }
