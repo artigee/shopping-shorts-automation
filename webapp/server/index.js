@@ -556,6 +556,16 @@ app.get('/api/contents/:id', (req, res) => {
 
 app.delete('/api/contents/:id', (req, res) => { db.prepare('DELETE FROM contents WHERE id = ?').run(req.params.id); res.json({ ok: true }) })
 
+// 콘텐츠 복제 — 전체 파이프라인(분석·제품·씬·overall·레퍼런스 등) 복사해 변형 버전 시작
+app.post('/api/contents/:id/duplicate', (req, res) => {
+  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
+  const cols = Object.keys(c).filter((k) => !['id', 'created_at', 'updated_at'].includes(k))
+  const vals = cols.map((k) => k === 'title' ? ((c.title || 'untitled').slice(0, 72) + ' (copy)') : c[k])
+  const id = Number(db.prepare(`INSERT INTO contents (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...vals).lastInsertRowid)
+  res.json(db.prepare('SELECT * FROM contents WHERE id = ?').get(id))
+})
+
 app.post('/api/contents/:id/analysis', (req, res) => {
   db.prepare(`UPDATE contents SET analysis_id = ?, updated_at = datetime('now') WHERE id = ?`).run((req.body && req.body.analysisId) || null, req.params.id)
   res.json({ ok: true })

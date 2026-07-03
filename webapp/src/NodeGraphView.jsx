@@ -168,6 +168,7 @@ function NodeGraphInner() {
   const [running, setRunning] = useState(null)            // { id, msg } — 노드 실행(잡) 진행
   const [modes, setModes] = useState([])                  // 콘텐츠 모드(claim-safety) 목록
   const [contentMode, setContentMode] = useState('')      // 현재 콘텐츠 모드
+  const [runningIds, setRunningIds] = useState(new Set()) // 실행 중 잡이 있는 콘텐츠 id (보드 뱃지)
   const nodeRefs = useRef({})
   const canvasRef = useRef(null)
   const pan = useRef(null), drag = useRef(null), libUid = useRef(0)
@@ -188,6 +189,15 @@ function NodeGraphInner() {
   useEffect(() => {
     api('/api/contents').then((cs) => setList(cs)).catch((e) => setErr(String(e.message || e)))   // cid=null → 카드 보드로 시작
   }, [])
+  const reloadList = () => api('/api/contents').then((cs) => setList(cs)).catch(() => {})
+  // 보드에서 실행 중(잡) 콘텐츠 뱃지 — 4s 폴링
+  useEffect(() => {
+    if (cid != null) return
+    let alive = true
+    const tick = () => api('/api/jobs?status=running').then((r) => { if (alive) setRunningIds(new Set((r.jobs || []).filter((j) => j.ref_type === 'contents').map((j) => Number(j.ref_id)))) }).catch(() => {})
+    tick(); const iv = setInterval(tick, 4000)
+    return () => { alive = false; clearInterval(iv) }
+  }, [cid])
   useEffect(() => { if (cid == null) return; setData(null); setErr(null); setSel(null); setSourceStale(false); api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setContentMode(r.content?.content_mode || ''); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }, [cid])
   useEffect(() => { api('/api/content-modes').then((r) => setModes(r.modes || [])).catch(() => {}) }, [])
   function saveContentMode(v) { setContentMode(v); if (cid != null) postJSON(`/api/contents/${cid}/content-mode`, { mode: v || null }).catch(() => {}) }
@@ -373,7 +383,7 @@ function NodeGraphInner() {
 
   return (
     <div className="ng-wrap" style={{ top }}>
-      {cid == null ? <Board list={list} onOpen={setCid} /> : <>
+      {cid == null ? <Board list={list} running={runningIds} onOpen={setCid} reload={reloadList} /> : <>
       <div className="ng-bar">
         <button className="ng-libtoggle" onClick={() => { setSel(null); setCid(null) }} title="back to the board">← board</button>
         <span className="ng-barsep" />
@@ -475,22 +485,49 @@ function NodeGraphInner() {
   )
 }
 
-// ── BOARD — collapsed content cards (grid); click to open the full graph ──
-function Board({ list, onOpen }) {
+// ── BOARD — collapsed content cards (grid, app theme); click to open the full graph ──
+function Board({ list, running, onOpen, reload }) {
+  const [q, setQ] = useState('')
+  const [sort, setSort] = useState('recent')
+  async function create() { try { const c = await postJSON('/api/contents', {}); await reload(); if (c?.id) onOpen(c.id) } catch { /* ignore */ } }
+  async function dup(e, id) { e.stopPropagation(); try { await postJSON(`/api/contents/${id}/duplicate`, {}); reload() } catch { /* ignore */ } }
+  async function del(e, id, name) { e.stopPropagation(); if (!window.confirm(`Delete "${name}"? This can't be undone.`)) return; try { await api(`/api/contents/${id}`, { method: 'DELETE' }); reload() } catch { /* ignore */ } }
+  let items = list
+  if (q.trim()) { const s = q.toLowerCase(); items = items.filter((c) => `${c.title || ''} ${c.product_name || ''} ${c.persona || ''} ${c.hook || ''}`.toLowerCase().includes(s)) }
+  if (sort === 'title') items = [...items].sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+  else if (sort === 'movie') items = [...items].sort((a, b) => ((b.preview || b.export_mp4) ? 1 : 0) - ((a.preview || a.export_mp4) ? 1 : 0))
+  // 'recent' = default (list already id DESC)
   return (
     <div className="ng-board">
-      <div className="ng-board-head">Content Gen <span>· {list.length} project{list.length === 1 ? '' : 's'} · click a card to open its graph</span></div>
+      <div className="ng-board-bar">
+        <button className="ng-newbtn" onClick={create}>+ New</button>
+        <input className="ng-search" placeholder="search  ·  product / persona / hook" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option value="recent">recent</option>
+          <option value="title">title A–Z</option>
+          <option value="movie">movie ready</option>
+        </select>
+        <span className="ng-board-count">{items.length}/{list.length}</span>
+      </div>
       <div className="ng-cards">
-        {list.map((c) => {
+        {items.map((c) => {
           let sc = []; try { sc = c.scenes ? JSON.parse(c.scenes) : [] } catch { sc = [] }
           const thumb = c.product_image || c.reel_thumbnail || null
           const hasOverall = !!c.overall, hasMovie = !!c.preview || !!c.export_mp4
           const imgs = sc.filter((s) => s && (s.image || s.imageSrc)).length
+          const title = c.title || c.product_name || c.analysis_title || 'untitled'
           return (
             <div key={c.id} className="ng-card" onClick={() => onOpen(c.id)} title="open graph">
-              <div className="ng-card-thumb">{thumb ? <img src={thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} /> : <span>#{c.id}</span>}</div>
+              <div className="ng-card-thumb">
+                {running?.has(c.id) && <span className="ng-card-run">● running</span>}
+                {thumb ? <img src={thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} /> : <span>#{c.id}</span>}
+                <div className="ng-card-acts">
+                  <button onClick={(e) => dup(e, c.id)} title="duplicate">⧉ copy</button>
+                  <button onClick={(e) => del(e, c.id, title)} title="delete">✕</button>
+                </div>
+              </div>
               <div className="ng-card-body">
-                <div className="ng-card-title">{c.title || c.product_name || c.analysis_title || 'untitled'}</div>
+                <div className="ng-card-title">{title}</div>
                 <div className="ng-card-sub">{c.persona || '—'} · {c.hook || '—'}</div>
                 <div className="ng-card-stat">
                   <span>{sc.length} scene{sc.length === 1 ? '' : 's'}</span>
@@ -503,7 +540,7 @@ function Board({ list, onOpen }) {
             </div>
           )
         })}
-        {!list.length && <div className="ng-card-empty">No content yet — create one from ④ / the pipeline.</div>}
+        {!items.length && <div className="ng-card-empty">{list.length ? 'No matching content.' : 'No content yet — + New to start one.'}</div>}
       </div>
     </div>
   )
