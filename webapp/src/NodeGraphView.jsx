@@ -247,6 +247,16 @@ function NodeGraphInner() {
       } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
       return
     }
+    if (n.kind === 'movie') {                                     // preview(ffmpeg+VO) 또는 remotion(고품질)
+      const mode = n.data.exportMode === 'remotion' ? 'remotion' : 'preview'
+      setRunning({ id: n.id, msg: mode === 'remotion' ? 'remotion render… (~수분)' : 'ffmpeg preview + VO…', t0 })
+      try {
+        const r = await postJSON(`/api/contents/${cid}/${mode === 'remotion' ? 'remotion' : 'movie'}`, {})
+        const url = r.preview || r.url
+        if (url) commitRun(n.id, (x) => ({ ...x, dirty: false, video: bust(media(url), Date.now()) }))
+      } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
+      return
+    }
     const k = n.scene ? n.scene - 1 : null                        // 0-based 씬 index
     const id = typeof n.id === 'string' ? n.id : ''
     const ep = id.startsWith('prompt-') ? 'prompt' : id.startsWith('promptV-') ? 'votext' : id.startsWith('promptM-') ? 'motion'
@@ -635,7 +645,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
   // re-run = 씬 스크립트 기반으로 생성하는 노드: overall · image-prompt · motion-prompt · VO-text · image · clip · vo.
   // scene-script(script-)만 "편집이 소스" → re-run 없음. 생성된 노드들은 생성 후 편집 가능.
   const isGenPrompt = typeof n.id === 'string' && (n.id.startsWith('prompt-') || n.id.startsWith('promptV-') || n.id.startsWith('promptM-'))
-  const canRun = !!k && !k.source && (n.kind === 'overall' || n.kind === 'image' || n.kind === 'clip' || n.kind === 'vo' || isGenPrompt)
+  const canRun = !!k && !k.source && (n.kind === 'overall' || n.kind === 'image' || n.kind === 'clip' || n.kind === 'vo' || n.kind === 'movie' || isGenPrompt)
   const header = (
     <div className="ng-dh">
       <span className="ng-k" style={{ background: c }} />
