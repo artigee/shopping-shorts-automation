@@ -905,10 +905,22 @@ async function genImageForScene(c, scenes, i, promptOverride) {
     product?.dimensions ? `The real product's actual dimensions are ${product.dimensions} — depict it at exactly that real-world size.` : '',
     product?.features ? `Depict the product accurately per these real specs/mechanics: ${String(product.features).slice(0, 700)}` : '',
   ].filter(Boolean).join(' ')
-  const refs = (Array.isArray(scenes[i].refs) && scenes[i].refs.length) ? scenes[i].refs : [product?.image || (product?.images || [])[0]].filter(Boolean)
+  // 노드 그래프 레퍼런스(refLib + 씬 graphRefs) → 실제 URL 해석. 없으면 기존 방식 폴백.
+  let refLib = null; try { refLib = c.ref_lib ? JSON.parse(c.ref_lib) : null } catch { refLib = null }
+  const gr = scenes[i].graphRefs
+  let gProduct = null, gChar = null, gEnv = null
+  if (refLib && gr) {
+    const map = {}; ['product', 'character', 'environment'].forEach((role) => (refLib[role] || []).forEach((a) => { if (a && a.id) map[a.id] = a.thumb }))
+    gProduct = (gr.product || []).map((id) => map[id]).filter(Boolean)
+    gChar = (gr.character || []).map((id) => map[id]).find(Boolean) || null
+    gEnv = (gr.environment || []).map((id) => map[id]).find(Boolean) || null
+  }
+  const refs = (gProduct && gProduct.length) ? gProduct : (Array.isArray(scenes[i].refs) && scenes[i].refs.length) ? scenes[i].refs : [product?.image || (product?.images || [])[0]].filter(Boolean)
+  const characterRef = gChar || c.character_ref || null
+  const envRef = gEnv || scenes[i].envRef || null
   const url = hfReady()
     ? await genImage({ prompt, aspect: '9:16' })
-    : await genImageViaCLI({ prompt, productImageUrls: refs, characterRef: c.character_ref || null, envRef: scenes[i].envRef || null, productName: product?.title, dimensions: product?.dimensions })
+    : await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, productName: product?.title, dimensions: product?.dimensions })
   const rel = await saveAsset(c.id, i, url, false)
   scenes[i] = { ...scenes[i], ...(promptOverride ? { imagePrompt: promptOverride } : {}), image: rel, imageSrc: url }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)

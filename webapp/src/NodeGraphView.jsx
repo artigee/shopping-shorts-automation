@@ -137,7 +137,7 @@ function buildGraph(data) {
     mk({ id: 'script-' + k, role: 'script', kind: 'script', hd: 'scene ' + k, x: COL.script, y, scene: k, t: s.onScreenText || '', data: { title: s.onScreenText || '', vo: s.vo || '', guidance: '' } })
     mk({ id: 'prompt-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y, scene: k, t: (s.imagePrompt || '').slice(0, 90), data: { prompt: s.imagePrompt || '', guidance: '' } })
     mk({ id: 'promptV-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y: y + 160, scene: k, t: (s.voEn || s.vo || '').slice(0, 90), data: { prompt: s.voEn || s.vo || '', guidance: '' } })
-    mk({ id: 'image-' + k, role: 'image', kind: 'image', hd: 'scene ' + k, x: COL.image, y, scene: k, thumb: bust(media(s.image), lv), data: { imagePrompt: s.imagePrompt || '', image: s.image || '', aspect: '9:16', model: 'auto', seed: '', style: data.style || '', frameRole: 'start', guidance: '', refs: defRefs() } })
+    mk({ id: 'image-' + k, role: 'image', kind: 'image', hd: 'scene ' + k, x: COL.image, y, scene: k, thumb: bust(media(s.image), lv), data: { imagePrompt: s.imagePrompt || '', image: s.image || '', aspect: '9:16', model: 'auto', seed: '', style: data.style || '', frameRole: 'start', guidance: '', refs: (s.graphRefs && typeof s.graphRefs === 'object') ? { product: [], character: [], environment: [], ...s.graphRefs } : defRefs() } })
     mk({ id: 'vo-' + k, role: 'vo', kind: 'vo', hd: 'scene ' + k, x: COL.vo, y, scene: k, audio: bust(media(s.audio), lv), data: { voiceId: data.persona || 'default', lang: 'US EN', audio: s.audio || '' } })
     const clip = s.makeVideo !== false
     if (clip) {
@@ -461,7 +461,15 @@ function NodeGraphInner() {
   function setNodeData(id, patch) { commit((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, data: { ...n.data, ...patch } } : n) }), 'data:' + id + ':' + Object.keys(patch).join(',')) }
   function setNodeField(id, patch) { commit((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, ...patch } : n) }), 'field:' + id + ':' + Object.keys(patch).join(',')) }
   function setNodeScene(id, v) { if (!(v > 0)) return; commit((g) => ({ ...g, nodes: g.nodes.map((n) => n.id === id ? { ...n, dirty: true, scene: v, hd: /^scene \d+$/.test(n.hd || '') ? 'scene ' + v : n.hd } : n) })) }
-  function toggleRef(id, role, refId) { commit((g) => ({ ...g, nodes: g.nodes.map((n) => { if (n.id !== id) return n; const refs = { product: [], character: [], environment: [], ...(n.data.refs || {}) }; const arr = refs[role] = [...(refs[role] || [])]; const i = arr.indexOf(refId); if (i >= 0) arr.splice(i, 1); else arr.push(refId); return { ...n, dirty: true, data: { ...n.data, refs } } }) })) }
+  function toggleRef(id, role, refId) {
+    commit((g) => ({ ...g, nodes: g.nodes.map((n) => { if (n.id !== id) return n; const refs = { product: [], character: [], environment: [], ...(n.data.refs || {}) }; const arr = refs[role] = [...(refs[role] || [])]; const i = arr.indexOf(refId); if (i >= 0) arr.splice(i, 1); else arr.push(refId); return { ...n, dirty: true, data: { ...n.data, refs } } }) }))
+    const node = ngRef.current.nodes.find((n) => n.id === id)   // 이미지 노드의 ref 배정을 씬에 저장 (생성에 반영)
+    if (node && node.scene) persistSceneRefs(node.scene - 1, node.data.refs)
+  }
+  async function persistSceneRefs(idx, refs) {
+    if (cid == null) return
+    try { const r = await api(`/api/contents/${cid}`), cur = parse(r.content?.scenes) || []; const scenes = cur.map((s, i) => i === idx ? { ...s, graphRefs: refs } : s); await postJSON(`/api/contents/${cid}/scenes`, { scenes }, 'PUT') } catch { /* ignore */ }
+  }
   let uidN = useRef(0)
   function createNode(kind, wx, wy) {
     const id = kind + '-u' + (uidN.current++), x = Math.round(wx / 20) * 20, y = Math.round(wy / 20) * 20
