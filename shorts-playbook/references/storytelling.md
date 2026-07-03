@@ -4,6 +4,12 @@ The structure decides what happens; THIS file decides whether anyone keeps liste
 
 ## 0. Fit the time — the hard limit
 A line must be SPEAKABLE in its scene. Calm pace ≈ 2.5 words/second. So a scene's VO words ≤ duration × 2.5: a 4s scene = ~10 words MAX, a 2s scene = ~5 words. Count the words. A line nobody can finish in time is worse than a short one. The whole monologue must fit the total video length (a 16s video ≈ 40 words TOTAL). Short shorts use FEW words — write tight, then cut.
+
+### The duration rule (total → per-shot → words)
+
+- **Total length** defaults to the **reference reel's measured length** (editable). The sum of the shots' seconds should land close to it.
+- **Allocate per shot by the reel's PACING, never an even split.** Mirror where the reel lingers vs cuts fast: the hook is punchy/short; the key reveal/payoff and the CTA can hold a beat longer; connective beats get fewer seconds. A good weighted distribution first, then minor manual tweaks.
+- **Words follow duration**, not the reverse: each shot's VO ≤ `durationSec × 2.5` words. Set the shot's seconds from the beat's weight, then write the VO to fit.
 - ❌ (4s) "I did not believe a travel cot was going to be the thing I actually use every single trip — we have a graveyard of gear that sounded good at two in the morning." (~32 words — impossible in 4s)
 - ✅ (4s) "Swore I'd never use a travel cot. Four trips later." (~10 words)
 

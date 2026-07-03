@@ -89,7 +89,7 @@ Rules (all text in English):
 - beats: 4-7 items, one line each, the video flow (product strengths surface naturally).
 - vo: the full voiceover as ONE continuous persona monologue (see [VO = the through-line] above) — the through-line that scenes will later slice. NOT a paragraph that explains the beats.
 - cta: the final call to action (comment keyword → link funnel).
-- durationSec: estimated total length (seconds, 15-40).
+- durationSec: total video length in seconds — DEFAULT to the reference reel's length${Number(analysis?._meta?.duration) > 0 ? ' (~' + Math.round(analysis._meta.duration) + 's)' : ''}; only deviate if the story clearly needs it, and keep it in the 12-40s range.
 
 Output ONLY JSON (no explanation):
 {"angle":"...","title":"...","hookLine":"...","durationSec":25,"beats":["...","..."],"vo":"...","cta":"..."}`
@@ -102,6 +102,10 @@ Output ONLY JSON (no explanation):
 // ④ 씬 스크립트 — (편집됐을 수 있는) 전체 스크립트를 씬 단위로 분해 + 씬별 이미지 프롬프트. guidance 있으면 그 지시대로 수정.
 export async function generateScenes({ analysis, productName, product, overall, base, guidance, direction, shotCount, persona, hook, contentMode, hasFootage = false, lang = 'English (US, American audience)' }) {
   const countRule = shotCount ? `Produce EXACTLY ${shotCount} scenes` : 'Produce 5-8 scenes'
+  const reelLen = Math.round(Number(analysis?._meta?.duration) || 0)
+  const totalSec = Math.round(Number(overall?.durationSec) || reelLen || 22)   // 목표 총 길이 = overall(=릴스 길이 기본)
+  const reelBeats = (analysis?.sceneScript || []).map((s, i) => `${s.t || 'beat ' + (i + 1)}≈${s.durationSec || '?'}s`).join(', ')
+  const reelPacing = analysis?.structure?.pacing || ''
   const prompt = `You are CRAFTING an impactful ${lang}-market shopping short — you are NOT splitting text into N pieces.
 The [Overall script] is your STORY SOURCE: the full narration (facts, persona voice, the beats). Use it as material, but do NOT chop its monologue into shots. From [Structure reference] keep only the skeleton (beat order, pacing, shot types, CTA mechanic); discard the original's words.
 APPLY the chosen HOOK shape and the SHORTS-PLAYBOOK storytelling rules below to BUILD the short: open with a scroll-stopping hook, create tension, land ONE clean turn, pay it off, exit casual. SELECT and SHARPEN the strongest beats from the story — write fresh, tight, ear-catching scene VO + titles. The short is TIGHTER than the full narration; compress hard. ALL text natively in ${lang}.
@@ -124,11 +128,16 @@ ${productLine(productName, product)}
 [Structure reference]
 ${JSON.stringify(analysis?.structure || analysis).slice(0, 2200)}
 
+[DURATION PLAN — allocate by the reel's rhythm, NEVER an even split]
+- Target TOTAL ≈ ${totalSec}s (the reference reel's length). The sum of all durationSec must land close to this.
+- Follow the reference reel's PACING, not an even split.${reelPacing ? ' Reel pacing: ' + reelPacing + '.' : ''}${reelBeats ? ' Reel beat lengths: ' + reelBeats + '.' : ''} Mirror where the reel LINGERS vs cuts fast — the hook is punchy/short; the key reveal or payoff, and the CTA, can hold a beat longer. Give the strongest moments more seconds and the connective beats fewer.
+- Each durationSec is an INTEGER number of seconds (typically 2-5). The VO MUST be sayable within it at ~2.5 words/second → words ≤ durationSec × 2.5.
+
 Rules:
 - ${countRule}. If the count is very small (1-3), FOLD roles together — 1 scene = hook + product + CTA in one; 2-3 scenes = combine beats. Scene 1 = the HOOK (apply the hook shape). The LAST scene MUST be the CTA: its onScreenText is the comment keyword caption (e.g. "Comment WANT IT 👇") AND its vo IS the spoken ask — casually tell the viewer to comment the keyword to get the link (e.g. "Comment WANT IT and I'll send it your way" / "Say the word, it's in your DMs"). Do NOT make the last vo just a verdict/sign-off with no ask — the spoken CTA must be there (casual, not a hard sell). SELECT and SHARPEN the strongest beats from the story across exactly this many shots — compress, don't transcribe.
 - Each scene field (TEXT ONLY — no visuals):
   t: timecode (e.g. "0-2s")
-  durationSec: number (keep each scene SHORT — 2-4s, punchy)
+  durationSec: integer seconds per the DURATION PLAN above (reel-paced, sum ≈ ${totalSec}s; VO fits at ~2.5 words/s)
   onScreenText: on-screen TITLE — short claim/spec (<= ~5 words), carries the FACT, NEVER the same as vo
   vo: a FRESH tight spoken line distilled from the story (NOT a verbatim slice) — reacts / reveals mechanism / sensory; in persona; fits the scene's seconds; DIFFERENT job than the title
 
