@@ -115,7 +115,7 @@ function buildGraph(data) {
 
   mk({ id: 'in-0', role: 'input', hd: 'persona', t: ctx.persona, sub: 'VO voice', x: COL.input, y: 100, data: {} })
   mk({ id: 'in-1', role: 'input', hd: 'hook', t: ctx.hook, sub: 'story shape', x: COL.input, y: 240, data: {} })
-  mk({ id: 'analysis', role: 'analysis', kind: 'analysis', hd: 'reel', x: COL.input, y: 400, data: { angle: ctx.angle, hook: aj.hook || null, struct: aj.structure || null, sceneScript: aj.sceneScript || null, reel: { url: ar.reel_url, thumb: ar.reel_thumbnail, user: ar.reel_username, caption: ar.reel_caption, comments: ar.reel_comments, play: ar.reel_play, category: ar.category, title: ar.title }, product: { title: p.title, price: p.price, rating: p.rating, reviews: p.reviewCount, dimensions: p.dimensions, asin: p.asin, url: p.amazon_url, image: p.image } } })
+  mk({ id: 'analysis', role: 'analysis', kind: 'analysis', hd: 'reel', x: COL.input, y: 400, data: { angle: ctx.angle, hook: aj.hook || null, audience: aj.audience || null, struct: aj.structure || null, visualStyle: aj.visualStyle || null, sceneScript: aj.sceneScript || null, assets: aj.assets || null, viralFactors: aj.viralFactors || null, reel: { url: ar.reel_url, thumb: ar.reel_thumbnail, user: ar.reel_username, caption: ar.reel_caption, comments: ar.reel_comments, play: ar.reel_play, category: ar.category, title: ar.title }, product: { title: p.title, price: p.price, rating: p.rating, reviews: p.reviewCount, dimensions: p.dimensions, asin: p.asin, url: p.amazon_url, image: p.image } } })
   mk({ id: 'overall', role: 'overall', kind: 'overall', hd: 'overall', x: COL.overall, y: midY, data: { shotCount: data.shot_count ? String(data.shot_count) : '', direction: data.direction || '', angle: ctx.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || ''), guidance: '' } })
   const slug = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24)
   mk({ id: 'movie', role: 'movie', kind: 'movie', hd: 'final movie', x: COL.movie, y: midY, video: media(data.export_mp4 || data.preview), data: { sceneCount: scenes.length, final_form: data.final_form || 'card', output: data.export_mp4 || data.preview || '', exportMode: 'preview', outputDir: 'output/content-' + (data.id || 'x') + '/', outputName: (slug(ctx.product) || 'short') + '_' + (slug(data.hook) || 'hook') + '_v1' } })
@@ -423,7 +423,8 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
 
   let body
   if (n.kind === 'analysis') {
-    const r = d.reel || {}, p = d.product || {}, hk = d.hook || {}, st = d.struct || {}
+    const r = d.reel || {}, p = d.product || {}, hk = d.hook || {}, st = d.struct || {}, aud = d.audience || {}, vs = d.visualStyle || {}
+    const ss = Array.isArray(d.sceneScript) ? d.sceneScript : [], assets = Array.isArray(d.assets) ? d.assets : [], vf = Array.isArray(d.viralFactors) ? d.viralFactors : []
     body = (
       <div className="ng-db ng-analysis">
         <div className="ng-col">
@@ -436,11 +437,30 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
           <div className="ng-sh top" style={{ color: '#c9b3ea' }}>hook{hk.family ? ' · ' + hk.family : ''}</div>
           {hk.openingLine && <div className="ng-kvtext">"{hk.openingLine}"</div>}
           {hk.why && <div className="ng-kvtext">{hk.why}</div>}
+          {hk.scrollStopper && <div className="ng-kv"><span className="l">scroll stop</span><span className="v">{hk.scrollStopper}</span></div>}
+          {hk.emotionalTrigger && <div className="ng-kv"><span className="l">emotion</span><span className="v">{hk.emotionalTrigger}</span></div>}
+          {(aud.who || aud.painPoint || aud.objection) && <>
+            <div className="ng-sh top">audience</div>
+            {aud.who && <div className="ng-kv"><span className="l">who</span><span className="v">{aud.who}</span></div>}
+            {aud.painPoint && <div className="ng-kv"><span className="l">pain</span><span className="v">{aud.painPoint}</span></div>}
+            {aud.objection && <div className="ng-kv"><span className="l">objection</span><span className="v">{aud.objection}</span></div>}
+          </>}
           <div className="ng-sh top">structure</div>
           <div className="ng-kv"><span className="l">format</span><span className="v">{st.format || '—'}</span></div>
           <div className="ng-kv"><span className="l">pacing</span><span className="v">{st.pacing || '—'}</span></div>
+          {st.turningPoint && <div className="ng-kv"><span className="l">turn</span><span className="v">{st.turningPoint}</span></div>}
+          {st.productIntegration && <div className="ng-kv"><span className="l">product in</span><span className="v">{st.productIntegration}</span></div>}
           <div className="ng-kv"><span className="l">cta</span><span className="v">{st.cta || '—'}</span></div>
+          {st.whyItConverts && <div className="ng-kv"><span className="l">converts</span><span className="v">{st.whyItConverts}</span></div>}
           {(Array.isArray(st.beats) ? st.beats : []).map((b, i) => <div key={i} className="ng-kv"><span className="l">beat {i + 1}</span><span className="v">{typeof b === 'string' ? b : JSON.stringify(b)}</span></div>)}
+          {(vs.lookFeel || vs.lighting || vs.palette || vs.textStyle || vs.editing) && <>
+            <div className="ng-sh top">visual style</div>
+            {vs.lookFeel && <div className="ng-kv"><span className="l">look</span><span className="v">{vs.lookFeel}</span></div>}
+            {vs.lighting && <div className="ng-kv"><span className="l">lighting</span><span className="v">{vs.lighting}</span></div>}
+            {vs.palette && <div className="ng-kv"><span className="l">palette</span><span className="v">{vs.palette}</span></div>}
+            {vs.textStyle && <div className="ng-kv"><span className="l">text</span><span className="v">{vs.textStyle}</span></div>}
+            {vs.editing && <div className="ng-kv"><span className="l">editing</span><span className="v">{vs.editing}</span></div>}
+          </>}
         </div>
         <div className="ng-col right">
           <div className="ng-sh" style={{ color: '#5DCAA5' }}>matched product</div>
@@ -450,6 +470,18 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
           <div className="ng-kv"><span className="l">rating</span><span className="v">{p.rating ? '★ ' + p.rating + ' · ' + (p.reviews || 0) : '—'}</span></div>
           {p.dimensions && <div className="ng-kv"><span className="l">dims</span><span className="v">{p.dimensions}</span></div>}
           {p.asin && <div className="ng-kv"><span className="l" /><span className="v"><a href={'https://www.amazon.com/dp/' + p.asin} target="_blank" rel="noreferrer">Amazon ↗</a></span></div>}
+          {ss.length > 0 && <>
+            <div className="ng-sh top">scene script</div>
+            {ss.map((s, i) => <div key={i} className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>{s.t || `#${i + 1}`}</b> {s.shot || ''}{s.onScreenText ? ` · “${s.onScreenText}”` : ''}{s.vo ? ` · VO: ${s.vo}` : ''}</div>)}
+          </>}
+          {assets.length > 0 && <>
+            <div className="ng-sh top">scene assets</div>
+            {assets.map((s, i) => <div key={i} className="ng-kv"><span className="l">#{s.scene} {s.type}</span><span className="v">{s.need}</span></div>)}
+          </>}
+          {vf.length > 0 && <>
+            <div className="ng-sh top">viral factors</div>
+            {vf.map((f, i) => <div key={i} className="ng-kvtext">• {typeof f === 'string' ? f : JSON.stringify(f)}</div>)}
+          </>}
         </div>
       </div>
     )
