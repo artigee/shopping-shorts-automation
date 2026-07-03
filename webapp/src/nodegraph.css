@@ -23,6 +23,7 @@
 .ng-node:active { cursor: grabbing; }
 .ng-node:hover { border-color: rgba(222,220,209,.30); }
 .ng-node.dim { opacity: .3; }
+.ng-media-big { display: block; width: 100%; max-width: 300px; max-height: 46vh; object-fit: contain; border-radius: 10px; background: #0b0c10; margin: 0 auto 4px; }
 .ng-voplayer { display: flex; align-items: center; gap: 7px; margin-top: 4px; background: #17171a; border: 1px solid #2f2f36; border-radius: 8px; padding: 4px 8px; }
 .ng-voplay { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%; border: 1px solid #43434c; background: #232328; color: #e0c85d; cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center; line-height: 1; }
 .ng-voplay:hover { background: #2a2a30; }

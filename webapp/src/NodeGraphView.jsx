@@ -516,7 +516,7 @@ function NodeGraphInner() {
                 {tl && <span className="ng-type" style={{ color: c, borderColor: c + '66' }}>{tl}</span>}
                 {running && running.id === n.id && <span className="ng-node-timer">⏳ {fmtDur(runSecs)}{running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ''}</span>}
                 <button className="ng-del" title="delete" onClick={(e) => { e.stopPropagation(); deleteNode(n.id) }}>×</button>
-                {n.kind === 'image' && (n.thumb ? <img className="ng-thumb" style={{ aspectRatio: aspectCSS(n.data?.aspect) }} src={n.thumb} loading="lazy" onError={(e) => { e.target.style.opacity = .2 }} /> : <div className="ng-thumb ph" style={{ aspectRatio: aspectCSS(n.data?.aspect) }}>{n.data?.aspect || '9:16'}</div>)}
+                {n.kind === 'image' && (n.thumb ? <img className="ng-thumb" style={{ aspectRatio: aspectCSS(n.data?.aspect) }} src={n.thumb} loading="lazy" {...hoverPreview} onError={(e) => { e.target.style.opacity = .2 }} /> : <div className="ng-thumb ph" style={{ aspectRatio: aspectCSS(n.data?.aspect) }}>{n.data?.aspect || '9:16'}</div>)}
                 {n.kind === 'clip' && (n.video ? <video className="ng-thumb" src={n.video} muted loop playsInline preload="metadata" onMouseOver={(e) => e.target.play()} onMouseOut={(e) => e.target.pause()} /> : n.image ? <img className="ng-thumb" style={{ opacity: .4 }} src={n.image} /> : null)}
                 {n.kind === 'movie' && n.video && <video className="ng-thumb" src={n.video} controls playsInline preload="metadata" />}
                 {n.kind === 'analysis' && n.data?.reel?.thumb && <img className="ng-thumb" src={n.data.reel.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} />}
@@ -800,11 +800,15 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
     const ed = k.editor
     const fedBy = incoming.filter((s) => outTypeOf(s) === 'text')
     const cfg = (k.config || []).map((cc) => ({ ...cc, _moves: lib.moves }))
+    const hasMedia = (n.kind === 'image' && n.thumb) || ((n.kind === 'clip' || n.kind === 'movie') && n.video) || (n.kind === 'vo' && n.audio)
     body = (
       <div className="ng-db">
         <div className="ng-col">
+          {n.kind === 'image' && n.thumb && <img className="ng-media-big" style={{ aspectRatio: aspectCSS(d.aspect) }} src={n.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.opacity = .25 }} />}
+          {(n.kind === 'clip' || n.kind === 'movie') && n.video && <video className="ng-media-big" src={n.video} controls playsInline preload="metadata" style={n.kind === 'movie' ? { aspectRatio: '9/16', maxWidth: 320, margin: '0 auto' } : null} />}
+          {n.kind === 'vo' && n.audio && <div style={{ marginBottom: 8 }}><VoPlayer src={n.audio} /></div>}
           {ed && <>
-            <div className="ng-sh">{ed.label}</div>
+            <div className={'ng-sh' + (hasMedia ? ' top' : '')}>{ed.label}</div>
             <div className={'ng-fed' + (fedBy.length ? '' : ' manual')}>{fedBy.length ? '◦ from ' + fedBy.map((s) => s.hd).join(', ') : '✎ manual'}</div>
             <textarea className={'ng-big' + (ed.readOnly ? ' ro' : '')} value={d[ed.field] || ''} readOnly={ed.readOnly} onChange={ed.readOnly ? undefined : (e) => onField(ed.field, e.target.value)} onBlur={ed.readOnly ? undefined : onCommit} />
           </>}
