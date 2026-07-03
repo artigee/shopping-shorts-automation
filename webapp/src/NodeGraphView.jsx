@@ -509,7 +509,7 @@ function Board({ list, running, onOpen, reload }) {
         </select>
         <span className="ng-board-count">{items.length}/{list.length}</span>
       </div>
-      <div className="ng-cards">
+      <div className="pgrid">
         {items.map((c) => {
           let sc = []; try { sc = c.scenes ? JSON.parse(c.scenes) : [] } catch { sc = [] }
           const thumb = c.product_image || c.reel_thumbnail || null
@@ -517,24 +517,24 @@ function Board({ list, running, onOpen, reload }) {
           const imgs = sc.filter((s) => s && (s.image || s.imageSrc)).length
           const title = c.title || c.product_name || c.analysis_title || 'untitled'
           return (
-            <div key={c.id} className="ng-card" onClick={() => onOpen(c.id)} title="open graph">
-              <div className="ng-card-thumb">
-                {running?.has(c.id) && <span className="ng-card-run">● running</span>}
-                {thumb ? <img src={thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} /> : <span>#{c.id}</span>}
-                <div className="ng-card-acts">
-                  <button onClick={(e) => dup(e, c.id)} title="duplicate">⧉ copy</button>
-                  <button onClick={(e) => del(e, c.id, title)} title="delete">✕</button>
-                </div>
+            <div key={c.id} className="pcard ng-pcard" onClick={() => onOpen(c.id)} title="open graph">
+              {running?.has(c.id) && <span className="ng-card-run">● running</span>}
+              <div className="ng-card-acts">
+                <button onClick={(e) => dup(e, c.id)} title="duplicate">⧉</button>
+                <button onClick={(e) => del(e, c.id, title)} title="delete">✕</button>
               </div>
-              <div className="ng-card-body">
-                <div className="ng-card-title">{title}</div>
-                <div className="ng-card-sub">{c.persona || '—'} · {c.hook || '—'}</div>
-                <div className="ng-card-stat">
-                  <span>{sc.length} scene{sc.length === 1 ? '' : 's'}</span>
-                  <span className={hasOverall ? 'on' : ''}>overall</span>
-                  <span className={imgs ? 'on' : ''}>{imgs}/{sc.length} img</span>
-                  <span className={hasMovie ? 'on' : ''}>movie</span>
-                  {c.content_mode && <span className="mode">{c.content_mode.replace('_', ' ')}</span>}
+              <div className="pbody">
+                {thumb ? <img className="pthumb" src={thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} /> : <div className="pthumb ng-pthumb-ph">#{c.id}</div>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="pname" style={{ fontSize: 14, margin: '0 0 4px' }}>{title}</div>
+                  <div className="pmet"><span className="muted">{c.persona || '—'} · {c.hook || '—'}</span></div>
+                  <div className="ng-card-stat" style={{ marginTop: 7 }}>
+                    <span>{sc.length} sc</span>
+                    <span className={hasOverall ? 'on' : ''}>overall</span>
+                    <span className={imgs ? 'on' : ''}>{imgs}/{sc.length} img</span>
+                    <span className={hasMovie ? 'on' : ''}>movie</span>
+                    {c.content_mode && <span className="mode">{c.content_mode.replace('_', ' ')}</span>}
+                  </div>
                 </div>
               </div>
             </div>

@@ -27,20 +27,15 @@
 .ng-search:focus { border-color: var(--gold, #ffce4d); outline: none; }
 .ng-board-bar select { background: var(--card, #1a1d26); border: 1px solid var(--line, #272b36); border-radius: 8px; color: var(--txt, #e8eaf0); padding: 7px 9px; font-size: 12px; cursor: pointer; }
 .ng-board-count { color: var(--mut, #9aa0ad); font-size: 12px; font-family: ui-monospace, monospace; }
-.ng-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-.ng-card { position: relative; display: flex; flex-direction: column; background: var(--card, #1a1d26); border: 1px solid var(--line, #272b36); border-radius: 12px; overflow: hidden; cursor: pointer; transition: border-color .12s, transform .1s, box-shadow .12s; }
-.ng-card:hover { border-color: var(--gold, #ffce4d); transform: translateY(-2px); box-shadow: 0 10px 26px -14px #000; }
-.ng-card-thumb { position: relative; height: 148px; background: #0b0c10; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.ng-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.ng-card-thumb span { font-family: ui-monospace, monospace; color: var(--mut, #9aa0ad); font-size: 13px; }
+/* content cards reuse the app .pcard/.pbody/.pthumb (same size/style as ③ Select product) */
+.ng-pcard { position: relative; }
+.ng-pcard:hover { border-color: var(--gold, #ffce4d); }
+.ng-pthumb-ph { display: flex; align-items: center; justify-content: center; color: var(--mut, #9aa0ad); background: #0b0c10 !important; font-family: ui-monospace, monospace; font-size: 11px; }
 .ng-card-run { position: absolute; top: 8px; left: 8px; z-index: 2; background: rgba(0,0,0,.62); color: var(--green, #7ee787); font-size: 10px; font-family: ui-monospace, monospace; padding: 2px 9px; border-radius: 20px; }
-.ng-card-acts { position: absolute; top: 6px; right: 6px; display: none; gap: 5px; }
-.ng-card:hover .ng-card-acts { display: flex; }
-.ng-card-acts button { background: rgba(0,0,0,.62); color: #dfe3ea; border: 1px solid var(--line, #272b36); border-radius: 6px; font-size: 10.5px; padding: 3px 8px; cursor: pointer; font-family: ui-monospace, monospace; }
+.ng-card-acts { position: absolute; top: 8px; right: 8px; display: none; gap: 5px; z-index: 2; }
+.ng-pcard:hover .ng-card-acts { display: flex; }
+.ng-card-acts button { background: rgba(0,0,0,.62); color: #dfe3ea; border: 1px solid var(--line, #272b36); border-radius: 6px; font-size: 11px; padding: 3px 8px; cursor: pointer; font-family: ui-monospace, monospace; }
 .ng-card-acts button:hover { border-color: var(--gold, #ffce4d); color: var(--gold, #ffce4d); }
-.ng-card-body { padding: 11px 13px 13px; }
-.ng-card-title { font-size: 13.5px; color: var(--txt, #e8eaf0); font-weight: 600; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.ng-card-sub { font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--mut, #9aa0ad); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ng-card-stat { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
 .ng-card-stat span { font-family: ui-monospace, monospace; font-size: 9.5px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line, #272b36); color: var(--mut, #9aa0ad); }
 .ng-card-stat span.on { border-color: #2f5233; color: var(--green, #7ee787); }
