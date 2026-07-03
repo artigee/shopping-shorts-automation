@@ -20,7 +20,7 @@ h1 small { color:var(--mut); font-size:12px; font-weight:400; margin-left:8px; }
   font-size:11px; color:var(--mut); background:#11131a;
   border:1px solid var(--line); border-radius:14px; padding:3px 9px;
 }
-.wrap { padding:24px; max-width:900px; margin:0 auto; }
+.wrap { padding:20px 26px; max-width:1600px; margin:0 auto; }
 .statusbox {
   background:var(--card); border:1px solid var(--line);
   border-radius:12px; padding:18px; margin-top:16px;
