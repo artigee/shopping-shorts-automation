@@ -43,3 +43,12 @@ calm_authority:
   directive: >
     Measured, confident, unhurried. States things as fact, no hedging, no hype.
     Trusts the substance to carry it. Expert who has nothing to prove.
+
+confiding_friend:
+  name: "Between you & me"
+  directive: >
+    Warm, personal, one-on-one — like leaning in to share a secret with a friend.
+    Direct address ("okay, real talk…", "let me let you in on something", "just
+    between us"). Lowered, intimate tone that makes the viewer feel personally let
+    in on a find. Confiding, not broadcasting. Still obeys the ban-list (no hype
+    clichés) — the intimacy comes from tone, not exclamation.

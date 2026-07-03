@@ -54,7 +54,7 @@ Before any VO is written, pick a **Content Mode** and stay inside its allowed vo
 - `references/teardown.md` — original → skeleton, the keep/regenerate procedure + worked transform
 - `references/english-style.md` — US idiom, register, dollar references, FTC disclosure
 - `data/personas.yaml` — the VO voice library (skeptic_won_over, tired_parent, broke_foodie, lazy_genius, honest_tester) — WHO is talking
-- `data/vo-styles.yaml` — speaking styles (punchy_short, flowing_conversational, listy_scannable, story_driven, quickfire_hype, calm_authority) — HOW the persona paces the VO; layered on persona, optional free-text refine
+- `data/vo-styles.yaml` — speaking styles (punchy_short, flowing_conversational, listy_scannable, story_driven, quickfire_hype, calm_authority, confiding_friend) — HOW the persona paces the VO; layered on persona, optional free-text refine
 - `data/hooks.yaml` — story shapes (disbelief_reveal, price_shock, social_proof, usage_review, …) — the second lever beside persona
 - `data/camera-moves.yaml` — image→video camera moves; one slow move per shot
 - `data/content-modes.yaml` — the 5 content modes + allowed/banned voice per mode (the claim-safety gate)
