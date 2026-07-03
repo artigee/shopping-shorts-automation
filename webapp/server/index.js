@@ -11,7 +11,7 @@ import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon
 import { analyzeReel } from './analyze.js'
 import { matchProductByVision } from './match.js'
 import { generateOverall, generateScenes, translateVO, recommendPersonaHook, generateImagePrompt } from './produce.js'
-import { getPersonas, getHooks, getCameraMoves, getCameraMove, playbookReady } from './playbook.js'
+import { getPersonas, getHooks, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
 import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady } from './higgsfield.js'
 import { buildPreview } from './preview.js'
 import { renderShort, probeDuration, FPS } from './remotion-render.js'
@@ -738,7 +738,7 @@ app.post('/api/contents/:id/overall', (req, res) => {
   const base = guidance && c.overall ? JSON.parse(c.overall) : null
   const job = startJob({ agent: 'overall', refType: 'contents', refId: c.id, message: 'writing overall…' }, async (progress) => {
     progress('스토리 스크립트 작성 중… (~1분)', 30)
-    const overall = await generateOverall({ analysis: JSON.parse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, hook: c.hook, lang: genLang() })
+    const overall = await generateOverall({ analysis: JSON.parse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', lang: genLang() })
     progress('저장 중…', 90)
     db.prepare(`UPDATE contents SET overall = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(overall), c.id)
     return overall
@@ -749,6 +749,14 @@ app.post('/api/contents/:id/overall', (req, res) => {
 app.put('/api/contents/:id/overall', (req, res) => {
   db.prepare(`UPDATE contents SET overall = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify((req.body && req.body.overall) || {}), req.params.id)
   res.json({ ok: true })
+})
+
+// 콘텐츠 모드 (claim-safety 게이트) — 목록 + 콘텐츠별 저장
+app.get('/api/content-modes', (req, res) => res.json({ modes: getContentModes() }))
+app.post('/api/contents/:id/content-mode', (req, res) => {
+  const mode = (req.body && req.body.mode) || null
+  db.prepare(`UPDATE contents SET content_mode = ?, updated_at = datetime('now') WHERE id = ?`).run(mode, req.params.id)
+  res.json({ content_mode: mode })
 })
 
 // ④ 씬 스크립트 생성 (편집된 전체 스크립트를 씬 단위로 분해; 없으면 자동 생성). body.guidance로 guided regeneration.
@@ -767,8 +775,9 @@ app.post('/api/contents/:id/script', async (req, res) => {
   try {
     const analysis = JSON.parse(a.analysis)
     let overall = c.overall ? JSON.parse(c.overall) : null
-    if (!overall) { overall = await generateOverall({ analysis, productName: p?.title || a.title, product: p, persona: c.persona, hook: c.hook, lang: genLang() }); db.prepare(`UPDATE contents SET overall = ? WHERE id = ?`).run(JSON.stringify(overall), c.id) }
-    const scenes = await generateScenes({ analysis, productName: p?.title || a.title, product: p, overall, base, guidance, direction: c.direction, shotCount, persona: c.persona, hook: c.hook, lang: genLang() })
+    const hasFootage = c.content_mode === 'direct_review'
+    if (!overall) { overall = await generateOverall({ analysis, productName: p?.title || a.title, product: p, persona: c.persona, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() }); db.prepare(`UPDATE contents SET overall = ? WHERE id = ?`).run(JSON.stringify(overall), c.id) }
+    const scenes = await generateScenes({ analysis, productName: p?.title || a.title, product: p, overall, base, guidance, direction: c.direction, shotCount, persona: c.persona, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() })
     // 새 씬 구성 → 기존 이미지/클립/VO/프리뷰 초기화 (어긋남 방지). 새로 생성해야 함.
     flushContentAssets(c.id)
     db.prepare(`UPDATE contents SET scenes = ?, preview = NULL, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)

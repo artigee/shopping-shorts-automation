@@ -97,6 +97,8 @@ function ContentDetail({ data, onClose, onChange, goProducts }) {
   const [busy, setBusy] = useState('')
   const [busyMsg, setBusyMsg] = useState('')   // 잡 진행 라벨
   const [err, setErr] = useState(null)
+  const [modes, setModes] = useState([])       // 콘텐츠 모드(claim-safety) 목록
+  const [contentMode, setContentMode] = useState(content.content_mode || '')
   const [hf, setHf] = useState(null)   // Higgsfield 키 설정 여부
   const [genIdx, setGenIdx] = useState(-1)
   const [ver, setVer] = useState(0)    // 미디어 캐시 버스터 (재생성 후 즉시 갱신)
@@ -284,6 +286,8 @@ function ContentDetail({ data, onClose, onChange, goProducts }) {
   }, [content.id])
   function editO(f, v) { setOverall((o) => ({ ...(o || {}), [f]: v })) }
   async function saveOverall() { try { await postJSON(`/api/contents/${content.id}/overall`, { overall }, 'PUT') } catch {} }
+  useEffect(() => { api('/api/content-modes').then((r) => setModes(r.modes || [])).catch(() => {}) }, [])
+  async function saveContentMode(v) { setContentMode(v); try { await postJSON(`/api/contents/${content.id}/content-mode`, { mode: v || null }) } catch {} }
 
   // ④ 씬 스크립트 — 재생성 = 저장된 전체 스크립트 기반. 샷 개수 지정 가능. 자막·VO는 onBlur 자동저장.
   const [shotCount, setShotCount] = useState(content.shot_count ? String(content.shot_count) : '')
@@ -419,6 +423,13 @@ function ContentDetail({ data, onClose, onChange, goProducts }) {
         {/* 1. 전체 스크립트 */}
         <Section title={`1. ${t('전체 스크립트')}`} open={open.overall} onToggle={() => toggle('overall')}
           right={<button className="primary" onClick={() => genOverall()} disabled={!ready || !!busy}>{busy === 'overall' ? <Dots label={busyMsg || t('생성')} /> : overall ? t('🔄 재생성') : t('▶ 생성')}</button>}>
+          <label className="fld" style={{ marginBottom: 4 }}><span>{t('콘텐츠 모드')}</span>
+            <select value={contentMode} onChange={(e) => saveContentMode(e.target.value)}>
+              <option value="">{t('안전 기본 (Curated Find)')}</option>
+              {modes.map((m) => <option key={m.key} value={m.key}>{m.label}{m.requires_footage ? ' — footage 필요' : ''}</option>)}
+            </select>
+          </label>
+          {(() => { const m = modes.find((x) => x.key === contentMode); return <p className="muted hint" style={{ margin: '0 2px 8px' }}>{m ? `${m.use_when} · ${t('허용')}: ${(m.allow || []).join(', ')} · ${t('금지')}: ${(m.ban || []).join(', ')}${m.requires_footage ? ' · ⚠ ' + t('직접 촬영 footage 있을 때만') : ''}` : t('미선택 시 안전 기본값(Curated Find) — 결과 단정을 관찰형으로 완화합니다.')}</p> })()}
           {overall ? (
             <div className="vbox" style={{ gap: 6 }}>
               <label className="fld"><span>{t('각도(angle)')}</span><input value={overall.angle || ''} onChange={(e) => editO('angle', e.target.value)} onBlur={saveOverall} /></label>
