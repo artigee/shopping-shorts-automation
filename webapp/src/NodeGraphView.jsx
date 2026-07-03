@@ -267,6 +267,39 @@ function NodeGraphInner() {
       })
     } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
   }
+  // 배치 후 씬 노드 미디어(이미지/클립/VO)만 최신으로 갱신 (그래프 편집/위치 보존)
+  async function refreshSceneMedia() {
+    const r = await api(`/api/contents/${cid}`), scenes = parse(r.content?.scenes) || [], v = Date.now()
+    setNg((g) => {
+      const nodes = g.nodes.map((x) => {
+        const k = x.scene; if (!k) return x
+        const s = scenes[k - 1]; if (!s) return x
+        if (x.kind === 'image') return { ...x, dirty: false, thumb: bust(media(s.image), v), data: { ...x.data, image: s.image || '', imagePrompt: s.imagePrompt || '' } }
+        if (x.kind === 'clip') return { ...x, dirty: false, video: bust(media(s.video), v), image: bust(media(s.image), v) }
+        if (x.kind === 'vo') return { ...x, dirty: false, audio: bust(media(s.audio), v) }
+        return x
+      })
+      const nn = { ...g, nodes }; ngRef.current = nn; return nn
+    })
+  }
+  // 배치 생성 (순차 큐) — 기존 /batch 엔드포인트 재사용. kind: images | clips | vo
+  async function runBatchKind(kind) {
+    if (cid == null || running) return
+    setErr(null)
+    const prefix = kind === 'clips' ? 'clip-' : kind === 'vo' ? 'vo-' : 'image-', t0 = Date.now()
+    try {
+      const resp = await postJSON(`/api/contents/${cid}/batch`, { kind })
+      let job = resp && resp.job
+      while (job && job.status === 'running') {
+        setRunning({ id: prefix + ((job.current ?? 0) + 1), msg: `${kind} ${job.done}/${job.total}`, t0 })
+        await new Promise((res) => setTimeout(res, 1500))
+        job = (await api(`/api/contents/${cid}/batch`)).job
+      }
+      await refreshSceneMedia()
+      if (job && job.fails && job.fails.length) setErr(`${kind}: ${job.fails.length} scene(s) failed${job.lastError ? ' — ' + job.lastError : ''}`)
+    } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
+  }
+  async function runBatchAll() { for (const k of ['images', 'clips', 'vo']) await runBatchKind(k) }
   // 편집 저장 — 노드의 텍스트를 백엔드에 반영(자산은 보존)하고, 편집 노드 dirty 해제 + 하류 dirty 전파.
   // scene-script / VO text / motion prompt / image prompt는 재생성이 아니라 "편집"이 소스가 된다.
   async function persistNode(n) {
@@ -418,6 +451,14 @@ function NodeGraphInner() {
         <select value={contentMode} onChange={(e) => saveContentMode(e.target.value)} title={(() => { const m = modes.find((x) => x.key === contentMode); return m ? `${m.use_when} · allow: ${(m.allow || []).join(', ')} · never: ${(m.ban || []).join(', ')}` : 'safe default (Curated Find) — result claims softened to observations' })()}>
           <option value="">◇ mode: safe default</option>
           {modes.map((m) => <option key={m.key} value={m.key}>◇ {m.label}{m.requires_footage ? ' (needs footage)' : ''}</option>)}
+        </select>
+        <span className="ng-barsep" />
+        <select className="ng-gensel" value="" disabled={!!running} title="batch generate (sequential, one at a time)" onChange={(e) => { const k = e.target.value; if (k === 'all') runBatchAll(); else if (k) runBatchKind(k) }}>
+          <option value="">⚙ generate…</option>
+          <option value="all">▶ all (images → clips → VO)</option>
+          <option value="images">▶ all images</option>
+          <option value="clips">▶ all clips</option>
+          <option value="vo">▶ all VO</option>
         </select>
       </div>
       {sourceStale && (
