@@ -517,6 +517,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
 
   useEffect(() => { if (!running) return; const iv = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(iv) }, [running])
   const runSecs = running ? Math.floor((Date.now() - running.t0) / 1000) : 0
+  const scenesDur = graph.nodes.reduce((a, n) => n.kind === 'script' ? a + (Number(n.data?.durationSec) || 0) : a, 0)   // 샷 durationSec 합계
   const fmtDur = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   return (
@@ -585,6 +586,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 {n.kind === 'analysis' && n.data?.reel?.thumb && <img className="ng-thumb" src={n.data.reel.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} />}
                 <div className="ng-hd" style={{ color: c }}><span className="ng-dot" style={{ background: c }} />{n.hd}</div>
                 {n.t && n.kind !== 'prompt' && <div className="ng-t">{n.t}</div>}
+                {n.kind === 'overall' && (() => { const tgt = Number(n.data?.durationSec) || 0, drift = tgt ? Math.abs(scenesDur - tgt) / tgt : 0; return <div className={'ng-dur-readout' + (tgt && drift > 0.2 ? ' off' : '')}>Σ shots {scenesDur}s{tgt ? ` / ${tgt}s target` : ''}</div> })()}
                 {n.sub && <div className="ng-sub">{n.sub}</div>}
                 {n.kind === 'vo' && (n.audio ? <VoPlayer src={n.audio} /> : <div className="ng-sub">no VO yet</div>)}
                 {n.kind === 'clip' && <div className="ng-pill">{n.data?.makeVideo === 'still' ? '🖼 still' : '🎥 ' + cameraMoveName(n.data?.cameraMove, lib.moves)}</div>}
