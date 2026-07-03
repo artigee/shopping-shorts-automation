@@ -297,3 +297,29 @@ Output ONLY JSON: {"persona":"<key>","personaWhy":"one short reason","hook":"<ke
   if (!r || typeof r !== 'object') throw new Error('추천 응답 파싱 실패')
   return r
 }
+
+// 페르소나만 추천 (product + audience + reel voice + instruction)
+export async function recommendPersona({ productName, product, analysis, personas, guidance }) {
+  const prompt = `Recommend the single best VO PERSONA for a US-market shopping short — the voice that makes the most scroll-stopping short for THIS product and its likely buyer.
+[Product] ${productLine(productName, product)}${product?.features ? '\n[Features] ' + String(product.features).slice(0, 400) : ''}
+[Reel voice + audience (reference)] ${JSON.stringify({ voice: analysis?.voice, audience: analysis?.audience, hook: analysis?.hook }).slice(0, 1400)}
+[Available personas (key: name — register)]
+${(personas || []).map((p) => `${p.key}: ${p.name} — ${p.register || ''}`).join('\n')}
+${guidance && guidance.trim() ? '[INSTRUCTION — honor above all] ' + guidance.trim() : ''}
+Pick ONE persona key from the list (exact key). Output ONLY JSON: {"persona":"<key>","why":"one short reason"}`
+  const out = await runClaude(prompt, { model: 'haiku', timeout: 60000 })
+  const r = JSON.parse(stripFence(out)); if (!r?.persona) throw new Error('persona 추천 파싱 실패'); return r
+}
+
+// 훅만 추천 (reel의 hook.family로 leaning + instruction)
+export async function recommendHook({ analysis, hooks, guidance }) {
+  const fam = analysis?.hook?.family || ''
+  const prompt = `Recommend the single best HOOK shape for a US-market shopping short.${fam ? ` The reference reel's hook archetype is "${fam}" — LEAN to the catalog hook that matches it unless the instruction says otherwise.` : ''}
+[Reel hook] ${JSON.stringify(analysis?.hook || {}).slice(0, 700)}
+[Available hooks (key: name — when it fits)]
+${(hooks || []).map((h) => `${h.key}: ${h.name} — ${h.when_to_use || ''}`).join('\n')}
+${guidance && guidance.trim() ? '[INSTRUCTION — honor above all] ' + guidance.trim() : ''}
+Pick ONE hook key from the list (exact key). Output ONLY JSON: {"hook":"<key>","why":"one short reason"}`
+  const out = await runClaude(prompt, { model: 'haiku', timeout: 60000 })
+  const r = JSON.parse(stripFence(out)); if (!r?.hook) throw new Error('hook 추천 파싱 실패'); return r
+}

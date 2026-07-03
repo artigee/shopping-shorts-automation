@@ -10,7 +10,7 @@ import { extractProducts, identifyReel } from './extract.js'
 import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon.js'
 import { analyzeReel } from './analyze.js'
 import { matchProductByVision } from './match.js'
-import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
+import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
 import { getPersonas, getHooks, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
 import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady } from './higgsfield.js'
 import { buildPreview } from './preview.js'
@@ -691,6 +691,25 @@ app.post('/api/contents/:id/recommend', async (req, res) => {
     const rec = await recommendPersonaHook({ productName: product?.title || a?.title, product, analysis, personas: getPersonas(), hooks: getHooks() })
     res.json(rec)
   } catch (e) { res.status(500).json({ error: e.message || String(e) }) }
+})
+// 페르소나만 추천 (persona 노드 re-run)
+app.post('/api/contents/:id/recommend-persona', async (req, res) => {
+  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
+  const a = c.analysis_id ? db.prepare('SELECT * FROM analyses WHERE id = ?').get(c.analysis_id) : null
+  const product = c.product ? JSON.parse(c.product) : null
+  const analysis = a?.analysis ? JSON.parse(a.analysis) : null
+  try { res.json(await recommendPersona({ productName: product?.title || a?.title, product, analysis, personas: getPersonas(), guidance: req.body && req.body.guidance })) }
+  catch (e) { res.status(500).json({ error: e.message || String(e) }) }
+})
+// 훅만 추천 (hook 노드 re-run)
+app.post('/api/contents/:id/recommend-hook', async (req, res) => {
+  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
+  const a = c.analysis_id ? db.prepare('SELECT * FROM analyses WHERE id = ?').get(c.analysis_id) : null
+  const analysis = a?.analysis ? JSON.parse(a.analysis) : null
+  try { res.json(await recommendHook({ analysis, hooks: getHooks(), guidance: req.body && req.body.guidance })) }
+  catch (e) { res.status(500).json({ error: e.message || String(e) }) }
 })
 
 // 제품 선택 — 아마존에서 고른 제품을 콘텐츠에 적용 (asin 없으면 해제). asin이면 실제 치수도 자동 조회.

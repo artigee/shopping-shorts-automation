@@ -123,12 +123,13 @@ function buildGraph(data) {
     scenes.forEach((s) => (s.refs || []).forEach((r) => { const u = media(r); if (u) push(u, 'product', 'ref') }))
   }
 
-  mk({ id: 'in-0', role: 'input', hd: 'persona', t: ctx.persona, sub: 'VO voice', x: COL.input, y: 100, data: {} })
-  mk({ id: 'in-1', role: 'input', hd: 'hook', t: ctx.hook, sub: 'story shape', x: COL.input, y: 240, data: {} })
-  mk({ id: 'analysis', role: 'analysis', kind: 'analysis', hd: 'reel', x: COL.input, y: 400, data: { angle: ctx.angle, hook: aj.hook || null, audience: aj.audience || null, struct: aj.structure || null, visualStyle: aj.visualStyle || null, sceneScript: aj.sceneScript || null, assets: aj.assets || null, viralFactors: aj.viralFactors || null, reel: { url: ar.reel_url, thumb: ar.reel_thumbnail, user: ar.reel_username, caption: ar.reel_caption, comments: ar.reel_comments, play: ar.reel_play, category: ar.category, title: ar.title }, product: { title: p.title, price: p.price, rating: p.rating, reviews: p.reviewCount, dimensions: p.dimensions, asin: p.asin, url: p.amazon_url, image: p.image } } })
+  mk({ id: 'in-0', role: 'input', hd: 'persona', t: ctx.persona, sub: 'VO voice', x: COL.input, y: 100, data: { guidance: '' } })
+  mk({ id: 'in-1', role: 'input', hd: 'hook', t: ctx.hook, sub: 'story shape', x: COL.input, y: 240, data: { guidance: '' } })
+  mk({ id: 'analysis', role: 'analysis', kind: 'analysis', hd: 'reel', x: COL.input, y: 400, data: { angle: ctx.angle, hook: aj.hook || null, audience: aj.audience || null, voice: aj.voice || null, struct: aj.structure || null, visualStyle: aj.visualStyle || null, sceneScript: aj.sceneScript || null, assets: aj.assets || null, viralFactors: aj.viralFactors || null, reel: { url: ar.reel_url, thumb: ar.reel_thumbnail, user: ar.reel_username, caption: ar.reel_caption, comments: ar.reel_comments, play: ar.reel_play, category: ar.category, title: ar.title }, product: { title: p.title, price: p.price, rating: p.rating, reviews: p.reviewCount, dimensions: p.dimensions, asin: p.asin, url: p.amazon_url, image: p.image } } })
   mk({ id: 'overall', role: 'overall', kind: 'overall', hd: 'Script Engine', x: COL.overall, y: midY, data: { shotCount: data.shot_count ? String(data.shot_count) : '', durationSec: o.durationSec ? String(o.durationSec) : '', direction: data.direction || '', angle: ctx.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || ''), guidance: '' } })
   const slug = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24)
   mk({ id: 'movie', role: 'movie', kind: 'movie', hd: 'final movie', x: COL.movie, y: midY, video: media(data.export_mp4 || data.preview), data: { sceneCount: scenes.length, final_form: data.final_form || 'card', output: data.export_mp4 || data.preview || '', exportMode: 'preview', outputDir: 'output/content-' + (data.id || 'x') + '/', outputName: (slug(ctx.product) || 'short') + '_' + (slug(data.hook) || 'hook') + '_v1' } })
+  edges.push({ from: 'analysis', to: 'in-0', cls: 'global' }, { from: 'analysis', to: 'in-1', cls: 'global' })   // Analysis가 persona/hook 초기값을 제안
   edges.push({ from: 'analysis', to: 'overall', cls: 'global' }, { from: 'in-0', to: 'overall', cls: 'global' }, { from: 'in-1', to: 'overall', cls: 'global' })
 
   const defRefs = () => ({ product: refLib.product.map((a) => a.id), character: refLib.character.map((a) => a.id), environment: [] })
@@ -278,6 +279,15 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         const r = await postJSON(`/api/contents/${cid}/${mode === 'remotion' ? 'remotion' : 'movie'}`, {})
         const url = r.preview || r.url
         if (url) commitRun(n.id, (x) => ({ ...x, dirty: false, video: bust(media(url), Date.now()) }))
+      } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
+      return
+    }
+    if (n.role === 'input' && (n.hd === 'persona' || n.hd === 'hook')) {   // Analysis 기반 추천 → 값 채택 (override는 select)
+      setRunning({ id: n.id, msg: `recommending ${n.hd}…`, t0 })
+      try {
+        const r = await postJSON(`/api/contents/${cid}/recommend-${n.hd}`, { guidance: n.data.guidance || '' })
+        const v = n.hd === 'persona' ? r.persona : r.hook
+        if (v) { await postJSON(`/api/contents/${cid}/${n.hd}`, { [n.hd]: v }); commitRun(n.id, (x) => ({ ...x, t: v })) }
       } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
       return
     }
@@ -751,7 +761,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
   // re-run = 씬 스크립트 기반으로 생성하는 노드: overall · image-prompt · motion-prompt · VO-text · image · clip · vo.
   // scene-script(script-)만 "편집이 소스" → re-run 없음. 생성된 노드들은 생성 후 편집 가능.
   const isGenPrompt = typeof n.id === 'string' && (n.id.startsWith('prompt-') || n.id.startsWith('promptV-') || n.id.startsWith('promptM-'))
-  const canRun = !!k && !k.source && (n.kind === 'overall' || n.kind === 'script' || n.kind === 'image' || n.kind === 'clip' || n.kind === 'vo' || n.kind === 'movie' || isGenPrompt)
+  const canRun = (n.role === 'input' && (n.hd === 'persona' || n.hd === 'hook')) || (!!k && !k.source && (n.kind === 'overall' || n.kind === 'script' || n.kind === 'image' || n.kind === 'clip' || n.kind === 'vo' || n.kind === 'movie' || isGenPrompt))
   const header = (
     <div className="ng-dh">
       <span className="ng-k" style={{ background: c }} />
@@ -830,24 +840,42 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
         </div>
       </div>
     )
-  } else if (!k) { // input (persona / hook)
+  } else if (!k) { // input (persona / hook): ① input(Analysis) ② instruction ③ output(pick, override)
     const isP = n.hd === 'persona', L = isP ? lib.personas : n.hd === 'hook' ? lib.hooks : null
     const cur = n.t || '', opt = (L || []).find((o) => o.key === cur)
-    body = (
-      <div className="ng-db">
-        <div className="ng-col">
-          {L ? <>
-            <div className="ng-sh">choose {n.hd} · {L.length} options</div>
+    const an = incoming.find((x) => x.kind === 'analysis')
+    if (!L) { body = <div className="ng-db"><div className="ng-col"><div className="ng-sh">value</div><div className="ng-wired">{n.t || n.hd}</div></div></div> } else {
+      body = (
+        <div className="ng-db">
+          <div className="ng-col">
+            <div className="ng-sh">① input · from Analysis</div>
+            <div className="ng-srcbox">
+              {an ? (isP ? <>
+                {an.data?.voice?.persona ? <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>reel voice</b> {an.data.voice.persona}</div> : null}
+                {an.data?.audience?.who ? <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>who</b> {an.data.audience.who}</div> : null}
+                {an.data?.audience?.painPoint ? <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>pain</b> {an.data.audience.painPoint}</div> : null}
+                <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>product</b> {ctx.product}</div>
+              </> : <>
+                {an.data?.hook?.family ? <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>hook family</b> {an.data.hook.family}</div> : null}
+                {an.data?.hook?.openingLine ? <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>opener</b> "{an.data.hook.openingLine}"</div> : null}
+                {!an.data?.hook?.family ? <span className="ng-none">— run the analysis first —</span> : null}
+              </>) : <span className="ng-none">— not linked to Analysis —</span>}
+            </div>
+            <div className="ng-sh top">② instruction <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· steer the recommendation (optional)</em></div>
+            <textarea className="ng-instruct" value={d.guidance || ''} placeholder={isP ? 'e.g. more skeptical · younger buyer · expert tone' : 'e.g. urgency · curiosity gap · social proof'} onChange={(e) => onField('guidance', e.target.value)} onBlur={onCommit} />
+          </div>
+          <div className="ng-col right">
+            <div className="ng-sh">③ output · {n.hd} <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· ▶ re-run recommends · override below</em></div>
             <select className="ng-bigsel" value={cur} onChange={(e) => onField('__nodeval', e.target.value)}>
               <option value="">— default —</option>{L.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
             </select>
-            {opt ? <div className="ng-fed" style={{ marginTop: 9 }}>{opt.register || opt.when_to_use || ''}</div> : <div className="ng-fed manual" style={{ marginTop: 9 }}>— default (choose one) —</div>}
-            <button className="ng-recbtn" onClick={onRecommend} disabled={runBusy} style={{ marginTop: 11 }}>✨ recommend persona + hook</button>
-          </> : <><div className="ng-sh">value</div><div className="ng-wired">{n.t || n.hd}</div></>}
+            {opt ? <div className="ng-fed" style={{ marginTop: 9 }}>{opt.register || opt.when_to_use || ''}</div> : <div className="ng-fed manual" style={{ marginTop: 9 }}>— choose one, or ▶ re-run to recommend —</div>}
+            <div className="ng-sh top">context</div>
+            <div className="ng-ctxrow">persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div>
+          </div>
         </div>
-        <div className="ng-col right"><div className="ng-sh">context</div><div className="ng-ctxrow">persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div><div className="ng-ctxrow">angle {ctx.angle}</div></div>
-      </div>
-    )
+      )
+    }
   } else if (n.kind === 'script') {
     // scene script: ① input(Script Engine/overall) ② instruction ③ output(Title + VO, editable)
     const eng = incoming.find((x) => x.kind === 'overall')
