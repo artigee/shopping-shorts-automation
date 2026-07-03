@@ -335,6 +335,17 @@ function NodeGraphInner() {
     } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
   }
   async function runBatchAll() { for (const k of ['images', 'clips', 'vo']) await runBatchKind(k) }
+  // 씬 스크립트 생성 (overall → scene[] 분해) — 구조가 바뀌므로 재로드/재빌드. 기존 씬 자산은 초기화됨.
+  async function runScenes() {
+    if (cid == null || running) return
+    if (!window.confirm('Generate scene scripts from the Script Engine? This rebuilds the scene chain and clears existing scene images/clips/VO.')) return
+    setErr(null); setRunning({ id: 'overall', msg: 'generating scene scripts…', t0: Date.now() })
+    try {
+      await postJSON(`/api/contents/${cid}/script`, {})
+      const r = await api(`/api/contents/${cid}`)
+      srcSig.current = r.analysis?.analyzed_at || null; setContentMode(r.content?.content_mode || ''); setSel(null); setData(adapt(r))
+    } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
+  }
   // 편집 저장 — 노드의 텍스트를 백엔드에 반영(자산은 보존)하고, 편집 노드 dirty 해제 + 하류 dirty 전파.
   // scene-script / VO text / motion prompt / image prompt는 재생성이 아니라 "편집"이 소스가 된다.
   async function persistNode(n) {
@@ -344,8 +355,11 @@ function NodeGraphInner() {
         const d = n.data || {}, r = await api(`/api/contents/${cid}`), cur = parse(r.content?.overall) || {}
         const overall = { ...cur, angle: d.angle || '', hookLine: d.hookLine || '', vo: d.vo || '', cta: d.cta || '', beats: (d.beats || '').split('/').map((s) => s.trim()).filter(Boolean) }
         await postJSON(`/api/contents/${cid}/overall`, { overall }, 'PUT')
+        postJSON(`/api/contents/${cid}/direction`, { direction: d.direction || '' }).catch(() => {})   // 생성 파라미터도 저장
+        postJSON(`/api/contents/${cid}/shot-count`, { shotCount: d.shotCount || '' }).catch(() => {})
         commitRun(n.id, (x) => ({ ...x, dirty: false })); return
       }
+      if (n.kind === 'image') { postJSON(`/api/contents/${cid}/style`, { style: n.data.style || '' }).catch(() => {}); return }   // 전 씬 공통 스타일
       const idx = n.scene ? n.scene - 1 : null
       if (idx == null || typeof n.id !== 'string') return
       let patch = null
@@ -501,6 +515,7 @@ function NodeGraphInner() {
           {genOpen && <>
             <div className="ng-genbd" onClick={() => setGenOpen(false)} />
             <div className="ng-genmenu">
+              <div className="ng-genitem" onClick={() => { setGenOpen(false); runScenes() }}>▶ scene scripts<span>from Script Engine (rebuilds)</span></div>
               <div className="ng-genitem" onClick={() => { setGenOpen(false); runBatchAll() }}>▶ all<span>images → clips → VO</span></div>
               <div className="ng-genitem" onClick={() => { setGenOpen(false); runBatchKind('images') }}>▶ all images<span>every scene</span></div>
               <div className="ng-genitem" onClick={() => { setGenOpen(false); runBatchKind('clips') }}>▶ all clips<span>needs images first</span></div>

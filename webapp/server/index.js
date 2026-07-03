@@ -663,6 +663,12 @@ app.post('/api/contents/:id/direction', (req, res) => {
 })
 
 // VO 페르소나 (화자) — 전체/씬 스크립트 생성에 반영 (playbook 키 또는 자유텍스트)
+app.post('/api/contents/:id/shot-count', (req, res) => {
+  const n = Number(req.body && req.body.shotCount)
+  const v = (Number.isInteger(n) && n >= 3 && n <= 12) ? n : null
+  db.prepare(`UPDATE contents SET shot_count = ?, updated_at = datetime('now') WHERE id = ?`).run(v, req.params.id)
+  res.json({ shot_count: v })
+})
 app.post('/api/contents/:id/persona', (req, res) => {
   db.prepare(`UPDATE contents SET persona = ?, updated_at = datetime('now') WHERE id = ?`).run((req.body && req.body.persona) || '', req.params.id)
   res.json({ ok: true })
