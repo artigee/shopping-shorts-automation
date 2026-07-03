@@ -91,7 +91,9 @@
 .ng-title-edit:focus { border-color: #43434c; background: #17171a; outline: none; }
 .ng-kind { font-family: ui-monospace, monospace; font-size: 11px; color: #6b6a64; }
 .ng-out { font-family: ui-monospace, monospace; font-size: 11px; color: #5DCAA5; }
-.ng-run { color: #5DCAA5; border: 1px solid rgba(93,202,165,.45); background: rgba(93,202,165,.08); border-radius: 7px; padding: 6px 12px; font-family: ui-monospace, monospace; font-size: 12px; cursor: pointer; margin-left: 6px; }
+.ng-run { color: #5DCAA5; border: 1px solid rgba(93,202,165,.45); background: rgba(93,202,165,.08); border-radius: 7px; padding: 6px 12px; font-family: ui-monospace, monospace; font-size: 12px; cursor: pointer; margin-left: 6px; min-width: 92px; text-align: center; white-space: nowrap; flex: 0 0 auto; }
+.ng-run.running { opacity: .55; animation: ng-pulse-dim 1s ease-in-out infinite; }
+@keyframes ng-pulse-dim { 0%, 100% { opacity: .45; } 50% { opacity: .8; } }
 .ng-wctrl { margin-left: auto; display: flex; gap: 8px; padding-left: 14px; border-left: 1px solid #2f2f36; }
 .ng-icn { width: 34px; padding: 6px 0; background: #232328; color: #9c9a92; border: 1px solid #2f2f36; border-radius: 7px; font-size: 13px; cursor: pointer; }
 .ng-icn.on { background: #2b3a34; border-color: #5DCAA5; color: #5DCAA5; }

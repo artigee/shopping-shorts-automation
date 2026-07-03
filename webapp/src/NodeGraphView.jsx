@@ -209,7 +209,16 @@ function NodeGraphInner() {
     try {
       const resp = await postJSON(`/api/contents/${cid}/overall`, {})
       const o = resp && resp.jobId ? await pollJob(resp.jobId, (jb) => setRunning({ id: n.id, msg: jb.message || '' })) : resp
-      if (o) setNg((g) => { const nn = { ...g, nodes: g.nodes.map((x) => x.id === n.id ? { ...x, dirty: false, data: { ...x.data, angle: o.angle ?? x.data.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || '') } } : x) }; ngRef.current = nn; return nn })
+      if (o) setNg((g) => {
+        // 재생성으로 overall 출력이 바뀜 → 하류 노드 전부 dirty(오래됨) 전파
+        const down = new Set(); const q = [n.id]
+        while (q.length) { const cur = q.shift(); g.edges.forEach((e) => { if (e.from === cur && !down.has(e.to)) { down.add(e.to); q.push(e.to) } }) }
+        const nodes = g.nodes.map((x) => {
+          if (x.id === n.id) return { ...x, dirty: false, data: { ...x.data, angle: o.angle ?? x.data.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || '') } }
+          return down.has(x.id) ? { ...x, dirty: true } : x
+        })
+        const nn = { ...g, nodes }; ngRef.current = nn; return nn
+      })
     } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
   }
   useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
@@ -435,7 +444,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
       <input className="ng-title-edit" value={n.hd} spellCheck={false} onChange={(e) => onRename(e.target.value)} />
       <span className="ng-kind">#{n.id}</span>
       {k && <span className="ng-out">→ {k.out.n} ({k.out.t})</span>}
-      {runnable && <button className="ng-run" onClick={onRun} disabled={runBusy} title="run this node">{runMsg ? '⏳ ' + runMsg : '▶ re-run'}</button>}
+      {runnable && <button className={'ng-run' + (runMsg ? ' running' : '')} onClick={onRun} disabled={runBusy} title={runMsg || 'run this node'}>▶ re-run</button>}
       <span className="ng-wctrl">
         <button className={'ng-icn' + (locked ? ' on' : '')} onClick={onLock} title={locked ? 'locked — stays open' : 'lock — keep open when clicking elsewhere'}>{locked ? '📌' : '📍'}</button>
         <button className="ng-icn" onClick={onClose} title="close">✕</button>
