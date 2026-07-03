@@ -35,7 +35,7 @@ const KIND = {
   overall: { out: { t: 'text', n: 'scene[] · N ordered', array: true }, editor: { field: 'vo', label: 'overall VO — the through-line' },
     config: [{ f: 'shotCount', ph: 'auto | 1-9  (# scene scripts)' }, { f: 'direction', ph: 'hook·shot direction' }, { f: 'angle' }, { f: 'hookLine' }, { f: 'cta' }, { f: 'beats' }, { f: 'guidance', ph: 'steer re-run' }] },
   script: { out: { t: 'text', n: 'Title + VO' }, editor: { field: 'vo', label: 'scene VO' }, config: [{ f: 'title', ph: 'on-screen title' }, { f: 'guidance', ph: 'steer re-run' }] },
-  prompt: { out: { t: 'text', n: 'prompt text' }, editor: { field: 'prompt', label: 'output prompt (generated · editable)' }, config: [{ f: 'guidance', label: 'input prompt', ph: 'instruction to the LLM — e.g. closer shot · warmer tone · punchier' }] },
+  prompt: { out: { t: 'text', n: 'prompt text' }, editor: { field: 'prompt', label: 'output prompt (generated · feeds downstream)', readOnly: true }, config: [{ f: 'guidance', label: 'input prompt', multiline: true, ph: 'instruction to the LLM — e.g. closer shot · warmer tone · punchier' }] },
   image: { out: { t: 'image', n: 'scene .png' }, config: [{ f: 'frameRole', choices: ['start', 'end'] }, { f: 'aspect', choices: ['9:16', '4:5', '1:1', '16:9'] }, { f: 'model', choices: ['auto', 'nano_banana_pro', 'marketing_studio_image'] }, { f: 'style', ph: 'all-scene style' }, { f: 'seed', ph: 'random' }, { f: 'guidance', ph: 'steer re-run' }] },
   clip: { out: { t: 'video', n: 'clip .mp4' }, config: [{ f: 'makeVideo', choices: ['animate', 'still'] }, { f: 'cameraMove', cameraLib: true }, { f: 'duration' }, { f: 'model', choices: ['kling3_0', 'seedance', 'hailuo', 'wan', 'kling3_0_turbo'] }] },
   vo: { out: { t: 'audio', n: '.mp3' }, config: [{ f: 'voiceId' }, { f: 'lang', fixed: 'US EN' }] },
@@ -417,7 +417,7 @@ function NodeGraphInner() {
                 {n.kind === 'movie' && n.video && <video className="ng-thumb" src={n.video} controls playsInline preload="metadata" />}
                 {n.kind === 'analysis' && n.data?.reel?.thumb && <img className="ng-thumb" src={n.data.reel.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} />}
                 <div className="ng-hd" style={{ color: c }}><span className="ng-dot" style={{ background: c }} />{n.hd}</div>
-                {n.t && <div className="ng-t">{n.t}</div>}
+                {n.t && n.kind !== 'prompt' && <div className="ng-t">{n.t}</div>}
                 {n.sub && <div className="ng-sub">{n.sub}</div>}
                 {n.kind === 'vo' && <div className="ng-sub">{n.audio ? '🔊 VO ready' : 'no VO yet'}</div>}
                 {n.kind === 'clip' && <div className="ng-pill">{n.data?.makeVideo === 'still' ? '🖼 still' : '🎥 ' + cameraMoveName(n.data?.cameraMove, lib.moves)}</div>}
@@ -481,6 +481,7 @@ function Field({ c, d, onField, onCommit }) {
     const nameOf = (v) => { if (c.cameraLib) { if (v === '') return 'default (slow push-in)'; if (v === 'auto') return '✨ auto'; const m = (c._moves || []).find((x) => x.key === v); return m ? m.name : v } return v }
     return <select value={cur} onChange={(e) => { onField(c.f, e.target.value); onCommit?.() }}>{choices.map((v) => <option key={v} value={v}>{nameOf(v)}</option>)}</select>
   }
+  if (c.multiline) return <textarea className="ng-smalltext" value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} onBlur={onCommit} />
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} onBlur={onCommit} />
 }
 
@@ -595,7 +596,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
           {ed && <>
             <div className="ng-sh">{ed.label}</div>
             <div className={'ng-fed' + (fedBy.length ? '' : ' manual')}>{fedBy.length ? '◦ from ' + fedBy.map((s) => s.hd).join(', ') : '✎ manual'}</div>
-            <textarea className="ng-big" value={d[ed.field] || ''} onChange={(e) => onField(ed.field, e.target.value)} onBlur={onCommit} />
+            <textarea className={'ng-big' + (ed.readOnly ? ' ro' : '')} value={d[ed.field] || ''} readOnly={ed.readOnly} onChange={ed.readOnly ? undefined : (e) => onField(ed.field, e.target.value)} onBlur={ed.readOnly ? undefined : onCommit} />
           </>}
           {n.kind === 'image' && <>
             <div className="ng-sh top">references (from library)</div>
