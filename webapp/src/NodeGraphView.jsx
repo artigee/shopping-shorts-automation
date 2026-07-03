@@ -287,7 +287,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     if (n.role === 'input' && (n.hd === 'persona' || n.hd === 'hook')) {   // Analysis 기반 추천 → 값 채택 (override는 select)
       setRunning({ id: n.id, msg: `recommending ${n.hd}…`, t0 })
       try {
-        const r = await postJSON(`/api/contents/${cid}/recommend-${n.hd}`, { guidance: n.data.guidance || '' })
+        const steer = n.hd === 'persona' ? (n.data.voStyleNote || '') : (n.data.guidance || '')   // persona는 'voice notes'가 곧 steer (하나의 입력)
+        const r = await postJSON(`/api/contents/${cid}/recommend-${n.hd}`, { guidance: steer })
         const v = n.hd === 'persona' ? r.persona : r.hook
         const style = n.hd === 'persona' ? (r.voStyle || '') : ''   // persona 추천은 스피킹 스타일도 함께 제안 (refine 노트는 사용자 소유 → 유지)
         if (v) {
@@ -873,22 +874,26 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
                 {!an.data?.hook?.family ? <span className="ng-none">— run the analysis first —</span> : null}
               </>) : <span className="ng-none">— not linked to Analysis —</span>}
             </div>
-            <div className="ng-sh top">② instruction <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· steer the recommendation (optional)</em></div>
-            <textarea className="ng-instruct" value={d.guidance || ''} placeholder={isP ? 'e.g. more skeptical · younger buyer · expert tone' : 'e.g. urgency · curiosity gap · social proof'} onChange={(e) => onField('guidance', e.target.value)} onBlur={onCommit} />
+            {isP ? <>
+              <div className="ng-sh top">② voice notes <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· how it should sound — shapes the VO + steers ▶ re-run</em></div>
+              <textarea className="ng-instruct" value={d.voStyleNote || ''} placeholder="e.g. shorter sentences · warmer on the CTA · address the viewer · younger buyer" onChange={(e) => onField('voStyleNote', e.target.value)} onBlur={(e) => onField('__vostylenote', e.target.value)} />
+            </> : <>
+              <div className="ng-sh top">② instruction <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· steer the recommendation (optional)</em></div>
+              <textarea className="ng-instruct" value={d.guidance || ''} placeholder="e.g. urgency · curiosity gap · social proof" onChange={(e) => onField('guidance', e.target.value)} onBlur={onCommit} />
+            </>}
           </div>
           <div className="ng-col right">
-            <div className="ng-sh">③ output · {n.hd} <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· ▶ re-run recommends · override below</em></div>
+            <div className="ng-sh">③ {n.hd} <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· {isP ? "who's talking" : 'story shape'} · ▶ re-run recommends · override</em></div>
             <select className="ng-bigsel" value={cur} onChange={(e) => onField('__nodeval', e.target.value)}>
               <option value="">— default —</option>{L.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
             </select>
             {opt ? <div className="ng-fed" style={{ marginTop: 9 }}>{opt.register || opt.when_to_use || ''}</div> : <div className="ng-fed manual" style={{ marginTop: 9 }}>— choose one, or ▶ re-run to recommend —</div>}
             {isP ? (() => { const sk = d.voStyle || '', so = (lib.voStyles || []).find((x) => x.key === sk); return <>
-              <div className="ng-sh top">④ speaking style <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· how this voice paces the VO · ▶ re-run recommends</em></div>
+              <div className="ng-sh top">④ speaking style <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· how they pace it · ▶ re-run recommends</em></div>
               <select className="ng-bigsel" value={sk} onChange={(e) => onField('__vostyle', e.target.value)}>
                 <option value="">— natural (persona default) —</option>{(lib.voStyles || []).map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
               </select>
               {so ? <div className="ng-fed" style={{ marginTop: 9 }}>{(so.directive || '').trim()}</div> : null}
-              <textarea className="ng-instruct" style={{ marginTop: 9 }} value={d.voStyleNote || ''} placeholder="refine (optional) — e.g. shorter sentences · warmer on the CTA · address the viewer" onChange={(e) => onField('voStyleNote', e.target.value)} onBlur={(e) => onField('__vostylenote', e.target.value)} />
             </> })() : null}
             <div className="ng-sh top">context</div>
             <div className="ng-ctxrow">persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div>
