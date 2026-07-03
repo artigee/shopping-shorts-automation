@@ -303,6 +303,7 @@ function NodeGraphInner() {
         <button className={'ng-libtoggle' + (libOpen ? ' on' : '')} onClick={() => setLibOpen((o) => !o)} title="reference asset library">▤ refs</button>
         <button className="ng-libtoggle" onClick={undo} disabled={!histN.u} title="undo (⌘Z)">↶</button>
         <button className="ng-libtoggle" onClick={redo} disabled={!histN.r} title="redo (⇧⌘Z)">↷</button>
+        <button className={'ng-libtoggle' + (sourceStale ? ' stale' : '')} onClick={refreshSource} title="reload graph from the latest source analysis (discards local graph edits)">↻ source{sourceStale ? ' •' : ''}</button>
         <select value={cid ?? ''} onChange={(e) => setCid(Number(e.target.value))}>{list.map((c) => <option key={c.id} value={c.id}>#{c.id} {(c.title || 'untitled').slice(0, 30)}</option>)}</select>
       </div>
       {sourceStale && (
