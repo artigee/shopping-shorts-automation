@@ -165,7 +165,8 @@ function NodeGraphInner() {
   const [locked, setLocked] = useState(false)
   const [framing, setFraming] = useState(false)
   const [sourceStale, setSourceStale] = useState(false)   // 소스 분석이 재분석돼 그래프가 오래됨
-  const [running, setRunning] = useState(null)            // { id, msg } — 노드 실행(잡) 진행
+  const [running, setRunning] = useState(null)            // { id, msg, t0 } — 노드 실행(잡) 진행
+  const [, setTick] = useState(0)                         // 실행 경과 시간 갱신용 틱
   const [modes, setModes] = useState([])                  // 콘텐츠 모드(claim-safety) 목록
   const [contentMode, setContentMode] = useState('')      // 현재 콘텐츠 모드
   const [runningIds, setRunningIds] = useState(new Set()) // 실행 중 잡이 있는 콘텐츠 id (보드 뱃지)
@@ -224,11 +225,12 @@ function NodeGraphInner() {
   async function runNode(n) {
     if (cid == null || running) return
     setErr(null)
+    const t0 = Date.now()
     if (n.kind === 'overall') {
-      setRunning({ id: n.id, msg: 'starting…' })
+      setRunning({ id: n.id, msg: 'starting…', t0 })
       try {
         const resp = await postJSON(`/api/contents/${cid}/overall`, {})
-        const o = resp && resp.jobId ? await pollJob(resp.jobId, (jb) => setRunning({ id: n.id, msg: jb.message || '' })) : resp
+        const o = resp && resp.jobId ? await pollJob(resp.jobId, (jb) => setRunning({ id: n.id, msg: jb.message || '', t0 })) : resp
         if (o) commitRun(n.id, (x) => ({ ...x, dirty: false, data: { ...x.data, angle: o.angle ?? x.data.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || '') } }))
       } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
       return
@@ -238,7 +240,7 @@ function NodeGraphInner() {
     const ep = id.startsWith('prompt-') ? 'prompt' : id.startsWith('promptV-') ? 'votext' : id.startsWith('promptM-') ? 'motion'
       : n.kind === 'image' ? 'image' : n.kind === 'clip' ? 'clip' : n.kind === 'vo' ? 'vo' : null
     if (!ep || k == null) { setErr(`'${n.hd}' re-run isn't wired (supported: overall · image-prompt · motion · VO-text · image · clip · vo).`); return }
-    setRunning({ id: n.id, msg: 'running…' })
+    setRunning({ id: n.id, msg: 'running…', t0 })
     try {
       const body = (ep === 'prompt' || ep === 'motion' || ep === 'votext') ? { guidance: n.data.guidance || '' } : {}
       await postJSON(`/api/contents/${cid}/scene/${k}/${ep}`, body)   // 씬 스크립트 + input prompt(guidance) 기반 생성
@@ -381,6 +383,10 @@ function NodeGraphInner() {
   function dropRefs(ev, role) { ev.preventDefault(); ev.currentTarget.classList.remove('drag'); const files = [...(ev.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/')); files.forEach((f) => addRefAsset(role, URL.createObjectURL(f), f.name)); if (!files.length) { const uri = ev.dataTransfer?.getData('text/uri-list') || ev.dataTransfer?.getData('text/plain') || ''; if (/^https?:/.test(uri)) addRefAsset(role, uri.trim(), role) } }
   const hoverPreview = { onMouseEnter: (e) => setPreview({ url: e.target.src, x: e.clientX, y: e.clientY }), onMouseMove: (e) => setPreview((p) => p ? { ...p, x: e.clientX, y: e.clientY } : p), onMouseLeave: () => setPreview(null) }
 
+  useEffect(() => { if (!running) return; const iv = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(iv) }, [running])
+  const runSecs = running ? Math.floor((Date.now() - running.t0) / 1000) : 0
+  const fmtDur = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+
   return (
     <div className="ng-wrap" style={{ top }}>
       {cid == null ? <Board list={list} running={runningIds} onOpen={setCid} reload={reloadList} /> : <>
@@ -424,6 +430,7 @@ function NodeGraphInner() {
             return (
               <div key={n.id} data-id={n.id} ref={(el) => (nodeRefs.current[n.id] = el)} className={'ng-node tier-' + tierOf(n) + (n.id === selId ? ' sel' : '') + (near && !near.has(n.id) ? ' dim' : '') + (n.dirty ? ' dirty' : '') + (running && running.id === n.id ? ' running' : '') + wt} style={{ left: n.x, top: n.y, width: NODE_W, color: c, '--nc': c, borderColor: (n.id === selId ? c : c + '99') }} onPointerDown={(e) => startNodeDrag(e, n)}>
                 {tl && <span className="ng-type" style={{ color: c, borderColor: c + '66' }}>{tl}</span>}
+                {running && running.id === n.id && <span className="ng-node-timer">⏳ {fmtDur(runSecs)}{running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ''}</span>}
                 <button className="ng-del" title="delete" onClick={(e) => { e.stopPropagation(); deleteNode(n.id) }}>×</button>
                 {n.kind === 'image' && (n.thumb ? <img className="ng-thumb" style={{ aspectRatio: aspectCSS(n.data?.aspect) }} src={n.thumb} loading="lazy" onError={(e) => { e.target.style.opacity = .2 }} /> : <div className="ng-thumb ph" style={{ aspectRatio: aspectCSS(n.data?.aspect) }}>{n.data?.aspect || '9:16'}</div>)}
                 {n.kind === 'clip' && (n.video ? <video className="ng-thumb" src={n.video} muted loop playsInline preload="metadata" onMouseOver={(e) => e.target.play()} onMouseOut={(e) => e.target.pause()} /> : n.image ? <img className="ng-thumb" style={{ opacity: .4 }} src={n.image} /> : null)}
@@ -475,7 +482,7 @@ function NodeGraphInner() {
 
       {drawerNode && <Drawer n={drawerNode} closing={closing && !selId} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
         fromArray={selFromArray} onScene={(v) => setNodeScene(drawerNode.id, v)} locked={locked} onLock={() => setLocked((l) => !l)} onFrame={frameNode}
-        onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (running.msg || 'running…') : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)}
+        onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (fmtDur(runSecs) + (running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ' · running…')) : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)}
         onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })} onField={(f, v) => f === '__nodeval' ? setNodeField(drawerNode.id, { t: v }) : setNodeData(drawerNode.id, { [f]: v })}
         onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} onDelete={() => deleteNode(drawerNode.id)} hoverPreview={hoverPreview}
         incoming={graph.edges.filter((e) => e.to === drawerNode.id).map((e) => nodeById[e.from]).filter(Boolean)}
