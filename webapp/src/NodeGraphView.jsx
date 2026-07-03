@@ -72,6 +72,8 @@ const menuOut = (k) => (k === 'persona' || k === 'hook') ? 'persona/hook' : k ==
 
 const parse = (v) => { try { return typeof v === 'string' ? JSON.parse(v) : v } catch { return null } }
 const media = (u) => { if (!u) return null; if (u.indexOf('|/output/') >= 0) u = u.split('|')[1]; return u }
+// 캐시 버스터 — 재생성 시 같은 파일명이라 브라우저가 옛 이미지를 캐시하는 문제 방지
+const bust = (u, v) => u ? u + (u.indexOf('?') >= 0 ? '&' : '?') + 'v=' + v : u
 const aspectCSS = (a) => String(a || '9:16').replace(':', '/')
 
 function tierOf(n) { if (['overall', 'movie', 'script'].includes(n.kind)) return 'special'; if (n.kind && KIND[n.kind] && !KIND[n.kind].source) return 'general'; return 'data' }
@@ -92,13 +94,14 @@ function adapt(resp) {
     id: c.id, title: c.title, persona: c.persona, hook: c.hook, style: c.style, final_form: c.final_form,
     shot_count: c.shot_count, direction: c.direction, preview: c.preview, export_mp4: c.export_mp4,
     analysisRow: resp.analysis || {}, product: resp.product || parse(c.product) || {},
-    scenes: parse(c.scenes) || [], overall: parse(c.overall) || null, refLibSaved: parse(c.ref_lib) || null,
+    scenes: parse(c.scenes) || [], overall: parse(c.overall) || null, refLibSaved: parse(c.ref_lib) || null, mediaVer: Date.now(),
   }
 }
 
 // build nodes + edges + reference library from content (faithful to node-studio build/addSceneChain)
 function buildGraph(data) {
   const nodes = [], edges = []
+  const lv = data.mediaVer || 0                 // 로드 시 캐시 버스터 값
   const scenes = data.scenes || [], o = data.overall || {}
   const ctx = { persona: data.persona || '—', hook: data.hook || '—', angle: o.angle || '—', product: data.product?.title || '—' }
   const midY = 100 + Math.max(0, scenes.length - 1) * PITCH / 2
@@ -133,12 +136,12 @@ function buildGraph(data) {
     mk({ id: 'script-' + k, role: 'script', kind: 'script', hd: 'scene ' + k, x: COL.script, y, scene: k, t: s.onScreenText || '', data: { title: s.onScreenText || '', vo: s.vo || '', guidance: '' } })
     mk({ id: 'prompt-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y, scene: k, t: (s.imagePrompt || '').slice(0, 90), data: { prompt: s.imagePrompt || '', guidance: '' } })
     mk({ id: 'promptV-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y: y + 160, scene: k, t: (s.voEn || s.vo || '').slice(0, 90), data: { prompt: s.voEn || s.vo || '', guidance: '' } })
-    mk({ id: 'image-' + k, role: 'image', kind: 'image', hd: 'scene ' + k, x: COL.image, y, scene: k, thumb: media(s.image), data: { imagePrompt: s.imagePrompt || '', image: s.image || '', aspect: '9:16', model: 'auto', seed: '', style: data.style || '', frameRole: 'start', guidance: '', refs: defRefs() } })
-    mk({ id: 'vo-' + k, role: 'vo', kind: 'vo', hd: 'scene ' + k, x: COL.vo, y, scene: k, audio: media(s.audio), data: { voiceId: data.persona || 'default', lang: 'US EN', audio: s.audio || '' } })
+    mk({ id: 'image-' + k, role: 'image', kind: 'image', hd: 'scene ' + k, x: COL.image, y, scene: k, thumb: bust(media(s.image), lv), data: { imagePrompt: s.imagePrompt || '', image: s.image || '', aspect: '9:16', model: 'auto', seed: '', style: data.style || '', frameRole: 'start', guidance: '', refs: defRefs() } })
+    mk({ id: 'vo-' + k, role: 'vo', kind: 'vo', hd: 'scene ' + k, x: COL.vo, y, scene: k, audio: bust(media(s.audio), lv), data: { voiceId: data.persona || 'default', lang: 'US EN', audio: s.audio || '' } })
     const clip = s.makeVideo !== false
     if (clip) {
       mk({ id: 'promptM-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y: y + 80, scene: k, t: (s.motionPrompt || '').slice(0, 90), data: { prompt: s.motionPrompt || '', guidance: '' } })
-      mk({ id: 'clip-' + k, role: 'clip', kind: 'clip', hd: 'scene ' + k, x: COL.clip, y, scene: k, video: media(s.video), image: media(s.image), data: { makeVideo: s.makeVideo === false ? 'still' : 'animate', cameraMove: s.cameraMove || '', duration: s.durationSec || 4, model: 'kling3_0' } })
+      mk({ id: 'clip-' + k, role: 'clip', kind: 'clip', hd: 'scene ' + k, x: COL.clip, y, scene: k, video: bust(media(s.video), lv), image: bust(media(s.image), lv), data: { makeVideo: s.makeVideo === false ? 'still' : 'animate', cameraMove: s.cameraMove || '', duration: s.durationSec || 4, model: 'kling3_0' } })
     }
     edges.push({ from: 'overall', to: 'script-' + k, cls: 'flow' }, { from: 'in-0', to: 'script-' + k, cls: 'global' }, { from: 'in-1', to: 'script-' + k, cls: 'global' })
     edges.push({ from: 'script-' + k, to: 'prompt-' + k, cls: 'flow' }, { from: 'prompt-' + k, to: 'image-' + k, cls: 'flow' })
@@ -257,9 +260,9 @@ function NodeGraphInner() {
         if (id.startsWith('prompt-')) return { ...x, dirty: false, t: (s.imagePrompt || '').slice(0, 90), data: { ...x.data, prompt: s.imagePrompt || '' } }
         if (id.startsWith('promptV-')) return { ...x, dirty: false, t: (s.voEn || '').slice(0, 90), data: { ...x.data, prompt: s.voEn || '' } }
         if (id.startsWith('promptM-')) return { ...x, dirty: false, t: (s.motionPrompt || '').slice(0, 90), data: { ...x.data, prompt: s.motionPrompt || '' } }
-        if (x.kind === 'image') return { ...x, dirty: false, thumb: media(s.image), data: { ...x.data, image: s.image || '', imagePrompt: s.imagePrompt || '' } }
-        if (x.kind === 'clip') return { ...x, dirty: false, video: media(s.video), image: media(s.image) }
-        if (x.kind === 'vo') return { ...x, dirty: false, audio: media(s.audio) }
+        if (x.kind === 'image') return { ...x, dirty: false, thumb: bust(media(s.image), Date.now()), data: { ...x.data, image: s.image || '', imagePrompt: s.imagePrompt || '' } }
+        if (x.kind === 'clip') return { ...x, dirty: false, video: bust(media(s.video), Date.now()), image: bust(media(s.image), Date.now()) }
+        if (x.kind === 'vo') return { ...x, dirty: false, audio: bust(media(s.audio), Date.now()) }
         return { ...x, dirty: false }
       })
     } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
