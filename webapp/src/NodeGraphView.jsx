@@ -447,7 +447,7 @@ function NodeGraphInner() {
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up)
     setWireEnd({ ...anchor(n, 'out'), fromId: n.id, targetId: null, valid: false })
   }
-  function startDrawerResize(ev) { ev.preventDefault(); const sy = ev.clientY, h0 = drawerH; const mv = (e) => setDrawerH(Math.min(560, Math.max(140, h0 - (e.clientY - sy)))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
+  function startDrawerResize(ev) { ev.preventDefault(); const sy = ev.clientY, h0 = drawerH, maxH = Math.round(window.innerHeight * 0.85); const mv = (e) => setDrawerH(Math.min(maxH, Math.max(140, h0 - (e.clientY - sy)))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
   function addRefAsset(role, thumb, name) { if (!thumb) return; commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: [...(g.refLib[role] || []), { id: 'lib-' + (libUid.current++), thumb, role, name: name || role }] } })) }
   function deleteRefAsset(role, id) { commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: (g.refLib[role] || []).filter((a) => a.id !== id) }, nodes: g.nodes.map((n) => (n.data && n.data.refs && n.data.refs[role]) ? { ...n, data: { ...n.data, refs: { ...n.data.refs, [role]: n.data.refs[role].filter((x) => x !== id) } } } : n) })) }
   function dropRefs(ev, role) { ev.preventDefault(); ev.currentTarget.classList.remove('drag'); const files = [...(ev.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/')); files.forEach((f) => addRefAsset(role, URL.createObjectURL(f), f.name)); if (!files.length) { const uri = ev.dataTransfer?.getData('text/uri-list') || ev.dataTransfer?.getData('text/plain') || ''; if (/^https?:/.test(uri)) addRefAsset(role, uri.trim(), role) } }
@@ -804,8 +804,8 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
     body = (
       <div className="ng-db">
         <div className="ng-col">
-          {n.kind === 'image' && n.thumb && <img className="ng-media-big" style={{ aspectRatio: aspectCSS(d.aspect) }} src={n.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.opacity = .25 }} />}
-          {(n.kind === 'clip' || n.kind === 'movie') && n.video && <video className="ng-media-big" src={n.video} controls playsInline preload="metadata" style={n.kind === 'movie' ? { aspectRatio: '9/16', maxWidth: 320, margin: '0 auto' } : null} />}
+          {n.kind === 'image' && n.thumb && <img className="ng-media-big" style={{ aspectRatio: aspectCSS(d.aspect), maxHeight: Math.max(130, h - 132) }} src={n.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.opacity = .25 }} />}
+          {(n.kind === 'clip' || n.kind === 'movie') && n.video && <video className="ng-media-big" src={n.video} controls playsInline preload="metadata" style={{ maxHeight: Math.max(130, h - 132), width: 'auto', maxWidth: '100%', margin: '0 auto' }} />}
           {n.kind === 'vo' && n.audio && <div style={{ marginBottom: 8 }}><VoPlayer src={n.audio} /></div>}
           {ed && <>
             <div className={'ng-sh' + (hasMedia ? ' top' : '')}>{ed.label}</div>
