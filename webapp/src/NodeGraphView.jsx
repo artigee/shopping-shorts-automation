@@ -93,6 +93,7 @@ function adapt(resp) {
   const c = resp.content || resp
   return {
     id: c.id, title: c.title, persona: c.persona, hook: c.hook, style: c.style, final_form: c.final_form,
+    voStyle: c.vo_style || '', voStyleNote: c.vo_style_note || '',
     shot_count: c.shot_count, direction: c.direction, preview: c.preview, export_mp4: c.export_mp4,
     analysisRow: resp.analysis || {}, product: resp.product || parse(c.product) || {},
     scenes: parse(c.scenes) || [], overall: parse(c.overall) || null, refLibSaved: parse(c.ref_lib) || null, nodeMetaSaved: parse(c.node_meta) || null, mediaVer: Date.now(),
@@ -123,7 +124,7 @@ function buildGraph(data) {
     scenes.forEach((s) => (s.refs || []).forEach((r) => { const u = media(r); if (u) push(u, 'product', 'ref') }))
   }
 
-  mk({ id: 'in-0', role: 'input', hd: 'persona', t: ctx.persona, sub: 'VO voice', x: COL.input, y: 100, data: { guidance: '' } })
+  mk({ id: 'in-0', role: 'input', hd: 'persona', t: ctx.persona, sub: 'VO voice', x: COL.input, y: 100, data: { guidance: '', voStyle: data.voStyle || '', voStyleNote: data.voStyleNote || '' } })
   mk({ id: 'in-1', role: 'input', hd: 'hook', t: ctx.hook, sub: 'story shape', x: COL.input, y: 240, data: { guidance: '' } })
   mk({ id: 'analysis', role: 'analysis', kind: 'analysis', hd: 'reel', x: COL.input, y: 400, data: { angle: ctx.angle, hook: aj.hook || null, audience: aj.audience || null, voice: aj.voice || null, struct: aj.structure || null, visualStyle: aj.visualStyle || null, sceneScript: aj.sceneScript || null, assets: aj.assets || null, viralFactors: aj.viralFactors || null, reel: { url: ar.reel_url, thumb: ar.reel_thumbnail, user: ar.reel_username, caption: ar.reel_caption, comments: ar.reel_comments, play: ar.reel_play, category: ar.category, title: ar.title }, product: { title: p.title, price: p.price, rating: p.rating, reviews: p.reviewCount, dimensions: p.dimensions, asin: p.asin, url: p.amazon_url, image: p.image } } })
   mk({ id: 'overall', role: 'overall', kind: 'overall', hd: 'Script Engine', x: COL.overall, y: midY, data: { shotCount: data.shot_count ? String(data.shot_count) : '', durationSec: o.durationSec ? String(o.durationSec) : '', direction: data.direction || '', angle: ctx.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || ''), guidance: '' } })
@@ -163,7 +164,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const [data, setData] = useState(null)
   const [err, setErr] = useState(null)
   const [ng, setNg] = useState({ nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } })
-  const [lib, setLib] = useState({ personas: [], hooks: [], moves: [] })
+  const [lib, setLib] = useState({ personas: [], hooks: [], moves: [], voStyles: [] })
   const [view, setView] = useState({ x: 30, y: 20, k: 0.62 })
   const [heights, setHeights] = useState({})
   const [top, setTop] = useState(96)
@@ -200,7 +201,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       api('/api/personas').then((d) => d.personas || []).catch(() => []),
       api('/api/hooks').then((d) => d.hooks || []).catch(() => []),
       api('/api/camera-moves').then((d) => d.moves || []).catch(() => []),
-    ]).then(([personas, hooks, moves]) => setLib({ personas, hooks, moves }))
+      api('/api/vo-styles').then((d) => d.voStyles || []).catch(() => []),
+    ]).then(([personas, hooks, moves, voStyles]) => setLib({ personas, hooks, moves, voStyles }))
   }, [])
   useEffect(() => {
     api('/api/contents').then((cs) => setList(cs)).catch((e) => setErr(String(e.message || e)))   // cid=null → 카드 보드로 시작
@@ -648,6 +650,11 @@ function NodeGraphInner({ openId, onOpenHandled }) {
             commitRun(drawerNode.id, (x) => ({ ...x, dirty: false, t: v }))
             if (drawerNode.hd === 'persona') postJSON(`/api/contents/${cid}/persona`, { persona: v }).catch(() => {})
             else if (drawerNode.hd === 'hook') postJSON(`/api/contents/${cid}/hook`, { hook: v }).catch(() => {})
+          } else if (f === '__vostyle' || f === '__vostylenote') {   // 스피킹 스타일(프리셋/refine) → 노드 데이터 + 콘텐츠 저장 + 하류 stale
+            const key = f === '__vostyle' ? 'voStyle' : 'voStyleNote', cur = drawerNode.data || {}
+            const merged = { voStyle: cur.voStyle || '', voStyleNote: cur.voStyleNote || '', [key]: v }
+            commitRun(drawerNode.id, (x) => ({ ...x, dirty: false, data: { ...x.data, [key]: v } }))
+            postJSON(`/api/contents/${cid}/vo-style`, merged).catch(() => {})
           } else setNodeData(drawerNode.id, { [f]: v })
         }}
         onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} onDelete={() => deleteNode(drawerNode.id)} hoverPreview={hoverPreview}
@@ -870,6 +877,14 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
               <option value="">— default —</option>{L.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
             </select>
             {opt ? <div className="ng-fed" style={{ marginTop: 9 }}>{opt.register || opt.when_to_use || ''}</div> : <div className="ng-fed manual" style={{ marginTop: 9 }}>— choose one, or ▶ re-run to recommend —</div>}
+            {isP ? (() => { const sk = d.voStyle || '', so = (lib.voStyles || []).find((x) => x.key === sk); return <>
+              <div className="ng-sh top">④ speaking style <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· how this voice paces the VO</em></div>
+              <select className="ng-bigsel" value={sk} onChange={(e) => onField('__vostyle', e.target.value)}>
+                <option value="">— natural (persona default) —</option>{(lib.voStyles || []).map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
+              </select>
+              {so ? <div className="ng-fed" style={{ marginTop: 9 }}>{(so.directive || '').trim()}</div> : null}
+              <textarea className="ng-instruct" style={{ marginTop: 9 }} value={d.voStyleNote || ''} placeholder="refine (optional) — e.g. shorter sentences · warmer on the CTA · address the viewer" onChange={(e) => onField('voStyleNote', e.target.value)} onBlur={(e) => onField('__vostylenote', e.target.value)} />
+            </> })() : null}
             <div className="ng-sh top">context</div>
             <div className="ng-ctxrow">persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div>
           </div>

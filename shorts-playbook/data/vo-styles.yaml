@@ -1,0 +1,45 @@
+# vo-styles.yaml — the SPEAKING STYLE library (how the persona paces the VO)
+# Orthogonal to persona: persona = WHO is talking (their attitude, what they'd
+# never say); style = HOW they pace it (sentence length, rhythm, structure).
+# The same persona can be delivered in any of these styles. Pick one key; an
+# optional free-text refine note layers on top. Injected into every VO step.
+
+punchy_short:
+  name: "Punchy & short"
+  directive: >
+    Short, clipped sentences. One idea per line. Lots of full stops, few commas.
+    Front-load the payoff. Cut every filler word. Reads fast, hits hard.
+
+flowing_conversational:
+  name: "Flowing & conversational"
+  directive: >
+    Natural, spoken rhythm — like talking to a friend. Sentences can run on a
+    little, use asides and "and then…". Warm connective tissue between beats.
+    Never stiff or listy.
+
+listy_scannable:
+  name: "Listy & scannable"
+  directive: >
+    Structured, enumerated feel — "First… then… and the best part…". Each line
+    lands a discrete, scannable point. Great for roundups and feature runs.
+    Parallel phrasing, minimal narrative glue.
+
+story_driven:
+  name: "Story-driven"
+  directive: >
+    Narrative arc — a before, a turn, an after. Carry a small tension across the
+    lines and resolve it at the reveal. The product enters as the turning point,
+    not a bullet. Let scenes hand off to each other.
+
+quickfire_hype:
+  name: "Quickfire hype"
+  directive: >
+    High energy, momentum-driven. Rhetorical questions, direct address ("you"),
+    escalating stakes. Keep it moving — no line sits still. Stops just short of
+    cliché (still obeys the ban-list).
+
+calm_authority:
+  name: "Calm authority"
+  directive: >
+    Measured, confident, unhurried. States things as fact, no hedging, no hype.
+    Trusts the substance to carry it. Expert who has nothing to prove.

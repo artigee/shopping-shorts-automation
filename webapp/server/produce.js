@@ -1,7 +1,7 @@
 // 콘텐츠 제작 — 릴스 분석(설계도) + 선택 제품 → ① 전체 스크립트 → ② 씬 스크립트 (Claude CLI).
 // 핵심: 원본 릴스의 "구조"만 이해해 빌리고, 카피는 선택 제품으로 "새로" 작성 (복붙 금지).
 import { spawn } from 'node:child_process'
-import { personaBlock, hookBlock, banBlock, rulesBlock, contentSafetyBlock, getBanlist } from './playbook.js'
+import { personaBlock, voStyleBlock, hookBlock, banBlock, rulesBlock, contentSafetyBlock, getBanlist } from './playbook.js'
 
 const CLI_MODEL = process.env.PRODUCE_CLI_MODEL || 'sonnet' // 스크립트 품질 → sonnet
 
@@ -69,13 +69,13 @@ const directionBlock = (d) => (d && d.trim() ? `\n[DIRECTION — apply this crea
 const VO_ARC = 'disbelief → mechanism reveal → anti-climax/ease → earned payoff → casual close (each line a DIFFERENT energy)'
 
 // ③ 전체 스크립트 — 구조만 빌려 선택 제품으로 새로 작성 (복붙 금지). US 마켓 → 영어로 작성.
-export async function generateOverall({ analysis, productName, product, base, guidance, direction, persona, hook, contentMode, hasFootage = false, lang = 'English (US, American audience)' }) {
+export async function generateOverall({ analysis, productName, product, base, guidance, direction, persona, voStyle, voStyleNote, hook, contentMode, hasFootage = false, lang = 'English (US, American audience)' }) {
   const prompt = `You are a top short-form (Instagram Reels/TikTok) ad copywriter for the ${lang} market.
 KEEP the original reel's STRUCTURE only — hook archetype, beat order, pacing, CTA mechanic. DISCARD the original's exact words (its captions and voiceover); never copy its sentences. On that skeleton write a COMPLETELY NEW shorts script that sells [My product], natively in ${lang} — idioms, rhythm, regional nuance native to that audience; do NOT translate from another language.
 This OVERALL script is the product's story/context. The single most important field is "vo".
 [VO = the through-line] Write "vo" as ONE continuous spoken monologue in the PERSONA below — one person thinking out loud, moving through the energy ARC: ${VO_ARC}. REACT and reveal the mechanism; do NOT just explain or list features. Specific sensory detail and real numbers, never generic ad language.
 This is the FULL story / context — it may be richer and longer than the final short. Write it complete and good; the SCENE step will distill it down to fit the video length. Do NOT pre-truncate here.
-${personaBlock(persona)}${hookBlock(hook)}${banBlock()}${contentSafetyBlock(contentMode, { hasFootage })}
+${personaBlock(persona)}${voStyleBlock(voStyle, voStyleNote)}${hookBlock(hook)}${banBlock()}${contentSafetyBlock(contentMode, { hasFootage })}
 ${guideBlock(base, guidance, 'overall script')}
 [Reel analysis (structure reference only)]
 ${JSON.stringify(analysis).slice(0, 6500)}
@@ -123,7 +123,7 @@ export function allocateDurations(weights, totalSec, min = 2, max = 10) {
   return d
 }
 
-export async function generateScenes({ analysis, productName, product, overall, base, guidance, direction, shotCount, persona, hook, contentMode, hasFootage = false, lang = 'English (US, American audience)' }) {
+export async function generateScenes({ analysis, productName, product, overall, base, guidance, direction, shotCount, persona, voStyle, voStyleNote, hook, contentMode, hasFootage = false, lang = 'English (US, American audience)' }) {
   const countRule = shotCount ? `Produce EXACTLY ${shotCount} scenes` : 'Produce 5-8 scenes'
   const reelLen = Math.round(Number(analysis?._meta?.duration) || 0)
   const totalSec = Math.round(Number(overall?.durationSec) || reelLen || 22)   // 목표 총 길이 = overall(=릴스 길이 기본)
@@ -140,7 +140,7 @@ STRONG STORY RULE: the AI image/video can't show transformations (folding, unfol
 - onScreenText (per scene) = the on-screen TITLE: a SHORT punchy claim or spec (<= ~5 words) that carries the FACT.
 - TITLE and VO must NEVER say the same thing. TEST: delete the vo — if the title still delivers the same info, the vo FAILED; rewrite it to react, not narrate. Do NOT inflate the title back into a full sentence.
 - EAR-CATCHING (see storytelling rules): line 1 is a cold open that lands in 1.5s (no "so/okay so"). VARY line length — at least TWO vo lines are short 2-5 word fragments. One clean TURN. Cut filler. Keep each line short enough to actually say within its scene's seconds.
-${personaBlock(persona)}${hookBlock(hook)}${banBlock()}${rulesBlock()}${contentSafetyBlock(contentMode, { hasFootage })}
+${personaBlock(persona)}${voStyleBlock(voStyle, voStyleNote)}${hookBlock(hook)}${banBlock()}${rulesBlock()}${contentSafetyBlock(contentMode, { hasFootage })}
 ${directionBlock(direction)}${guideBlock(base, guidance, 'scene script')}
 [Overall script]
 ${JSON.stringify(overall).slice(0, 3000)}
@@ -183,7 +183,7 @@ Output ONLY a JSON array (no explanation):
 }
 
 // 한 씬의 스크립트(Title + VO)만 재생성 — overall(input) + instruction(guidance) 기반, 나머지 씬과 겹치지 않게
-export async function generateSceneScript({ overall, product, productName, scenes = [], sceneIndex = 0, sceneTotal = 1, persona, hook, contentMode, hasFootage = false, guidance, durationSec, lang = 'English (US, American audience)' }) {
+export async function generateSceneScript({ overall, product, productName, scenes = [], sceneIndex = 0, sceneTotal = 1, persona, voStyle, voStyleNote, hook, contentMode, hasFootage = false, guidance, durationSec, lang = 'English (US, American audience)' }) {
   const isFirst = sceneIndex === 0, isLast = sceneTotal > 1 && sceneIndex === sceneTotal - 1
   const dur = Number(durationSec) > 0 ? Number(durationSec) : null
   const durRule = dur ? `\n[DURATION — the VO must fit ${dur}s of natural speech: about ${Math.max(3, Math.round(dur * 2.6))} words MAX. Write the vo to be comfortably sayable within ${dur} seconds; do not exceed it.]` : ''
@@ -195,7 +195,7 @@ export async function generateSceneScript({ overall, product, productName, scene
   const prompt = `You are crafting ONE scene of a ${lang}-market shopping short. Rewrite ONLY scene ${sceneIndex + 1} of ${sceneTotal} — its on-screen Title and spoken VO — distilled from the overall story, keeping the arc and NOT duplicating the other scenes. ALL text natively in ${lang}.
 ${roleRule}
 [VO vs TITLE — the key rule] onScreenText = a SHORT punchy claim/spec (<= ~5 words) that carries the FACT. vo = a FRESH tight spoken line in the PERSONA that REACTS / reveals the mechanism — it must NEVER restate the title. Delete-test: if the title alone conveys the vo, rewrite the vo.
-${personaBlock(persona)}${hookBlock(hook)}${banBlock()}${rulesBlock()}${contentSafetyBlock(contentMode, { hasFootage })}${durRule}
+${personaBlock(persona)}${voStyleBlock(voStyle, voStyleNote)}${hookBlock(hook)}${banBlock()}${rulesBlock()}${contentSafetyBlock(contentMode, { hasFootage })}${durRule}
 ${guidance && guidance.trim() ? '[INSTRUCTION — honor this above all] ' + guidance.trim() : ''}
 [Overall story]
 ${JSON.stringify(overall).slice(0, 2600)}

@@ -36,6 +36,17 @@ export function getHook(key) {
   return y[key] ? { key, ...y[key] } : null
 }
 
+// ── VO speaking styles (how the persona paces the line; layered on persona) ──
+export function getVoStyles() {
+  const y = readYaml('data/vo-styles.yaml')
+  return Object.entries(y).map(([key, v]) => ({ key, ...v }))
+}
+export function getVoStyle(key) {
+  if (!key) return null
+  const y = readYaml('data/vo-styles.yaml')
+  return y[key] ? { key, ...y[key] } : null
+}
+
 // ── 카메라 무빙 (image→video 클립) ──
 export function getCameraMoves() {
   const y = readYaml('data/camera-moves.yaml')
@@ -73,6 +84,16 @@ Idioms they actually use:\n${list(p.idiom_markers)}
 They NEVER say:\n${list(p.never_says)}
 Dollar/value framing: ${p.dollar_reference_style || ''}
 Example lines (match this exact voice):\n${list(p.example_lines)}\n`
+}
+
+// 스피킹 스타일 — 페르소나(누구)는 그대로 두고, 문장의 호흡/구조(어떻게)만 얹는다.
+// 프리셋 키 + 자유 텍스트 refine 을 합쳐 하나의 지시 블록으로. 둘 다 없으면 빈 문자열.
+export function voStyleBlock(styleKeyOrText, note) {
+  const s = getVoStyle(styleKeyOrText)
+  const preset = s ? (s.directive || '').trim() : (String(styleKeyOrText || '').trim())
+  const refine = (note || '').trim()
+  if (!preset && !refine) return ''
+  return `\n[SPEAKING STYLE — how the persona paces the VO (keeps the persona's attitude; only changes the delivery)]\n${preset}${preset && refine ? '\n' : ''}${refine ? 'Also: ' + refine : ''}\n`
 }
 
 // 훅/스토리텔링 셰이프 — 지정 안 하면 LLM이 가장 잘 맞는 훅을 직접 고르게 (훅 크래프트는 항상 적용)

@@ -11,7 +11,7 @@ import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon
 import { analyzeReel } from './analyze.js'
 import { matchProductByVision } from './match.js'
 import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
-import { getPersonas, getHooks, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
+import { getPersonas, getHooks, getVoStyles, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
 import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady } from './higgsfield.js'
 import { buildPreview } from './preview.js'
 import { renderShort, probeDuration, FPS } from './remotion-render.js'
@@ -334,6 +334,7 @@ app.put('/api/gen-lang', (req, res) => { setSetting('genLang', (req.body && req.
 // shorts-playbook 라이브러리 — 페르소나·훅 (폴더가 소스). UI 드롭다운용.
 app.get('/api/personas', (req, res) => res.json({ ready: playbookReady(), personas: getPersonas() }))
 app.get('/api/hooks', (req, res) => res.json({ ready: playbookReady(), hooks: getHooks() }))
+app.get('/api/vo-styles', (req, res) => res.json({ ready: playbookReady(), voStyles: getVoStyles() }))
 app.get('/api/camera-moves', (req, res) => res.json({ moves: getCameraMoves() }))
 
 // 제품 → 아마존 검색 후보 (저장 X, 사람이 고름)
@@ -680,6 +681,13 @@ app.post('/api/contents/:id/hook', (req, res) => {
   res.json({ ok: true })
 })
 
+// VO 스피킹 스타일 (프리셋 키 + 자유 텍스트 refine) — 페르소나 위에 얹혀 모든 VO 생성에 반영
+app.post('/api/contents/:id/vo-style', (req, res) => {
+  const b = req.body || {}
+  db.prepare(`UPDATE contents SET vo_style = ?, vo_style_note = ?, updated_at = datetime('now') WHERE id = ?`).run(b.voStyle || '', b.voStyleNote || '', req.params.id)
+  res.json({ ok: true })
+})
+
 // 추천 — 제품 + 릴스 분석을 보고 가장 잘 맞는 persona + hook 제안 (이유 포함)
 app.post('/api/contents/:id/recommend', async (req, res) => {
   const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
@@ -773,7 +781,7 @@ app.post('/api/contents/:id/overall', (req, res) => {
   const base = guidance && c.overall ? JSON.parse(c.overall) : null
   const job = startJob({ agent: 'overall', refType: 'contents', refId: c.id, message: 'writing overall…' }, async (progress) => {
     progress('스토리 스크립트 작성 중… (~1분)', 30)
-    const overall = await generateOverall({ analysis: JSON.parse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', lang: genLang() })
+    const overall = await generateOverall({ analysis: JSON.parse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', lang: genLang() })
     progress('저장 중…', 90)
     db.prepare(`UPDATE contents SET overall = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(overall), c.id)
     return overall
@@ -825,8 +833,8 @@ app.post('/api/contents/:id/script', async (req, res) => {
     const analysis = JSON.parse(a.analysis)
     let overall = c.overall ? JSON.parse(c.overall) : null
     const hasFootage = c.content_mode === 'direct_review'
-    if (!overall) { overall = await generateOverall({ analysis, productName: p?.title || a.title, product: p, persona: c.persona, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() }); db.prepare(`UPDATE contents SET overall = ? WHERE id = ?`).run(JSON.stringify(overall), c.id) }
-    const scenes = await generateScenes({ analysis, productName: p?.title || a.title, product: p, overall, base, guidance, direction: c.direction, shotCount, persona: c.persona, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() })
+    if (!overall) { overall = await generateOverall({ analysis, productName: p?.title || a.title, product: p, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() }); db.prepare(`UPDATE contents SET overall = ? WHERE id = ?`).run(JSON.stringify(overall), c.id) }
+    const scenes = await generateScenes({ analysis, productName: p?.title || a.title, product: p, overall, base, guidance, direction: c.direction, shotCount, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() })
     // 새 씬 구성 → 기존 이미지/클립/VO/프리뷰 초기화 (어긋남 방지). 새로 생성해야 함.
     flushContentAssets(c.id)
     db.prepare(`UPDATE contents SET scenes = ?, preview = NULL, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
@@ -903,7 +911,7 @@ async function genSceneScriptForScene(c, scenes, i, guidance) {
   if (!overall) throw new Error('먼저 Script Engine으로 전체 스크립트를 생성하세요.')
   const product = c.product ? JSON.parse(c.product) : null
   const a = c.analysis_id ? db.prepare('SELECT title FROM analyses WHERE id = ?').get(c.analysis_id) : null
-  const r = await generateSceneScript({ overall, product, productName: product?.title || a?.title, scenes, sceneIndex: i, sceneTotal: scenes.length, persona: c.persona, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', guidance, durationSec: scenes[i].durationSec, lang: genLang() })
+  const r = await generateSceneScript({ overall, product, productName: product?.title || a?.title, scenes, sceneIndex: i, sceneTotal: scenes.length, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', guidance, durationSec: scenes[i].durationSec, lang: genLang() })
   scenes[i] = { ...scenes[i], onScreenText: r.onScreenText, vo: r.vo }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
   return scenes[i]

@@ -164,6 +164,8 @@ ensureColumn('contents', 'preview', 'TEXT')          // ffmpeg 임시 프리뷰 
 ensureColumn('contents', 'direction', 'TEXT')        // 연출 지시 (훅·샷 스타일) — 스크립트 생성에 항상 반영
 ensureColumn('contents', 'persona', 'TEXT')          // VO 화자 페르소나 (playbook personas.yaml 키 또는 자유텍스트)
 ensureColumn('contents', 'hook', 'TEXT')             // 훅/스토리텔링 셰이프 (playbook hooks.yaml 키)
+ensureColumn('contents', 'vo_style', 'TEXT')         // VO 스피킹 스타일 프리셋 키 (playbook vo-styles.yaml) — 페르소나 위에 얹는 호흡/구조
+ensureColumn('contents', 'vo_style_note', 'TEXT')    // VO 스피킹 스타일 자유 텍스트 refine (프리셋 위에 미세 조정)
 ensureColumn('contents', 'shot_count', 'INTEGER')    // 씬(샷) 목표 개수 (null = 자동 5~8)
 ensureColumn('contents', 'export_mp4', 'TEXT')       // Remotion 정식 익스포트 mp4 경로
 ensureColumn('contents', 'character_ref', 'TEXT')    // 캐릭터(인물) 레퍼런스 — 모든 씬 이미지에 동일 인물 적용 (url 또는 hfmedia:)
