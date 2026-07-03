@@ -92,7 +92,7 @@ function adapt(resp) {
     id: c.id, title: c.title, persona: c.persona, hook: c.hook, style: c.style, final_form: c.final_form,
     shot_count: c.shot_count, direction: c.direction, preview: c.preview, export_mp4: c.export_mp4,
     analysisRow: resp.analysis || {}, product: resp.product || parse(c.product) || {},
-    scenes: parse(c.scenes) || [], overall: parse(c.overall) || null,
+    scenes: parse(c.scenes) || [], overall: parse(c.overall) || null, refLibSaved: parse(c.ref_lib) || null,
   }
 }
 
@@ -106,12 +106,18 @@ function buildGraph(data) {
   const ar = data.analysisRow || {}, p = data.product || {}
   let aj = {}; try { aj = JSON.parse(ar.analysis || '{}') } catch { aj = {} }
 
-  // reference library (product / character / environment) from product image + scene refs
-  const refLib = { product: [], character: [], environment: [] }
-  const seen = new Set(); let lid = 0
-  const push = (thumb, role, name) => { if (!thumb || seen.has(thumb)) return; seen.add(thumb); refLib[role].push({ id: 'lib-' + (lid++), thumb, role, name: name || role }) }
-  if (p.image) push(p.image, 'product', 'product main')
-  scenes.forEach((s) => (s.refs || []).forEach((r) => { const u = media(r); if (u) push(u, 'product', 'ref') }))
+  // reference library — saved(사용자 정리 보존)이 있으면 그대로, 없으면 product image + scene refs로 기본 구성
+  const saved = data.refLibSaved
+  const hasSaved = saved && ['product', 'character', 'environment'].some((r) => Array.isArray(saved[r]) && saved[r].length)
+  const refLib = hasSaved
+    ? { product: saved.product || [], character: saved.character || [], environment: saved.environment || [] }
+    : { product: [], character: [], environment: [] }
+  if (!hasSaved) {
+    const seen = new Set(); let lid = 0
+    const push = (thumb, role, name) => { if (!thumb || seen.has(thumb)) return; seen.add(thumb); refLib[role].push({ id: 'lib-' + (lid++), thumb, role, name: name || role }) }
+    if (p.image) push(p.image, 'product', 'product main')
+    scenes.forEach((s) => (s.refs || []).forEach((r) => { const u = media(r); if (u) push(u, 'product', 'ref') }))
+  }
 
   mk({ id: 'in-0', role: 'input', hd: 'persona', t: ctx.persona, sub: 'VO voice', x: COL.input, y: 100, data: {} })
   mk({ id: 'in-1', role: 'input', hd: 'hook', t: ctx.hook, sub: 'story shape', x: COL.input, y: 240, data: {} })
@@ -175,6 +181,7 @@ function NodeGraphInner() {
   const pan = useRef(null), drag = useRef(null), libUid = useRef(0)
   const ngRef = useRef(ng); ngRef.current = ng
   const srcSig = useRef(null)               // 로드 당시 소스 분석 시그니처(analyzed_at)
+  const loadedRefKey = useRef('')           // 로드 당시 refLib 시그니처 (변경 감지용)
   const hist = useRef({ past: [], future: [], key: null })
   const dragSnap = useRef(null)
   const [histN, setHistN] = useState({ u: 0, r: 0 })
@@ -282,7 +289,13 @@ function NodeGraphInner() {
       commitRun(n.id, (x) => ({ ...x, dirty: false }))
     } catch (e) { setErr(String(e.message || e)) }
   }
-  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
+  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; loadedRefKey.current = JSON.stringify(g.refLib); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
+  // 레퍼런스 라이브러리 정리(추가/이동/삭제)를 자동 저장 — 로드값과 다를 때만
+  const refLibKey = JSON.stringify(ng.refLib)
+  useEffect(() => {
+    if (cid == null || !data || refLibKey === loadedRefKey.current) return
+    postJSON(`/api/contents/${cid}/ref-lib`, { refLib: ng.refLib }, 'PUT').catch(() => {})
+  }, [refLibKey])
 
   const graph = ng
   const nodeById = useMemo(() => { const m = {}; graph.nodes.forEach((n) => (m[n.id] = n)); return m }, [graph])

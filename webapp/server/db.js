@@ -168,6 +168,7 @@ ensureColumn('contents', 'shot_count', 'INTEGER')    // 씬(샷) 목표 개수 (
 ensureColumn('contents', 'export_mp4', 'TEXT')       // Remotion 정식 익스포트 mp4 경로
 ensureColumn('contents', 'character_ref', 'TEXT')    // 캐릭터(인물) 레퍼런스 — 모든 씬 이미지에 동일 인물 적용 (url 또는 hfmedia:)
 ensureColumn('contents', 'content_mode', 'TEXT')     // 콘텐츠 모드 (claim-safety 게이트): curated_find | deal_alert | direct_review | review_summary | comparison
+ensureColumn('contents', 'ref_lib', 'TEXT')          // 노드 그래프 레퍼런스 라이브러리 JSON {product[],character[],environment[]} (사용자 정리 보존)
 
 // 에이전트 잡 — 장시간 LLM 작업(analyze/generate 등)을 요청과 분리해 내구성 있게 추적.
 // status: queued | running | done | failed. ref_type/ref_id = 작업 대상(예: analyses:12).
