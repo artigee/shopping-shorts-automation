@@ -134,7 +134,7 @@ function buildGraph(data) {
   const defRefs = () => ({ product: refLib.product.map((a) => a.id), character: refLib.character.map((a) => a.id), environment: [] })
   scenes.forEach((s, i) => {
     const k = i + 1, y = 100 + (k - 1) * PITCH
-    mk({ id: 'script-' + k, role: 'script', kind: 'script', hd: 'scene ' + k, x: COL.script, y, scene: k, t: s.onScreenText || '', data: { title: s.onScreenText || '', vo: s.vo || '', guidance: '' } })
+    mk({ id: 'script-' + k, role: 'script', kind: 'script', hd: 'scene ' + k, x: COL.script, y, scene: k, t: s.onScreenText || '', data: { title: s.onScreenText || '', vo: s.vo || '', durationSec: s.durationSec || '', guidance: '' } })
     mk({ id: 'prompt-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y, scene: k, t: (s.imagePrompt || '').slice(0, 90), data: { prompt: s.imagePrompt || '', guidance: '' } })
     mk({ id: 'promptV-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y: y + 160, scene: k, t: (s.voEn || s.vo || '').slice(0, 90), data: { prompt: s.voEn || s.vo || '', guidance: '' } })
     mk({ id: 'image-' + k, role: 'image', kind: 'image', hd: 'scene ' + k, x: COL.image, y, scene: k, thumb: bust(media(s.image), lv), data: { imagePrompt: s.imagePrompt || '', image: s.image || '', aspect: '9:16', model: 'auto', seed: '', style: data.style || '', frameRole: 'start', guidance: '', refs: (s.graphRefs && typeof s.graphRefs === 'object') ? { product: [], character: [], environment: [], ...s.graphRefs } : defRefs() } })
@@ -365,7 +365,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       const idx = n.scene ? n.scene - 1 : null
       if (idx == null || typeof n.id !== 'string') return
       let patch = null
-      if (n.id.startsWith('script-')) patch = { onScreenText: n.data.title || '', vo: n.data.vo || '' }
+      if (n.id.startsWith('script-')) patch = { onScreenText: n.data.title || '', vo: n.data.vo || '', ...(Number(n.data.durationSec) > 0 ? { durationSec: Number(n.data.durationSec) } : {}) }
       else if (n.id.startsWith('promptV-')) patch = { voEn: n.data.prompt || '' }
       else if (n.id.startsWith('promptM-')) patch = { motionPrompt: n.data.prompt || '' }
       else if (n.id.startsWith('prompt-')) patch = { imagePrompt: n.data.prompt || '' }
@@ -866,6 +866,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
         </div>
         <div className="ng-col right">
           <div className="ng-sh">③ output · scene script <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· editable</em></div>
+          <div className="ng-prop"><label>duration (s)</label><input type="number" min="1" max="15" step="1" value={d.durationSec ?? ''} placeholder="e.g. 3" onChange={(e) => onField('durationSec', e.target.value)} onBlur={onCommit} style={{ maxWidth: 90 }} /><span className="ng-fixed" style={{ fontSize: 10 }}>drives VO length + clip</span></div>
           <div className="ng-prop"><label>title</label><input value={d.title || ''} placeholder="on-screen title" onChange={(e) => onField('title', e.target.value)} onBlur={onCommit} /></div>
           <div className="ng-slot-h" style={{ marginTop: 8 }}><span>VO</span></div>
           <textarea className="ng-big" style={{ minHeight: 90 }} value={d.vo || ''} placeholder="spoken line" onChange={(e) => onField('vo', e.target.value)} onBlur={onCommit} />

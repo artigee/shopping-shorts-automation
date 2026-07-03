@@ -884,7 +884,7 @@ async function genSceneScriptForScene(c, scenes, i, guidance) {
   if (!overall) throw new Error('먼저 Script Engine으로 전체 스크립트를 생성하세요.')
   const product = c.product ? JSON.parse(c.product) : null
   const a = c.analysis_id ? db.prepare('SELECT title FROM analyses WHERE id = ?').get(c.analysis_id) : null
-  const r = await generateSceneScript({ overall, product, productName: product?.title || a?.title, scenes, sceneIndex: i, sceneTotal: scenes.length, persona: c.persona, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', guidance, lang: genLang() })
+  const r = await generateSceneScript({ overall, product, productName: product?.title || a?.title, scenes, sceneIndex: i, sceneTotal: scenes.length, persona: c.persona, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', guidance, durationSec: scenes[i].durationSec, lang: genLang() })
   scenes[i] = { ...scenes[i], onScreenText: r.onScreenText, vo: r.vo }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
   return scenes[i]
@@ -948,7 +948,8 @@ async function genClipForScene(c, scenes, i, promptOverride) {
   const camera = move ? `CAMERA: ${move.prompt}` : 'CAMERA: slow push in'   // 기본 = 느린 push in (안전한 시네마틱)
   const extra = (promptOverride || scenes[i].motionPrompt || '').trim()      // 추가 연기/액션 (선택)
   const motion = `${sceneDesc ? sceneDesc + '. ' : ''}${camera}.${extra ? ' ' + extra + '.' : ''} Apply exactly ONE slow, smooth camera move — never stack multiple moves. The object stays as placed; do NOT fold, unfold, assemble or transform the product.`
-  const url = await genVideoViaCLI({ imageUrl, prompt: motion, duration: 5 })
+  const dur = Math.max(3, Math.min(10, Math.round(Number(scenes[i].durationSec) || 5)))   // 씬 durationSec 반영 (3-10s)
+  const url = await genVideoViaCLI({ imageUrl, prompt: motion, duration: dur })
   const rel = await saveAsset(c.id, i, url, true)
   scenes[i] = { ...scenes[i], ...(promptOverride ? { motionPrompt: promptOverride } : {}), video: rel, videoSrc: url }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
