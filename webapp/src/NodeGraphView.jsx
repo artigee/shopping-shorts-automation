@@ -201,23 +201,43 @@ function NodeGraphInner() {
     return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(iv) }
   }, [cid])
   function refreshSource() { if (cid == null) return; api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setSourceStale(false); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }
-  // 노드 실행 — overall 노드는 overall 잡을 돌려 결과를 노드에 반영 (진행률 표시). 그 외 종류는 아직 미연결.
+  // 노드 업데이트 + 하류(edge로 도달 가능한 모든 노드) dirty 전파
+  function commitRun(nodeId, patchNode) {
+    setNg((g) => {
+      const down = new Set(); const q = [nodeId]
+      while (q.length) { const cur = q.shift(); g.edges.forEach((e) => { if (e.from === cur && !down.has(e.to)) { down.add(e.to); q.push(e.to) } }) }
+      const nodes = g.nodes.map((x) => x.id === nodeId ? patchNode(x) : (down.has(x.id) ? { ...x, dirty: true } : x))
+      const nn = { ...g, nodes }; ngRef.current = nn; return nn
+    })
+  }
+  // 노드 실행 — 각 노드를 백엔드 엔드포인트로 재생성하고 결과를 노드에 반영. 지원: overall · image-prompt · image · clip · vo.
   async function runNode(n) {
     if (cid == null || running) return
-    if (n.kind !== 'overall') { setErr(`'${n.kind}' 실행은 아직 노드 그래프에 연결 안 됨 (overall 먼저).`); return }
-    setErr(null); setRunning({ id: n.id, msg: 'starting…' })
+    setErr(null)
+    if (n.kind === 'overall') {
+      setRunning({ id: n.id, msg: 'starting…' })
+      try {
+        const resp = await postJSON(`/api/contents/${cid}/overall`, {})
+        const o = resp && resp.jobId ? await pollJob(resp.jobId, (jb) => setRunning({ id: n.id, msg: jb.message || '' })) : resp
+        if (o) commitRun(n.id, (x) => ({ ...x, dirty: false, data: { ...x.data, angle: o.angle ?? x.data.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || '') } }))
+      } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
+      return
+    }
+    const k = n.scene ? n.scene - 1 : null                        // 0-based 씬 index
+    const isImagePrompt = typeof n.id === 'string' && n.id.startsWith('prompt-')
+    const ep = isImagePrompt ? 'prompt' : n.kind === 'image' ? 'image' : n.kind === 'clip' ? 'clip' : n.kind === 'vo' ? 'vo' : null
+    if (!ep || k == null) { setErr(`'${n.hd}' re-run isn't wired yet (supported: overall · image-prompt · image · clip · vo).`); return }
+    setRunning({ id: n.id, msg: 'running…' })
     try {
-      const resp = await postJSON(`/api/contents/${cid}/overall`, {})
-      const o = resp && resp.jobId ? await pollJob(resp.jobId, (jb) => setRunning({ id: n.id, msg: jb.message || '' })) : resp
-      if (o) setNg((g) => {
-        // 재생성으로 overall 출력이 바뀜 → 하류 노드 전부 dirty(오래됨) 전파
-        const down = new Set(); const q = [n.id]
-        while (q.length) { const cur = q.shift(); g.edges.forEach((e) => { if (e.from === cur && !down.has(e.to)) { down.add(e.to); q.push(e.to) } }) }
-        const nodes = g.nodes.map((x) => {
-          if (x.id === n.id) return { ...x, dirty: false, data: { ...x.data, angle: o.angle ?? x.data.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || '') } }
-          return down.has(x.id) ? { ...x, dirty: true } : x
-        })
-        const nn = { ...g, nodes }; ngRef.current = nn; return nn
+      await postJSON(`/api/contents/${cid}/scene/${k}/${ep}`, {})   // 저장된 값 기준 재생성
+      const r = await api(`/api/contents/${cid}`)                   // 새 씬 데이터 가져와 (buildGraph와 동일 필드로) 노드 갱신
+      const s = (parse(r.content?.scenes) || [])[k] || {}
+      commitRun(n.id, (x) => {
+        if (isImagePrompt) return { ...x, dirty: false, t: (s.imagePrompt || '').slice(0, 90), data: { ...x.data, prompt: s.imagePrompt || '' } }
+        if (x.kind === 'image') return { ...x, dirty: false, thumb: media(s.image), data: { ...x.data, image: s.image || '', imagePrompt: s.imagePrompt || '' } }
+        if (x.kind === 'clip') return { ...x, dirty: false, video: media(s.video), image: media(s.image) }
+        if (x.kind === 'vo') return { ...x, dirty: false, audio: media(s.audio) }
+        return { ...x, dirty: false }
       })
     } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
   }
