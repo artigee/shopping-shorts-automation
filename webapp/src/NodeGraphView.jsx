@@ -166,6 +166,8 @@ function NodeGraphInner() {
   const [framing, setFraming] = useState(false)
   const [sourceStale, setSourceStale] = useState(false)   // 소스 분석이 재분석돼 그래프가 오래됨
   const [running, setRunning] = useState(null)            // { id, msg } — 노드 실행(잡) 진행
+  const [modes, setModes] = useState([])                  // 콘텐츠 모드(claim-safety) 목록
+  const [contentMode, setContentMode] = useState('')      // 현재 콘텐츠 모드
   const nodeRefs = useRef({})
   const canvasRef = useRef(null)
   const pan = useRef(null), drag = useRef(null), libUid = useRef(0)
@@ -186,7 +188,9 @@ function NodeGraphInner() {
   useEffect(() => {
     api('/api/contents').then((cs) => { setList(cs); setCid((prev) => prev ?? (cs.find((c) => c.id === 27)?.id ?? cs.find((c) => c.scenes)?.id ?? cs[0]?.id ?? null)) }).catch((e) => setErr(String(e.message || e)))
   }, [])
-  useEffect(() => { if (cid == null) return; setData(null); setErr(null); setSel(null); setSourceStale(false); api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }, [cid])
+  useEffect(() => { if (cid == null) return; setData(null); setErr(null); setSel(null); setSourceStale(false); api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setContentMode(r.content?.content_mode || ''); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }, [cid])
+  useEffect(() => { api('/api/content-modes').then((r) => setModes(r.modes || [])).catch(() => {}) }, [])
+  function saveContentMode(v) { setContentMode(v); if (cid != null) postJSON(`/api/contents/${cid}/content-mode`, { mode: v || null }).catch(() => {}) }
   // 소스 분석 변경 감지 — 재분석(잡)이 끝나 analyzed_at가 바뀌면 stale 배너. 창 포커스 + 25s 주기.
   useEffect(() => {
     if (cid == null) return
@@ -317,6 +321,11 @@ function NodeGraphInner() {
         <button className="ng-libtoggle" onClick={redo} disabled={!histN.r} title="redo (⇧⌘Z)">↷</button>
         <button className={'ng-libtoggle' + (sourceStale ? ' stale' : '')} onClick={refreshSource} title="reload graph from the latest source analysis (discards local graph edits)">↻ source{sourceStale ? ' •' : ''}</button>
         <select value={cid ?? ''} onChange={(e) => setCid(Number(e.target.value))}>{list.map((c) => <option key={c.id} value={c.id}>#{c.id} {(c.title || 'untitled').slice(0, 30)}</option>)}</select>
+        <span className="ng-barsep" />
+        <select value={contentMode} onChange={(e) => saveContentMode(e.target.value)} title={(() => { const m = modes.find((x) => x.key === contentMode); return m ? `${m.use_when} · allow: ${(m.allow || []).join(', ')} · never: ${(m.ban || []).join(', ')}` : 'safe default (Curated Find) — result claims softened to observations' })()}>
+          <option value="">◇ mode: safe default</option>
+          {modes.map((m) => <option key={m.key} value={m.key}>◇ {m.label}{m.requires_footage ? ' (needs footage)' : ''}</option>)}
+        </select>
       </div>
       {sourceStale && (
         <div className="ng-stale">
