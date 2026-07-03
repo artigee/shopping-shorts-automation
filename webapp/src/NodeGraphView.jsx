@@ -287,7 +287,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       try {
         const r = await postJSON(`/api/contents/${cid}/recommend-${n.hd}`, { guidance: n.data.guidance || '' })
         const v = n.hd === 'persona' ? r.persona : r.hook
-        if (v) { await postJSON(`/api/contents/${cid}/${n.hd}`, { [n.hd]: v }); commitRun(n.id, (x) => ({ ...x, t: v })) }
+        if (v) { await postJSON(`/api/contents/${cid}/${n.hd}`, { [n.hd]: v }); commitRun(n.id, (x) => ({ ...x, dirty: false, t: v })) }
       } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
       return
     }
@@ -645,7 +645,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })}
         onField={(f, v) => {
           if (f === '__nodeval') {   // persona/hook 선택 → 노드 값 + 하류 stale + 콘텐츠에 저장(생성에 반영)
-            commitRun(drawerNode.id, (x) => ({ ...x, t: v }))
+            commitRun(drawerNode.id, (x) => ({ ...x, dirty: false, t: v }))
             if (drawerNode.hd === 'persona') postJSON(`/api/contents/${cid}/persona`, { persona: v }).catch(() => {})
             else if (drawerNode.hd === 'hook') postJSON(`/api/contents/${cid}/hook`, { hook: v }).catch(() => {})
           } else setNodeData(drawerNode.id, { [f]: v })
