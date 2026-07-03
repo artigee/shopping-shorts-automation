@@ -493,7 +493,24 @@ function NodeGraphInner() {
   function startDrawerResize(ev) { ev.preventDefault(); const sy = ev.clientY, h0 = drawerH, maxH = Math.round(window.innerHeight * 0.85); const mv = (e) => setDrawerH(Math.min(maxH, Math.max(140, h0 - (e.clientY - sy)))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
   function addRefAsset(role, thumb, name) { if (!thumb) return; commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: [...(g.refLib[role] || []), { id: 'lib-' + (libUid.current++), thumb, role, name: name || role }] } })) }
   function deleteRefAsset(role, id) { commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: (g.refLib[role] || []).filter((a) => a.id !== id) }, nodes: g.nodes.map((n) => (n.data && n.data.refs && n.data.refs[role]) ? { ...n, data: { ...n.data, refs: { ...n.data.refs, [role]: n.data.refs[role].filter((x) => x !== id) } } } : n) })) }
-  function dropRefs(ev, role) { ev.preventDefault(); ev.currentTarget.classList.remove('drag'); const files = [...(ev.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/')); files.forEach((f) => addRefAsset(role, URL.createObjectURL(f), f.name)); if (!files.length) { const uri = ev.dataTransfer?.getData('text/uri-list') || ev.dataTransfer?.getData('text/plain') || ''; if (/^https?:/.test(uri)) addRefAsset(role, uri.trim(), role) } }
+  async function dropRefs(ev, role) {
+    ev.preventDefault(); ev.currentTarget.classList.remove('drag')
+    const files = [...(ev.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/'))
+    if (files.length) {   // 파일 드롭 → 서버 업로드(Higgsfield) → 생성에 쓸 수 있는 ref 저장
+      if (cid == null) { setErr('open a content first'); return }
+      for (const f of files) {
+        try {
+          const dataB64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f) })
+          const p = await postJSON(`/api/contents/${cid}/ref-upload`, { filename: f.name, contentType: f.type, dataB64 })
+          const ref = (p.images && p.images[0]) || null
+          if (ref) addRefAsset(role, ref, f.name)
+        } catch (e) { setErr(String(e.message || e)) }
+      }
+      return
+    }
+    const uri = ev.dataTransfer?.getData('text/uri-list') || ev.dataTransfer?.getData('text/plain') || ''
+    if (/^https?:/.test(uri)) addRefAsset(role, uri.trim(), role)
+  }
   const hoverPreview = { onMouseEnter: (e) => setPreview({ url: e.target.src, x: e.clientX, y: e.clientY }), onMouseMove: (e) => setPreview((p) => p ? { ...p, x: e.clientX, y: e.clientY } : p), onMouseLeave: () => setPreview(null) }
 
   useEffect(() => { if (!running) return; const iv = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(iv) }, [running])
@@ -587,7 +604,7 @@ function NodeGraphInner() {
                 {items.length
                   ? <div className="ng-libgrid">{items.map((a) => (
                     <div key={a.id} className="ng-libitem">
-                      <img src={a.thumb} onError={(e) => { e.target.style.opacity = .2 }} {...hoverPreview} />
+                      <img src={media(a.thumb)} onError={(e) => { e.target.style.opacity = .2 }} {...hoverPreview} />
                       <span className="ng-libdel" title="delete" onClick={() => deleteRefAsset(role, a.id)}>×</span>
                       <div className="nm">{a.name}</div>
                     </div>))}</div>
@@ -633,7 +650,7 @@ function Board({ list, running, onOpen, reload }) {
   const [sort, setSort] = useState('recent')
   async function create() { try { const c = await postJSON('/api/contents', {}); await reload(); if (c?.id) onOpen(c.id) } catch { /* ignore */ } }
   async function dup(e, id) { e.stopPropagation(); try { await postJSON(`/api/contents/${id}/duplicate`, {}); reload() } catch { /* ignore */ } }
-  async function del(e, id, name) { e.stopPropagation(); if (!window.confirm(`Delete "${name}"? This can't be undone.`)) return; try { await api(`/api/contents/${id}`, { method: 'DELETE' }); reload() } catch { /* ignore */ } }
+  async function del(e, id, name) { e.stopPropagation(); e.preventDefault(); if (!window.confirm(`Delete "${name}"? This can't be undone.`)) return; try { await api(`/api/contents/${id}`, { method: 'DELETE' }); await reload() } catch (err) { window.alert('Delete failed: ' + (err.message || err)) } }
   let items = list
   if (q.trim()) { const s = q.toLowerCase(); items = items.filter((c) => `${c.title || ''} ${c.product_name || ''} ${c.persona || ''} ${c.hook || ''}`.toLowerCase().includes(s)) }
   if (sort === 'title') items = [...items].sort((a, b) => (a.title || '').localeCompare(b.title || ''))
@@ -661,9 +678,9 @@ function Board({ list, running, onOpen, reload }) {
           return (
             <div key={c.id} className="pcard ng-pcard" onClick={() => onOpen(c.id)} title="open graph">
               {running?.has(c.id) && <span className="ng-card-run">● running</span>}
-              <div className="ng-card-acts">
-                <button onClick={(e) => dup(e, c.id)} title="duplicate">⧉</button>
-                <button onClick={(e) => del(e, c.id, title)} title="delete">✕</button>
+              <div className="ng-card-acts" onPointerDown={(e) => e.stopPropagation()}>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => dup(e, c.id)} title="duplicate">⧉</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => del(e, c.id, title)} title="delete">✕</button>
               </div>
               <div className="pbody">
                 {thumb ? <img className="pthumb" src={thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} /> : <div className="pthumb ng-pthumb-ph">#{c.id}</div>}
@@ -869,7 +886,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
             {['product', 'character', 'environment'].map((role) => {
               const items = refLib[role] || [], on = (d.refs && d.refs[role]) || []
               return <div key={role} className="ng-refblk"><div className="ng-slot-h"><span style={{ color: COLOR[role] }}>{role}</span><em>{on.length} applied</em></div>
-                <div className="ng-refchips">{items.length ? items.map((a) => <span key={a.id} className={'ng-refchip' + (on.includes(a.id) ? ' on' : '')} style={on.includes(a.id) ? { borderColor: COLOR[role], color: COLOR[role] } : null} onClick={() => onToggleRef(role, a.id)}><img src={a.thumb} {...hoverPreview} />{a.name}</span>) : <span className="ng-none">— none —</span>}</div></div>
+                <div className="ng-refchips">{items.length ? items.map((a) => <span key={a.id} className={'ng-refchip' + (on.includes(a.id) ? ' on' : '')} style={on.includes(a.id) ? { borderColor: COLOR[role], color: COLOR[role] } : null} onClick={() => onToggleRef(role, a.id)}><img src={media(a.thumb)} {...hoverPreview} />{a.name}</span>) : <span className="ng-none">— none —</span>}</div></div>
             })}
           </>}
         </div>
