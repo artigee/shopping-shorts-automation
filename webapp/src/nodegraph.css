@@ -60,6 +60,7 @@
 .ng-pcard:hover .ng-card-acts { display: flex; }
 .ng-card-acts button { background: rgba(0,0,0,.62); color: #dfe3ea; border: 1px solid var(--line, #272b36); border-radius: 6px; font-size: 11px; padding: 3px 8px; cursor: pointer; font-family: ui-monospace, monospace; }
 .ng-card-acts button:hover { border-color: var(--gold, #ffce4d); color: var(--gold, #ffce4d); }
+.ng-card-acts button.ng-delarm { background: #5a2330; border-color: #e0655e; color: #ffb4a4; }
 .ng-card-stat { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
 .ng-card-stat span { font-family: ui-monospace, monospace; font-size: 9.5px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line, #272b36); color: var(--mut, #9aa0ad); }
 .ng-card-stat span.on { border-color: #2f5233; color: var(--green, #7ee787); }

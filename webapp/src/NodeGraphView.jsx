@@ -648,9 +648,15 @@ function NodeGraphInner() {
 function Board({ list, running, onOpen, reload }) {
   const [q, setQ] = useState('')
   const [sort, setSort] = useState('recent')
+  const [confirmDel, setConfirmDel] = useState(null)   // 인라인 2-클릭 삭제 확인
   async function create() { try { const c = await postJSON('/api/contents', {}); await reload(); if (c?.id) onOpen(c.id) } catch { /* ignore */ } }
   async function dup(e, id) { e.stopPropagation(); try { await postJSON(`/api/contents/${id}/duplicate`, {}); reload() } catch { /* ignore */ } }
-  async function del(e, id, name) { e.stopPropagation(); e.preventDefault(); if (!window.confirm(`Delete "${name}"? This can't be undone.`)) return; try { await api(`/api/contents/${id}`, { method: 'DELETE' }); await reload() } catch (err) { window.alert('Delete failed: ' + (err.message || err)) } }
+  async function del(e, id) {
+    e.stopPropagation(); e.preventDefault()
+    if (confirmDel !== id) { setConfirmDel(id); setTimeout(() => setConfirmDel((c) => (c === id ? null : c)), 2600); return }   // 1클릭 = 무장, 2클릭 = 삭제
+    setConfirmDel(null)
+    try { await api(`/api/contents/${id}`, { method: 'DELETE' }); await reload() } catch (err) { window.alert('Delete failed: ' + (err.message || err)) }
+  }
   let items = list
   if (q.trim()) { const s = q.toLowerCase(); items = items.filter((c) => `${c.title || ''} ${c.product_name || ''} ${c.persona || ''} ${c.hook || ''}`.toLowerCase().includes(s)) }
   if (sort === 'title') items = [...items].sort((a, b) => (a.title || '').localeCompare(b.title || ''))
@@ -680,7 +686,7 @@ function Board({ list, running, onOpen, reload }) {
               {running?.has(c.id) && <span className="ng-card-run">● running</span>}
               <div className="ng-card-acts" onPointerDown={(e) => e.stopPropagation()}>
                 <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => dup(e, c.id)} title="duplicate">⧉</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => del(e, c.id, title)} title="delete">✕</button>
+                <button className={confirmDel === c.id ? 'ng-delarm' : ''} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => del(e, c.id)} title={confirmDel === c.id ? 'click again to delete' : 'delete'}>{confirmDel === c.id ? 'delete?' : '✕'}</button>
               </div>
               <div className="pbody">
                 {thumb ? <img className="pthumb" src={thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} /> : <div className="pthumb ng-pthumb-ph">#{c.id}</div>}
