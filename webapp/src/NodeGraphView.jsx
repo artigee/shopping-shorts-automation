@@ -397,7 +397,7 @@ function NodeGraphInner() {
   }, [])
 
   function onWheel(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top; setView((v) => { const k = Math.min(2, Math.max(0.2, v.k * (ev.deltaY < 0 ? 1.1 : 1 / 1.1))); return { k, x: mx - (mx - v.x) * (k / v.k), y: my - (my - v.y) * (k / v.k) } }) }
-  function startNodeDrag(ev, n) { if (ev.target.closest('video, button, select, a, .ng-del')) return; ev.stopPropagation(); dragSnap.current = ngRef.current; drag.current = { id: n.id, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y, moved: false } }
+  function startNodeDrag(ev, n) { if (ev.target.closest('video, button, select, a, input, .ng-del, .ng-voplayer')) return; ev.stopPropagation(); dragSnap.current = ngRef.current; drag.current = { id: n.id, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y, moved: false } }
   function onDown(ev) { if (ev.target.closest('.ng-node')) return; if (!locked) setSel(null); pan.current = { sx: ev.clientX, sy: ev.clientY, x: view.x, y: view.y } }
   function frameNode(id) {
     const n = nodeById[id]; if (!n || !canvasRef.current) return
@@ -514,7 +514,7 @@ function NodeGraphInner() {
                 <div className="ng-hd" style={{ color: c }}><span className="ng-dot" style={{ background: c }} />{n.hd}</div>
                 {n.t && n.kind !== 'prompt' && <div className="ng-t">{n.t}</div>}
                 {n.sub && <div className="ng-sub">{n.sub}</div>}
-                {n.kind === 'vo' && <div className="ng-sub">{n.audio ? '🔊 VO ready' : 'no VO yet'}</div>}
+                {n.kind === 'vo' && (n.audio ? <VoPlayer src={n.audio} /> : <div className="ng-sub">no VO yet</div>)}
                 {n.kind === 'clip' && <div className="ng-pill">{n.data?.makeVideo === 'still' ? '🖼 still' : '🎥 ' + cameraMoveName(n.data?.cameraMove, lib.moves)}</div>}
                 {hasInput(n) && <span className={'ng-port in' + (inWired ? ' wired' : '')} style={{ '--pc': c, borderColor: c }} />}
                 <span className={'ng-port out' + (outWired ? ' wired' : '')} style={{ '--pc': c, borderColor: c }} onPointerDown={(e) => startWire(e, n)} title="drag to connect" />
@@ -622,6 +622,25 @@ function Board({ list, running, onOpen, reload }) {
         })}
         {!items.length && <div className="ng-card-empty">{list.length ? 'No matching content.' : 'No content yet — + New to start one.'}</div>}
       </div>
+    </div>
+  )
+}
+
+// VO 오디오 플레이어 — 재생/일시정지 + 스크러버(슬라이드바) + 시간 (프로토타입 voplayer)
+function VoPlayer({ src }) {
+  const ref = useRef(null)
+  const [playing, setPlaying] = useState(false)
+  const [cur, setCur] = useState(0)
+  const [dur, setDur] = useState(0)
+  const fmt = (s) => (isFinite(s) && s >= 0) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00'
+  const toggle = (e) => { e.stopPropagation(); const a = ref.current; if (!a) return; if (a.paused) { a.play(); setPlaying(true) } else { a.pause(); setPlaying(false) } }
+  const seek = (e) => { const a = ref.current; if (a) { a.currentTime = Number(e.target.value); setCur(a.currentTime) } }
+  return (
+    <div className="ng-voplayer" onPointerDown={(e) => e.stopPropagation()}>
+      <button className="ng-voplay" onClick={toggle} title={playing ? 'pause' : 'play VO'}>{playing ? '❚❚' : '▶'}</button>
+      <input type="range" className="ng-voseek" min={0} max={dur || 0} step="0.01" value={cur} onChange={seek} onClick={(e) => e.stopPropagation()} />
+      <span className="ng-votime">{fmt(cur)} / {fmt(dur)}</span>
+      <audio ref={ref} src={src} preload="metadata" onLoadedMetadata={(e) => setDur(e.target.duration || 0)} onTimeUpdate={(e) => setCur(e.target.currentTime)} onEnded={() => setPlaying(false)} />
     </div>
   )
 }

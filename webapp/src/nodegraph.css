@@ -23,6 +23,13 @@
 .ng-node:active { cursor: grabbing; }
 .ng-node:hover { border-color: rgba(222,220,209,.30); }
 .ng-node.dim { opacity: .3; }
+.ng-voplayer { display: flex; align-items: center; gap: 7px; margin-top: 4px; background: #17171a; border: 1px solid #2f2f36; border-radius: 8px; padding: 4px 8px; }
+.ng-voplay { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%; border: 1px solid #43434c; background: #232328; color: #e0c85d; cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.ng-voplay:hover { background: #2a2a30; }
+.ng-voseek { flex: 1; min-width: 0; height: 4px; -webkit-appearance: none; appearance: none; background: #3a3a42; border-radius: 3px; cursor: pointer; }
+.ng-voseek::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%; background: #e0c85d; cursor: pointer; }
+.ng-voseek::-moz-range-thumb { width: 11px; height: 11px; border: 0; border-radius: 50%; background: #e0c85d; cursor: pointer; }
+.ng-votime { font-family: ui-monospace, monospace; font-size: 9px; color: #9c9a92; flex: 0 0 auto; }
 .ng-node.ng-engine { min-height: 128px; border-width: 2px; padding: 11px 13px; box-shadow: 0 6px 26px -10px var(--nc, #e0a341); }
 .ng-node.ng-engine .ng-hd { font-size: 11.5px; letter-spacing: .5px; }
 .ng-node.ng-engine .ng-t { font-size: 12.5px; -webkit-line-clamp: 4; }
