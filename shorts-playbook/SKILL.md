@@ -61,4 +61,4 @@ Before any VO is written, pick a **Content Mode** and stay inside its allowed vo
 - `examples/dash-my-pint.md` — worked gadget example: flat VO vs good VO, side by side
 - `examples/cosmetic.mov` — calibration for review/UGC (cosmetics) mode
 - `examples/camera-moves/` — the 12 director's-note camera-move reference images
-- `scripts/check_vo.py` — enforces ban-list + VO≠caption; returns pass/fail (not yet UI-wired)
+- `scripts/check_vo.py` — enforces ban-list + VO≠caption on a beat sheet (standalone). Its two rules are ALSO enforced live in scene generation (produce.js mirrors them: ban-list + VO-novelty, with an auto-rewrite loop on failure).

@@ -1,7 +1,7 @@
 // 콘텐츠 제작 — 릴스 분석(설계도) + 선택 제품 → ① 전체 스크립트 → ② 씬 스크립트 (Claude CLI).
 // 핵심: 원본 릴스의 "구조"만 이해해 빌리고, 카피는 선택 제품으로 "새로" 작성 (복붙 금지).
 import { spawn } from 'node:child_process'
-import { personaBlock, hookBlock, banBlock, rulesBlock, contentSafetyBlock } from './playbook.js'
+import { personaBlock, hookBlock, banBlock, rulesBlock, contentSafetyBlock, getBanlist } from './playbook.js'
 
 const CLI_MODEL = process.env.PRODUCE_CLI_MODEL || 'sonnet' // 스크립트 품질 → sonnet
 
@@ -20,6 +20,21 @@ function stripFence(t = '') {
   const m = t.match(/```(?:json)?\s*([\s\S]*?)```/)
   return (m ? m[1] : t).trim()
 }
+// ── 스킬 검증 (check_vo.py의 규칙을 JS로: ban-list + VO가 Title을 재진술하지 않기) ──
+const VO_STOP = new Set(['a', 'an', 'the', 'and', 'or', 'but', 'so', 'to', 'of', 'in', 'on', 'it', 'is', 'this', 'that', 'your', 'you', 'with', 'for', 'into', 'just', 'one', 'no', 'i', 'my', 'me', 'at', 'its', 'then', 'now', 'up'])
+function contentWords(t = '') { return (String(t).toLowerCase().match(/[a-z0-9']+/g) || []).filter((w) => !VO_STOP.has(w) && w.length > 1) }
+function noveltyRatio(caption, vo) { const cap = new Set(contentWords(caption)); const v = contentWords(vo); if (!v.length) return 1; return v.filter((w) => !cap.has(w)).length / v.length }
+function validateScenes(scenes, banlist, threshold = 0.35) {
+  const fails = []
+  scenes.forEach((s, i) => {
+    const cap = s.onScreenText || '', vo = s.vo || ''
+    const banned = [...new Set([cap, vo].flatMap((txt) => banlist.filter((p) => String(txt).toLowerCase().includes(p))))]
+    if (banned.length) fails.push(`scene ${i + 1}: banned phrase(s) [${banned.join(', ')}] — rewrite without them.`)
+    if (cap && vo) { const nov = noveltyRatio(cap, vo); if (nov < threshold / 2) fails.push(`scene ${i + 1}: the VO just restates the title (only ${Math.round(nov * 100)}% new words) — rewrite the VO to REACT / reveal the mechanism, not narrate. title="${cap}" vo="${vo}"`) }
+  })
+  return fails
+}
+
 function productLine(productName, product) {
   if (product?.title) {
     const link = product.source === 'amazon' ? ' (아마존 실제 판매 제품 — 이 제품 기준)' : ' (원본 릴스의 제품)'
@@ -119,9 +134,18 @@ Rules:
 
 Output ONLY a JSON array (no explanation):
 [{"t":"0-2s","durationSec":2,"onScreenText":"...","vo":"..."}]`
-  let scenes
-  for (let k = 0; k < 2 && !scenes; k++) { const out = await runClaude(prompt); try { const j = JSON.parse(stripFence(out)); if (Array.isArray(j) && j.length) scenes = j } catch {} }
+  const runParse = async (pr) => { for (let k = 0; k < 2; k++) { const out = await runClaude(pr); try { const j = JSON.parse(stripFence(out)); if (Array.isArray(j) && j.length) return j } catch { /* 다음 시도 */ } } return null }
+  let scenes = await runParse(prompt)
   if (!scenes) throw new Error('씬 스크립트 응답 파싱 실패 — 다시 [재생성] 눌러주세요.')
+  // 스킬 검증 루프 — ban-list + VO≠Title(react-don't-narrate). 실패 라인만 지목해 재작성(최대 2회).
+  const banlist = getBanlist().map((p) => p.toLowerCase())
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const fails = validateScenes(scenes, banlist)
+    if (!fails.length) break
+    const fixed = await runParse(`${prompt}\n\n[GUARDRAIL FAILED on your previous output — FIX ONLY these lines, keep every other scene exactly as-is, and re-output the SAME full JSON array]:\n${fails.join('\n')}`)
+    if (!fixed) break
+    scenes = fixed
+  }
   return scenes.map((s, i) => ({ id: i + 1, makeVideo: false, ...s }))
 }
 
