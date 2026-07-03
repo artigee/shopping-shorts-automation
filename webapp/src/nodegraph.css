@@ -38,6 +38,9 @@
 .ng-node-timer { position: absolute; top: -10px; right: 30px; z-index: 3; background: #085041; color: #7ff0cc; border: 1px solid #5DCAA5; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 9px; font-weight: 600; padding: 1px 7px; border-radius: 20px; white-space: nowrap; }
 @keyframes ng-pulse { 0%, 100% { box-shadow: 0 0 0 2px #5DCAA5, 0 0 14px -6px #5DCAA5; } 50% { box-shadow: 0 0 0 2px #5DCAA5, 0 0 26px -2px #5DCAA5; } }
 .ng-run:disabled { opacity: .7; cursor: default; }
+.ng-recbtn { background: rgba(201,179,234,.1); color: #c9b3ea; border: 1px solid rgba(201,179,234,.4); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; cursor: pointer; font-family: inherit; }
+.ng-recbtn:hover:not(:disabled) { background: rgba(201,179,234,.18); border-color: #c9b3ea; }
+.ng-recbtn:disabled { opacity: .5; cursor: default; }
 .ng-barsep { width: 1px; align-self: stretch; background: #2f2f36; margin: 2px 4px; }
 
 /* ── board of content cards (app theme — matches ①②③④ tabs) ── */

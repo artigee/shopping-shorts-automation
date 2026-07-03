@@ -235,6 +235,27 @@ function NodeGraphInner() {
       const nn = { ...g, nodes }; ngRef.current = nn; return nn
     })
   }
+  // persona + hook 추천 (analysis+product 기반) → 두 입력 노드에 적용 + 저장 + 하류 stale
+  async function applyRecommend() {
+    if (cid == null || running) return
+    setErr(null); setRunning({ id: 'in-0', msg: 'recommending persona + hook…', t0: Date.now() })
+    try {
+      const r = await postJSON(`/api/contents/${cid}/recommend`, {})
+      if (r.persona) await postJSON(`/api/contents/${cid}/persona`, { persona: r.persona })
+      if (r.hook) await postJSON(`/api/contents/${cid}/hook`, { hook: r.hook })
+      setNg((g) => {
+        const down = new Set(['in-0', 'in-1'])
+        let changed = true
+        while (changed) { changed = false; g.edges.forEach((e) => { if (down.has(e.from) && !down.has(e.to)) { down.add(e.to); changed = true } }) }
+        const nodes = g.nodes.map((x) => {
+          if (x.id === 'in-0' && r.persona) return { ...x, t: r.persona }
+          if (x.id === 'in-1' && r.hook) return { ...x, t: r.hook }
+          return (x.id !== 'in-0' && x.id !== 'in-1' && down.has(x.id)) ? { ...x, dirty: true } : x
+        })
+        const nn = { ...g, nodes }; ngRef.current = nn; return nn
+      })
+    } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
+  }
   // 노드 실행 — 각 노드를 백엔드 엔드포인트로 재생성하고 결과를 노드에 반영. 지원: overall · image-prompt · image · clip · vo.
   async function runNode(n) {
     if (cid == null || running) return
@@ -566,7 +587,7 @@ function NodeGraphInner() {
 
       {drawerNode && <Drawer n={drawerNode} closing={closing && !selId} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
         fromArray={selFromArray} onScene={(v) => setNodeScene(drawerNode.id, v)} locked={locked} onLock={() => setLocked((l) => !l)} onFrame={frameNode}
-        onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (fmtDur(runSecs) + (running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ' · running…')) : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)}
+        onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (fmtDur(runSecs) + (running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ' · running…')) : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)} onRecommend={applyRecommend}
         onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })}
         onField={(f, v) => {
           if (f === '__nodeval') {   // persona/hook 선택 → 노드 값 + 하류 stale + 콘텐츠에 저장(생성에 반영)
@@ -675,7 +696,7 @@ function Field({ c, d, onField, onCommit }) {
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} onBlur={onCommit} />
 }
 
-function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, incoming, outgoing }) {
+function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, onRecommend, incoming, outgoing }) {
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
   // re-run = 씬 스크립트 기반으로 생성하는 노드: overall · image-prompt · motion-prompt · VO-text · image · clip · vo.
   // scene-script(script-)만 "편집이 소스" → re-run 없음. 생성된 노드들은 생성 후 편집 가능.
@@ -771,6 +792,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
               <option value="">— default —</option>{L.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
             </select>
             {opt ? <div className="ng-fed" style={{ marginTop: 9 }}>{opt.register || opt.when_to_use || ''}</div> : <div className="ng-fed manual" style={{ marginTop: 9 }}>— default (choose one) —</div>}
+            <button className="ng-recbtn" onClick={onRecommend} disabled={runBusy} style={{ marginTop: 11 }}>✨ recommend persona + hook</button>
           </> : <><div className="ng-sh">value</div><div className="ng-wired">{n.t || n.hd}</div></>}
         </div>
         <div className="ng-col right"><div className="ng-sh">context</div><div className="ng-ctxrow">persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div><div className="ng-ctxrow">angle {ctx.angle}</div></div>
