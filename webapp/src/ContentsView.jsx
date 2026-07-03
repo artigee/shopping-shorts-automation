@@ -95,10 +95,7 @@ function ContentDetail({ data, onClose, onChange, goProducts }) {
   const [scenes, setScenes] = useState(() => { try { return content.scenes ? JSON.parse(content.scenes) : [] } catch { return [] } })
   const [form, setForm] = useState(content.final_form || 'card')
   const [busy, setBusy] = useState('')
-  const [busyMsg, setBusyMsg] = useState('')   // 잡 진행 라벨
   const [err, setErr] = useState(null)
-  const [modes, setModes] = useState([])       // 콘텐츠 모드(claim-safety) 목록
-  const [contentMode, setContentMode] = useState(content.content_mode || '')
   const [hf, setHf] = useState(null)   // Higgsfield 키 설정 여부
   const [genIdx, setGenIdx] = useState(-1)
   const [ver, setVer] = useState(0)    // 미디어 캐시 버스터 (재생성 후 즉시 갱신)
@@ -261,33 +258,15 @@ function ContentDetail({ data, onClose, onChange, goProducts }) {
     catch (e) { setErr(String(e.message || e)) } finally { setExporting(false) }
   }
 
-  // ③ 전체 스크립트(엔진) — 잡으로 실행. 재생성 = 저장된 이전 단계(분석+제품) 기반. 직접 편집은 onBlur 자동저장.
+  // ③ 전체 스크립트 — 재생성 = 저장된 이전 단계(분석+제품) 기반. 직접 편집은 onBlur 자동저장.
+  // (엔드포인트가 잡 방식이라 최소 poll만; 진행률/모드 UI는 노드 그래프 ⑤에 있음)
   async function genOverall() {
-    setBusy('overall'); setBusyMsg(''); setErr(null)
-    try {
-      const resp = await postJSON(`/api/contents/${content.id}/overall`, {})
-      if (resp && resp.jobId) { const o = await pollJob(resp.jobId, (jb) => setBusyMsg(jb.message || '')); if (o) setOverall(o) }
-      else setOverall(resp)   // 레거시 동기 응답
-    }
-    catch (e) { setErr(String(e.message || e)) } finally { setBusy(''); setBusyMsg('') }
+    setBusy('overall'); setErr(null)
+    try { const resp = await postJSON(`/api/contents/${content.id}/overall`, {}); const o = resp && resp.jobId ? await pollJob(resp.jobId) : resp; setOverall(o) }
+    catch (e) { setErr(String(e.message || e)) } finally { setBusy('') }
   }
-  // 마운트 시: 이 콘텐츠에 진행 중 overall 잡이 있으면 스피너를 재연결
-  useEffect(() => {
-    let cancelled = false
-    api(`/api/jobs?ref=contents:${content.id}&active=1&agent=overall`).then(({ job }) => {
-      if (cancelled || !job) return
-      setBusy('overall')
-      pollJob(job.id, (jb) => !cancelled && setBusyMsg(jb.message || ''))
-        .then((o) => { if (!cancelled && o) setOverall(o) })
-        .catch((e) => { if (!cancelled) setErr(String(e.message || e)) })
-        .finally(() => { if (!cancelled) { setBusy(''); setBusyMsg('') } })
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [content.id])
   function editO(f, v) { setOverall((o) => ({ ...(o || {}), [f]: v })) }
   async function saveOverall() { try { await postJSON(`/api/contents/${content.id}/overall`, { overall }, 'PUT') } catch {} }
-  useEffect(() => { api('/api/content-modes').then((r) => setModes(r.modes || [])).catch(() => {}) }, [])
-  async function saveContentMode(v) { setContentMode(v); try { await postJSON(`/api/contents/${content.id}/content-mode`, { mode: v || null }) } catch {} }
 
   // ④ 씬 스크립트 — 재생성 = 저장된 전체 스크립트 기반. 샷 개수 지정 가능. 자막·VO는 onBlur 자동저장.
   const [shotCount, setShotCount] = useState(content.shot_count ? String(content.shot_count) : '')
@@ -422,14 +401,7 @@ function ContentDetail({ data, onClose, onChange, goProducts }) {
 
         {/* 1. 전체 스크립트 */}
         <Section title={`1. ${t('전체 스크립트')}`} open={open.overall} onToggle={() => toggle('overall')}
-          right={<button className="primary" onClick={() => genOverall()} disabled={!ready || !!busy}>{busy === 'overall' ? <Dots label={busyMsg || t('생성')} /> : overall ? t('🔄 재생성') : t('▶ 생성')}</button>}>
-          <label className="fld" style={{ marginBottom: 4 }}><span>{t('콘텐츠 모드')}</span>
-            <select value={contentMode} onChange={(e) => saveContentMode(e.target.value)}>
-              <option value="">{t('안전 기본 (Curated Find)')}</option>
-              {modes.map((m) => <option key={m.key} value={m.key}>{m.label}{m.requires_footage ? ' — footage 필요' : ''}</option>)}
-            </select>
-          </label>
-          {(() => { const m = modes.find((x) => x.key === contentMode); return <p className="muted hint" style={{ margin: '0 2px 8px' }}>{m ? `${m.use_when} · ${t('허용')}: ${(m.allow || []).join(', ')} · ${t('금지')}: ${(m.ban || []).join(', ')}${m.requires_footage ? ' · ⚠ ' + t('직접 촬영 footage 있을 때만') : ''}` : t('미선택 시 안전 기본값(Curated Find) — 결과 단정을 관찰형으로 완화합니다.')}</p> })()}
+          right={<button className="primary" onClick={() => genOverall()} disabled={!ready || !!busy}>{busy === 'overall' ? <Dots label={t('생성')} /> : overall ? t('🔄 재생성') : t('▶ 생성')}</button>}>
           {overall ? (
             <div className="vbox" style={{ gap: 6 }}>
               <label className="fld"><span>{t('각도(angle)')}</span><input value={overall.angle || ''} onChange={(e) => editO('angle', e.target.value)} onBlur={saveOverall} /></label>
