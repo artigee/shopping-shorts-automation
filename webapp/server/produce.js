@@ -191,6 +191,18 @@ Output ONLY the prompt text (one paragraph), ending with "vertical 9:16, photore
   return stripFence(out).trim().replace(/^["']|["']$/g, '')
 }
 
+// 씬의 캐릭터·제품 "동작/행동" 모션 (image→video 클립용). 카메라 무빙 아님 — 카메라는 clip의 cameraMove가 담당.
+export async function generateMotionPrompt({ scene = {}, product, lang = 'English (US)' }) {
+  const prompt = `Write ONE short motion line (<= ~18 words) describing the SUBJECT motion for turning this shopping-short still into a short vertical video clip: what the PERSON does (a small natural gesture / bit of acting) and/or how the PRODUCT moves or is handled in-frame. This is NOT camera movement — describe ONLY character & product behavior. No transformations (folding / assembling / setup). Keep it subtle, realistic, and grounded in the scene beat.
+[Scene Title] ${scene.onScreenText || ''}
+[Scene VO] ${scene.vo || ''}
+[Image] ${(scene.imagePrompt || '').slice(0, 300)}
+Product: ${product?.title || ''}
+Output ONLY the motion line — no quotes, and no camera terms (pan, zoom, dolly, push-in, tilt, orbit) — in ${lang}.`
+  const out = await runClaude(prompt, { model: 'haiku', timeout: 60000 })
+  return (out || '').trim().split('\n')[0].replace(/^["']|["']$/g, '').slice(0, 200)
+}
+
 // 제품 + 릴스 분석을 보고 가장 잘 맞는 PERSONA + HOOK 추천 (이유 포함)
 export async function recommendPersonaHook({ productName, product, analysis, personas, hooks }) {
   const prompt = `You recommend the single best VO PERSONA and the single best HOOK shape for a US-market shopping short, based on the product and the reference reel's analysis. Choose what will make the MOST impactful, scroll-stopping short for THIS product and its likely buyer.

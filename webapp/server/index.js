@@ -10,7 +10,7 @@ import { extractProducts, identifyReel } from './extract.js'
 import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon.js'
 import { analyzeReel } from './analyze.js'
 import { matchProductByVision } from './match.js'
-import { generateOverall, generateScenes, translateVO, recommendPersonaHook, generateImagePrompt } from './produce.js'
+import { generateOverall, generateScenes, translateVO, recommendPersonaHook, generateImagePrompt, generateMotionPrompt } from './produce.js'
 import { getPersonas, getHooks, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
 import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady } from './higgsfield.js'
 import { buildPreview } from './preview.js'
@@ -848,6 +848,22 @@ async function genPromptForScene(c, scenes, i, guidance) {
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
   return scenes[i]
 }
+// 씬 스크립트 기반 모션 프롬프트(캐릭터·제품 동작) 생성
+async function genMotionForScene(c, scenes, i) {
+  const product = c.product ? JSON.parse(c.product) : null
+  const motionPrompt = await generateMotionPrompt({ scene: scenes[i], product, lang: genLang() })
+  scenes[i] = { ...scenes[i], motionPrompt }
+  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  return scenes[i]
+}
+// VO 텍스트(voEn) — 씬 VO를 음성용 영어 텍스트로 (영어면 그대로, 아니면 번역)
+async function genVoTextForScene(c, scenes, i) {
+  const vo = scenes[i].vo || scenes[i].onScreenText || ''
+  const voEn = /english/i.test(genLang()) ? vo : (await translateVO(vo)) || vo
+  scenes[i] = { ...scenes[i], voEn }
+  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  return scenes[i]
+}
 async function genImageForScene(c, scenes, i, promptOverride) {
   const product = c.product ? JSON.parse(c.product) : null
   const scenePrompt = promptOverride || scenes[i].imagePrompt || buildImagePrompt(scenes[i], product)
@@ -969,6 +985,28 @@ app.post('/api/contents/:id/scene/:index/prompt', async (req, res) => {
   const i = Number(req.params.index)
   if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
   try { const scene = await genPromptForScene(c, scenes, i, req.body && req.body.guidance); res.json({ ok: true, scene }) }
+  catch (e) { res.status(500).json({ error: e.message || String(e) }) }
+})
+
+// 씬 모션 프롬프트 생성 (캐릭터·제품 동작 — 씬 스크립트 기반)
+app.post('/api/contents/:id/scene/:index/motion', async (req, res) => {
+  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
+  const scenes = getScenes(c)
+  const i = Number(req.params.index)
+  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
+  try { const scene = await genMotionForScene(c, scenes, i); res.json({ ok: true, scene }) }
+  catch (e) { res.status(500).json({ error: e.message || String(e) }) }
+})
+
+// 씬 VO 텍스트(voEn) 생성 (씬 VO → 음성용 영어 텍스트)
+app.post('/api/contents/:id/scene/:index/votext', async (req, res) => {
+  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
+  const scenes = getScenes(c)
+  const i = Number(req.params.index)
+  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
+  try { const scene = await genVoTextForScene(c, scenes, i); res.json({ ok: true, scene }) }
   catch (e) { res.status(500).json({ error: e.message || String(e) }) }
 })
 

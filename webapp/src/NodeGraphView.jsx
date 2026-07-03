@@ -224,16 +224,19 @@ function NodeGraphInner() {
       return
     }
     const k = n.scene ? n.scene - 1 : null                        // 0-based 씬 index
-    const isImagePrompt = typeof n.id === 'string' && n.id.startsWith('prompt-')
-    const ep = isImagePrompt ? 'prompt' : n.kind === 'image' ? 'image' : n.kind === 'clip' ? 'clip' : n.kind === 'vo' ? 'vo' : null
-    if (!ep || k == null) { setErr(`'${n.hd}' re-run isn't wired yet (supported: overall · image-prompt · image · clip · vo).`); return }
+    const id = typeof n.id === 'string' ? n.id : ''
+    const ep = id.startsWith('prompt-') ? 'prompt' : id.startsWith('promptV-') ? 'votext' : id.startsWith('promptM-') ? 'motion'
+      : n.kind === 'image' ? 'image' : n.kind === 'clip' ? 'clip' : n.kind === 'vo' ? 'vo' : null
+    if (!ep || k == null) { setErr(`'${n.hd}' re-run isn't wired (supported: overall · image-prompt · motion · VO-text · image · clip · vo).`); return }
     setRunning({ id: n.id, msg: 'running…' })
     try {
-      await postJSON(`/api/contents/${cid}/scene/${k}/${ep}`, {})   // 저장된 값 기준 재생성
+      await postJSON(`/api/contents/${cid}/scene/${k}/${ep}`, {})   // 씬 스크립트 기반 생성
       const r = await api(`/api/contents/${cid}`)                   // 새 씬 데이터 가져와 (buildGraph와 동일 필드로) 노드 갱신
       const s = (parse(r.content?.scenes) || [])[k] || {}
       commitRun(n.id, (x) => {
-        if (isImagePrompt) return { ...x, dirty: false, t: (s.imagePrompt || '').slice(0, 90), data: { ...x.data, prompt: s.imagePrompt || '' } }
+        if (id.startsWith('prompt-')) return { ...x, dirty: false, t: (s.imagePrompt || '').slice(0, 90), data: { ...x.data, prompt: s.imagePrompt || '' } }
+        if (id.startsWith('promptV-')) return { ...x, dirty: false, t: (s.voEn || '').slice(0, 90), data: { ...x.data, prompt: s.voEn || '' } }
+        if (id.startsWith('promptM-')) return { ...x, dirty: false, t: (s.motionPrompt || '').slice(0, 90), data: { ...x.data, prompt: s.motionPrompt || '' } }
         if (x.kind === 'image') return { ...x, dirty: false, thumb: media(s.image), data: { ...x.data, image: s.image || '', imagePrompt: s.imagePrompt || '' } }
         if (x.kind === 'clip') return { ...x, dirty: false, video: media(s.video), image: media(s.image) }
         if (x.kind === 'vo') return { ...x, dirty: false, audio: media(s.audio) }
@@ -482,9 +485,10 @@ function Field({ c, d, onField, onCommit }) {
 
 function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, incoming, outgoing }) {
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
-  // re-run은 실제 재생성 엔드포인트가 있는 노드만: overall · image-prompt(prompt-) · image · clip · vo.
-  // scene-script / VO text(promptV-) / motion prompt(promptM-)는 "편집"이 소스 → re-run 없음(편집 저장으로 반영).
-  const canRun = !!k && !k.source && (n.kind === 'overall' || n.kind === 'image' || n.kind === 'clip' || n.kind === 'vo' || (typeof n.id === 'string' && n.id.startsWith('prompt-')))
+  // re-run = 씬 스크립트 기반으로 생성하는 노드: overall · image-prompt · motion-prompt · VO-text · image · clip · vo.
+  // scene-script(script-)만 "편집이 소스" → re-run 없음. 생성된 노드들은 생성 후 편집 가능.
+  const isGenPrompt = typeof n.id === 'string' && (n.id.startsWith('prompt-') || n.id.startsWith('promptV-') || n.id.startsWith('promptM-'))
+  const canRun = !!k && !k.source && (n.kind === 'overall' || n.kind === 'image' || n.kind === 'clip' || n.kind === 'vo' || isGenPrompt)
   const header = (
     <div className="ng-dh">
       <span className="ng-k" style={{ background: c }} />
