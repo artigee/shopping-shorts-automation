@@ -283,16 +283,17 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     }
     const k = n.scene ? n.scene - 1 : null                        // 0-based 씬 index
     const id = typeof n.id === 'string' ? n.id : ''
-    const ep = id.startsWith('prompt-') ? 'prompt' : id.startsWith('promptV-') ? 'votext' : id.startsWith('promptM-') ? 'motion'
+    const ep = id.startsWith('script-') ? 'script' : id.startsWith('prompt-') ? 'prompt' : id.startsWith('promptV-') ? 'votext' : id.startsWith('promptM-') ? 'motion'
       : n.kind === 'image' ? 'image' : n.kind === 'clip' ? 'clip' : n.kind === 'vo' ? 'vo' : null
-    if (!ep || k == null) { setErr(`'${n.hd}' re-run isn't wired (supported: overall · image-prompt · motion · VO-text · image · clip · vo).`); return }
+    if (!ep || k == null) { setErr(`'${n.hd}' re-run isn't wired (supported: overall · scene-script · image-prompt · motion · VO-text · image · clip · vo).`); return }
     setRunning({ id: n.id, msg: 'running…', t0 })
     try {
-      const body = (ep === 'prompt' || ep === 'motion' || ep === 'votext') ? { guidance: n.data.guidance || '' } : {}
+      const body = (ep === 'prompt' || ep === 'motion' || ep === 'votext' || ep === 'script') ? { guidance: n.data.guidance || '' } : {}
       await postJSON(`/api/contents/${cid}/scene/${k}/${ep}`, body)   // 씬 스크립트 + input prompt(guidance) 기반 생성
       const r = await api(`/api/contents/${cid}`)                   // 새 씬 데이터 가져와 (buildGraph와 동일 필드로) 노드 갱신
       const s = (parse(r.content?.scenes) || [])[k] || {}
       commitRun(n.id, (x) => {
+        if (id.startsWith('script-')) return { ...x, dirty: false, t: s.onScreenText || '', data: { ...x.data, title: s.onScreenText || '', vo: s.vo || '' } }
         if (id.startsWith('prompt-')) return { ...x, dirty: false, t: (s.imagePrompt || '').slice(0, 90), data: { ...x.data, prompt: s.imagePrompt || '' } }
         if (id.startsWith('promptV-')) return { ...x, dirty: false, t: (s.voEn || '').slice(0, 90), data: { ...x.data, prompt: s.voEn || '' } }
         if (id.startsWith('promptM-')) return { ...x, dirty: false, t: (s.motionPrompt || '').slice(0, 90), data: { ...x.data, prompt: s.motionPrompt || '' } }
@@ -748,7 +749,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
   // re-run = 씬 스크립트 기반으로 생성하는 노드: overall · image-prompt · motion-prompt · VO-text · image · clip · vo.
   // scene-script(script-)만 "편집이 소스" → re-run 없음. 생성된 노드들은 생성 후 편집 가능.
   const isGenPrompt = typeof n.id === 'string' && (n.id.startsWith('prompt-') || n.id.startsWith('promptV-') || n.id.startsWith('promptM-'))
-  const canRun = !!k && !k.source && (n.kind === 'overall' || n.kind === 'image' || n.kind === 'clip' || n.kind === 'vo' || n.kind === 'movie' || isGenPrompt)
+  const canRun = !!k && !k.source && (n.kind === 'overall' || n.kind === 'script' || n.kind === 'image' || n.kind === 'clip' || n.kind === 'vo' || n.kind === 'movie' || isGenPrompt)
   const header = (
     <div className="ng-dh">
       <span className="ng-k" style={{ background: c }} />
@@ -843,6 +844,34 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
           </> : <><div className="ng-sh">value</div><div className="ng-wired">{n.t || n.hd}</div></>}
         </div>
         <div className="ng-col right"><div className="ng-sh">context</div><div className="ng-ctxrow">persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div><div className="ng-ctxrow">angle {ctx.angle}</div></div>
+      </div>
+    )
+  } else if (n.kind === 'script') {
+    // scene script: ① input(Script Engine/overall) ② instruction ③ output(Title + VO, editable)
+    const eng = incoming.find((x) => x.kind === 'overall')
+    body = (
+      <div className="ng-db">
+        <div className="ng-col">
+          <div className="ng-sh">① input · from Script Engine</div>
+          <div className="ng-srcbox">
+            {eng ? <>
+              {eng.data?.hookLine ? <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>hook</b> {eng.data.hookLine}</div> : null}
+              {eng.data?.vo ? <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>story</b> {String(eng.data.vo).slice(0, 260)}{String(eng.data.vo).length > 260 ? '…' : ''}</div> : null}
+              {eng.data?.cta ? <div className="ng-kvtext"><b style={{ color: '#c9b3ea' }}>cta</b> {eng.data.cta}</div> : null}
+              {!eng.data?.hookLine && !eng.data?.vo ? <span className="ng-none">— Script Engine empty (run it first) —</span> : null}
+            </> : <span className="ng-none">— not linked to Script Engine —</span>}
+          </div>
+          <div className="ng-sh top">② instruction <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· steer the LLM (optional)</em></div>
+          <textarea className="ng-instruct" value={d.guidance || ''} placeholder="e.g. punchier hook · mention the price · shorter VO — then ▶ re-run" onChange={(e) => onField('guidance', e.target.value)} onBlur={onCommit} />
+        </div>
+        <div className="ng-col right">
+          <div className="ng-sh">③ output · scene script <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· editable</em></div>
+          <div className="ng-prop"><label>title</label><input value={d.title || ''} placeholder="on-screen title" onChange={(e) => onField('title', e.target.value)} onBlur={onCommit} /></div>
+          <div className="ng-slot-h" style={{ marginTop: 8 }}><span>VO</span></div>
+          <textarea className="ng-big" style={{ minHeight: 90 }} value={d.vo || ''} placeholder="spoken line" onChange={(e) => onField('vo', e.target.value)} onBlur={onCommit} />
+          <div className="ng-sh top">→ feeds</div>
+          <div className="ng-wired">{outgoing && outgoing.length ? outgoing.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>) : <span className="ng-none">— not connected —</span>}</div>
+        </div>
       </div>
     )
   } else if (n.kind === 'prompt') {

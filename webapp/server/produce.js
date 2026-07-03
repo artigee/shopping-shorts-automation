@@ -149,6 +149,29 @@ Output ONLY a JSON array (no explanation):
   return scenes.map((s, i) => ({ id: i + 1, makeVideo: false, ...s }))
 }
 
+// 한 씬의 스크립트(Title + VO)만 재생성 — overall(input) + instruction(guidance) 기반, 나머지 씬과 겹치지 않게
+export async function generateSceneScript({ overall, product, productName, scenes = [], sceneIndex = 0, sceneTotal = 1, persona, hook, contentMode, hasFootage = false, guidance, lang = 'English (US, American audience)' }) {
+  const isFirst = sceneIndex === 0, isLast = sceneTotal > 1 && sceneIndex === sceneTotal - 1
+  const roleRule = isLast
+    ? 'This is the CTA scene (last): onScreenText = the comment-keyword caption (e.g. "Comment WANT IT 👇"); vo = the spoken casual ask to comment the keyword for the link (not a hard sell, and NOT just a sign-off).'
+    : isFirst ? 'This is the HOOK scene (scene 1): apply the hook shape — a scroll-stopping cold open that lands in ~1.5s.'
+      : 'A middle beat — select and sharpen the single strongest beat for this position in the arc.'
+  const others = scenes.map((s, i) => i === sceneIndex ? `[${i + 1}] ← THIS scene (the one you rewrite)` : `[${i + 1}] title:"${s.onScreenText || ''}" vo:"${s.vo || ''}"`).join('\n')
+  const prompt = `You are crafting ONE scene of a ${lang}-market shopping short. Rewrite ONLY scene ${sceneIndex + 1} of ${sceneTotal} — its on-screen Title and spoken VO — distilled from the overall story, keeping the arc and NOT duplicating the other scenes. ALL text natively in ${lang}.
+${roleRule}
+[VO vs TITLE — the key rule] onScreenText = a SHORT punchy claim/spec (<= ~5 words) that carries the FACT. vo = a FRESH tight spoken line in the PERSONA that REACTS / reveals the mechanism — it must NEVER restate the title. Delete-test: if the title alone conveys the vo, rewrite the vo.
+${personaBlock(persona)}${hookBlock(hook)}${banBlock()}${rulesBlock()}${contentSafetyBlock(contentMode, { hasFootage })}
+${guidance && guidance.trim() ? '[INSTRUCTION — honor this above all] ' + guidance.trim() : ''}
+[Overall story]
+${JSON.stringify(overall).slice(0, 2600)}
+[My product] ${productLine(productName, product)}
+[All scenes — context, keep THIS one distinct]
+${others}
+Output ONLY JSON: {"onScreenText":"...","vo":"..."}`
+  for (let k = 0; k < 2; k++) { const out = await runClaude(prompt); try { const j = JSON.parse(stripFence(out)); if (j && (j.onScreenText || j.vo)) return { onScreenText: j.onScreenText || '', vo: j.vo || '' } } catch { /* retry */ } }
+  throw new Error('씬 스크립트 생성 파싱 실패')
+}
+
 // 씬 1개의 이미지 프롬프트(영어) 생성 — 씬 스크립트는 Title+VO만 있으므로 여기서 비주얼을 정한다. 빠르게 haiku.
 export async function generateImagePrompt({ scene = {}, productName, product, style, sceneIndex = 0, sceneTotal = 1, guidance, cosmetic = false, lang = 'English (US)' }) {
   const guideBlk = guidance && guidance.trim()

@@ -10,7 +10,7 @@ import { extractProducts, identifyReel } from './extract.js'
 import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon.js'
 import { analyzeReel } from './analyze.js'
 import { matchProductByVision } from './match.js'
-import { generateOverall, generateScenes, translateVO, recommendPersonaHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
+import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
 import { getPersonas, getHooks, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
 import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady } from './higgsfield.js'
 import { buildPreview } from './preview.js'
@@ -878,6 +878,17 @@ async function genPromptForScene(c, scenes, i, guidance) {
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
   return scenes[i]
 }
+// 한 씬의 스크립트(Title + VO) 재생성 — overall + guidance 기반
+async function genSceneScriptForScene(c, scenes, i, guidance) {
+  const overall = c.overall ? JSON.parse(c.overall) : null
+  if (!overall) throw new Error('먼저 Script Engine으로 전체 스크립트를 생성하세요.')
+  const product = c.product ? JSON.parse(c.product) : null
+  const a = c.analysis_id ? db.prepare('SELECT title FROM analyses WHERE id = ?').get(c.analysis_id) : null
+  const r = await generateSceneScript({ overall, product, productName: product?.title || a?.title, scenes, sceneIndex: i, sceneTotal: scenes.length, persona: c.persona, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', guidance, lang: genLang() })
+  scenes[i] = { ...scenes[i], onScreenText: r.onScreenText, vo: r.vo }
+  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  return scenes[i]
+}
 // 씬 스크립트 기반 모션 프롬프트(캐릭터·제품 동작) 생성 — guidance(input prompt)로 조정
 async function genMotionForScene(c, scenes, i, guidance) {
   const product = c.product ? JSON.parse(c.product) : null
@@ -1029,6 +1040,17 @@ app.post('/api/contents/:id/scene/:index/prompt', async (req, res) => {
   const i = Number(req.params.index)
   if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
   try { const scene = await genPromptForScene(c, scenes, i, req.body && req.body.guidance); res.json({ ok: true, scene }) }
+  catch (e) { res.status(500).json({ error: e.message || String(e) }) }
+})
+
+// 씬 스크립트(Title+VO) 재생성 — overall + guidance(instruction) 기반
+app.post('/api/contents/:id/scene/:index/script', async (req, res) => {
+  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
+  const scenes = getScenes(c)
+  const i = Number(req.params.index)
+  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
+  try { const scene = await genSceneScriptForScene(c, scenes, i, req.body && req.body.guidance); res.json({ ok: true, scene }) }
   catch (e) { res.status(500).json({ error: e.message || String(e) }) }
 })
 
