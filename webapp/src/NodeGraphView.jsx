@@ -164,10 +164,12 @@ function NodeGraphInner() {
   const [wireEnd, setWireEnd] = useState(null)
   const [locked, setLocked] = useState(false)
   const [framing, setFraming] = useState(false)
+  const [sourceStale, setSourceStale] = useState(false)   // 소스 분석이 재분석돼 그래프가 오래됨
   const nodeRefs = useRef({})
   const canvasRef = useRef(null)
   const pan = useRef(null), drag = useRef(null), libUid = useRef(0)
   const ngRef = useRef(ng); ngRef.current = ng
+  const srcSig = useRef(null)               // 로드 당시 소스 분석 시그니처(analyzed_at)
   const hist = useRef({ past: [], future: [], key: null })
   const dragSnap = useRef(null)
   const [histN, setHistN] = useState({ u: 0, r: 0 })
@@ -183,7 +185,17 @@ function NodeGraphInner() {
   useEffect(() => {
     api('/api/contents').then((cs) => { setList(cs); setCid((prev) => prev ?? (cs.find((c) => c.id === 27)?.id ?? cs.find((c) => c.scenes)?.id ?? cs[0]?.id ?? null)) }).catch((e) => setErr(String(e.message || e)))
   }, [])
-  useEffect(() => { if (cid == null) return; setData(null); setErr(null); setSel(null); api(`/api/contents/${cid}`).then((r) => setData(adapt(r))).catch((e) => setErr(String(e.message || e))) }, [cid])
+  useEffect(() => { if (cid == null) return; setData(null); setErr(null); setSel(null); setSourceStale(false); api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }, [cid])
+  // 소스 분석 변경 감지 — 재분석(잡)이 끝나 analyzed_at가 바뀌면 stale 배너. 창 포커스 + 25s 주기.
+  useEffect(() => {
+    if (cid == null) return
+    const check = () => api(`/api/contents/${cid}`).then((r) => { const sig = r.analysis?.analyzed_at || null; if (srcSig.current != null && sig !== srcSig.current) setSourceStale(true) }).catch(() => {})
+    const onVis = () => { if (document.visibilityState === 'visible') check() }
+    document.addEventListener('visibilitychange', onVis)
+    const iv = setInterval(check, 25000)
+    return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(iv) }
+  }, [cid])
+  function refreshSource() { if (cid == null) return; api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setSourceStale(false); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }
   useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
 
   const graph = ng
@@ -293,6 +305,13 @@ function NodeGraphInner() {
         <button className="ng-libtoggle" onClick={redo} disabled={!histN.r} title="redo (⇧⌘Z)">↷</button>
         <select value={cid ?? ''} onChange={(e) => setCid(Number(e.target.value))}>{list.map((c) => <option key={c.id} value={c.id}>#{c.id} {(c.title || 'untitled').slice(0, 30)}</option>)}</select>
       </div>
+      {sourceStale && (
+        <div className="ng-stale">
+          <span>⟳ Source analysis was updated.</span>
+          <button onClick={refreshSource} title="rebuild graph from the new analysis — discards local graph edits">Refresh graph</button>
+          <button className="dismiss" onClick={() => setSourceStale(false)}>Dismiss</button>
+        </div>
+      )}
       {err && <div className="ng-err">{err}</div>}
       <div className="ng-canvas" ref={canvasRef} onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onContextMenu={onCanvasMenu}>
         {!data && <div className="ng-loading">loading #{cid}…</div>}

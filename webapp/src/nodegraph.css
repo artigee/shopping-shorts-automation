@@ -43,6 +43,9 @@
 .ng-libtoggle { background: #232328; color: #e8e6dd; border: 1px solid #2f2f36; border-radius: 8px; padding: 5px 11px; font-size: 12.5px; cursor: pointer; }
 .ng-libtoggle.on { border-color: #5DCAA5; color: #5DCAA5; }
 .ng-libtoggle:disabled { opacity: .32; cursor: default; }
+.ng-stale { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 11; display: flex; align-items: center; gap: 10px; background: #2b2618; border: 1px solid #e0a341; border-radius: 9px; padding: 7px 12px; font-size: 12.5px; color: #e8d9b0; box-shadow: 0 8px 24px -8px #000; }
+.ng-stale button { background: #e0a341; color: #17171a; border: 0; border-radius: 6px; padding: 4px 11px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.ng-stale button.dismiss { background: transparent; color: #b7ac93; border: 1px solid #4a4636; font-weight: 400; }
 .ng-libpanel { position: absolute; top: 42px; left: 0; bottom: 0; width: 270px; z-index: 9; background: rgba(24,24,28,.98); border-right: 1px solid #2f2f36; overflow: auto; padding: 4px 12px 20px; transition: bottom .22s cubic-bezier(.22,.61,.36,1); }
 .ng-libzone { border: 1px solid transparent; border-radius: 10px; padding: 2px 4px 6px; }
 .ng-libzone.drag { border-color: #5DCAA5; background: rgba(93,202,165,.06); }
