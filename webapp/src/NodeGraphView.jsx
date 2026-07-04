@@ -374,6 +374,13 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     staleAllOnLoad.current = false                      // 정확한 이전 상태로 복원 → stale 아님 (undo = 원상복구)
     srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setData(adapt(r)); sync()
   }
+  // 샷 수 수동 오버라이드 제거 → auto(플랜이 결정). undo 가능.
+  async function clearShotOverride() {
+    if (cid == null) return
+    await pushUndo()
+    setNodeData('overall', { shotCount: '' })
+    postJSON(`/api/contents/${cid}/shot-count`, { shotCount: '' }).catch(() => {})
+  }
   // 릴스(분석) 스왑 — 이 콘텐츠를 다른 분석 릴스 템플릿으로 갈아끼운다. 제품 유지, 하류 stale. undo 가능.
   async function swapAnalysis(analysisId) {
     if (cid == null || running) return
@@ -660,7 +667,9 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 <div className="ng-hd" style={{ color: c }}><span className="ng-dot" style={{ background: c }} />{n.hd}</div>
                 {n.t && n.kind !== 'prompt' && <div className="ng-t">{n.t}</div>}
                 {n.kind === 'overall' && (() => { const tgt = Number(n.data?.durationSec) || 0, drift = tgt ? Math.abs(scenesDur - tgt) / tgt : 0; return <div className={'ng-dur-readout' + (tgt && drift > 0.2 ? ' off' : '')}>Σ shots {scenesDur}s{tgt ? ` / ${tgt}s target` : ''}</div> })()}
-                {n.kind === 'overall' && (n.data?.shotCount || n.data?.recShotCount) && <div className="ng-dur-readout" title={n.data?.recShotWhy || ''} style={{ marginTop: 3 }}>{n.data?.shotCount ? `${n.data.shotCount} shots (you set)` : `plan → ${n.data.recShotCount} shots`}</div>}
+                {n.kind === 'overall' && (n.data?.shotCount || n.data?.recShotCount) && <div className="ng-dur-readout" title={n.data?.recShotWhy || ''} style={{ marginTop: 3 }}>{n.data?.shotCount
+                  ? <>shots: <b>{n.data.shotCount}</b> <span style={{ opacity: .65 }}>override</span>{n.data?.recShotCount ? ` · plan → ${n.data.recShotCount}` : ''} <button className="ng-clearshots" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); clearShotOverride() }} title="clear the manual shot count → let the plan decide">× auto</button></>
+                  : `plan → ${n.data.recShotCount} shots`}</div>}
                 {n.sub && <div className="ng-sub">{n.sub}</div>}
                 {n.kind === 'vo' && (n.audio ? <VoPlayer src={n.audio} /> : <div className="ng-sub">no VO yet</div>)}
                 {n.kind === 'clip' && <div className="ng-pill">{n.data?.makeVideo === 'still' ? '🖼 still' : '🎥 ' + cameraMoveName(n.data?.cameraMove, lib.moves)}</div>}
