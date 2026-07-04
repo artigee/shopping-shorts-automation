@@ -811,7 +811,10 @@ app.post('/api/contents/:id/overall', (req, res) => {
     progress('스토리 스크립트 작성 중… (~1분)', 30)
     const overall = await generateOverall({ analysis: JSON.parse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', lang: genLang() })
     progress('저장 중…', 90)
-    db.prepare(`UPDATE contents SET overall = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(overall), c.id)
+    // Script Engine 실행 = 샷 수 추천값을 편집 가능한 값으로 재시드(re-initiate). 이후 사용자가 편집 가능, 다시 실행하면 다시 시드.
+    const rec = Number(overall.shotCount)
+    const seed = (Number.isInteger(rec) && rec >= 3 && rec <= 12) ? rec : null
+    db.prepare(`UPDATE contents SET overall = ?, shot_count = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(overall), seed, c.id)
     return overall
   })
   res.json({ jobId: job.id })

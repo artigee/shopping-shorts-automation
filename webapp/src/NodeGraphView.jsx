@@ -34,7 +34,7 @@ const EDGE_COLOR = { flow: '#7d8590', global: '#9a86c8', audio: '#e0c85d', produ
 const KIND = {
   analysis: { out: { t: 'analysis', n: 'reel structure' }, source: true, editor: { field: 'angle', label: 'structure / angle (from reel analysis)' }, config: [] },
   overall: { out: { t: 'text', n: 'scene[] · N ordered', array: true }, editor: { field: 'vo', label: 'overall VO — the through-line' },
-    config: [{ f: 'shotCount', label: 'shots', ph: 'auto → plan decides (3-9) · or set 3-9' }, { f: 'durationSec', label: 'total (s)', ph: 'default = reel length' }, { f: 'direction', ph: 'hook·shot direction' }, { f: 'angle' }, { f: 'hookLine' }, { f: 'cta' }, { f: 'beats' }, { f: 'guidance', ph: 'steer re-run' }] },
+    config: [{ f: 'shotCount', label: 'shots', ph: 'set by Script Engine (3-9) · edit to override · re-run reinitiates' }, { f: 'durationSec', label: 'total (s)', ph: 'default = reel length' }, { f: 'direction', ph: 'hook·shot direction' }, { f: 'angle' }, { f: 'hookLine' }, { f: 'cta' }, { f: 'beats' }, { f: 'guidance', ph: 'steer re-run' }] },
   script: { out: { t: 'text', n: 'Title + VO' }, editor: { field: 'vo', label: 'scene VO' }, config: [{ f: 'title', ph: 'on-screen title' }, { f: 'guidance', ph: 'steer re-run' }] },
   prompt: { out: { t: 'text', n: 'prompt text' }, editor: { field: 'prompt', label: 'output prompt (generated · feeds downstream)', readOnly: true }, config: [{ f: 'guidance', label: 'input prompt', multiline: true, ph: 'instruction to the LLM — e.g. closer shot · warmer tone · punchier' }] },
   image: { out: { t: 'image', n: 'scene .png' }, config: [{ f: 'frameRole', choices: ['start', 'end'] }, { f: 'aspect', choices: ['9:16', '4:5', '1:1', '16:9'] }, { f: 'model', choices: ['auto', 'nano_banana_pro', 'marketing_studio_image'] }, { f: 'style', ph: 'all-scene style' }, { f: 'seed', ph: 'random' }, { f: 'guidance', ph: 'steer re-run' }] },
@@ -275,7 +275,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       try {
         const resp = await postJSON(`/api/contents/${cid}/overall`, {})
         const o = resp && resp.jobId ? await pollJob(resp.jobId, (jb) => setRunning({ id: n.id, msg: jb.message || '', t0 })) : resp
-        if (o) commitRun(n.id, (x) => ({ ...x, dirty: false, data: { ...x.data, angle: o.angle ?? x.data.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || '') } }))
+        if (o) commitRun(n.id, (x) => ({ ...x, dirty: false, data: { ...x.data, angle: o.angle ?? x.data.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || ''), shotCount: (Number(o.shotCount) >= 3 && Number(o.shotCount) <= 12) ? String(o.shotCount) : x.data.shotCount, recShotWhy: o.shotCountWhy || '' } }))
       } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
       return
     }
@@ -373,13 +373,6 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     const r = await api(`/api/contents/${cid}`)
     staleAllOnLoad.current = false                      // 정확한 이전 상태로 복원 → stale 아님 (undo = 원상복구)
     srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setData(adapt(r)); sync()
-  }
-  // 샷 수 수동 오버라이드 제거 → auto(플랜이 결정). undo 가능.
-  async function clearShotOverride() {
-    if (cid == null) return
-    await pushUndo()
-    setNodeData('overall', { shotCount: '' })
-    postJSON(`/api/contents/${cid}/shot-count`, { shotCount: '' }).catch(() => {})
   }
   // 릴스(분석) 스왑 — 이 콘텐츠를 다른 분석 릴스 템플릿으로 갈아끼운다. 제품 유지, 하류 stale. undo 가능.
   async function swapAnalysis(analysisId) {
@@ -667,9 +660,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 <div className="ng-hd" style={{ color: c }}><span className="ng-dot" style={{ background: c }} />{n.hd}</div>
                 {n.t && n.kind !== 'prompt' && <div className="ng-t">{n.t}</div>}
                 {n.kind === 'overall' && (() => { const tgt = Number(n.data?.durationSec) || 0, drift = tgt ? Math.abs(scenesDur - tgt) / tgt : 0; return <div className={'ng-dur-readout' + (tgt && drift > 0.2 ? ' off' : '')}>Σ shots {scenesDur}s{tgt ? ` / ${tgt}s target` : ''}</div> })()}
-                {n.kind === 'overall' && (n.data?.shotCount || n.data?.recShotCount) && <div className="ng-dur-readout" title={n.data?.recShotWhy || ''} style={{ marginTop: 3 }}>{n.data?.shotCount
-                  ? <>shots: <b>{n.data.shotCount}</b> <span style={{ opacity: .65 }}>override</span>{n.data?.recShotCount ? ` · plan → ${n.data.recShotCount}` : ''} <button className="ng-clearshots" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); clearShotOverride() }} title="clear the manual shot count → let the plan decide">× auto</button></>
-                  : `plan → ${n.data.recShotCount} shots`}</div>}
+                {n.kind === 'overall' && n.data?.shotCount && <div className="ng-dur-readout" title={n.data?.recShotWhy ? 'why: ' + n.data.recShotWhy + ' — editable; re-run reinitiates' : 'editable in the drawer; re-run reinitiates'} style={{ marginTop: 3 }}>{n.data.shotCount} shots <span style={{ opacity: .6 }}>· editable</span></div>}
                 {n.sub && <div className="ng-sub">{n.sub}</div>}
                 {n.kind === 'vo' && (n.audio ? <VoPlayer src={n.audio} /> : <div className="ng-sub">no VO yet</div>)}
                 {n.kind === 'clip' && <div className="ng-pill">{n.data?.makeVideo === 'still' ? '🖼 still' : '🎥 ' + cameraMoveName(n.data?.cameraMove, lib.moves)}</div>}
