@@ -162,6 +162,8 @@
 .ng-crash button { background: #232328; color: #ddd; border: 1px solid #43434c; border-radius: 7px; padding: 6px 14px; cursor: pointer; }
 .ng-db { flex: 1; overflow: auto; display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); gap: 0; }
 .ng-db.ng-analysis { grid-template-columns: 1fr 1fr; }
+.ng-swaphint { position: absolute; bottom: 8px; right: 8px; z-index: 3; background: rgba(93,202,165,.14); border: 1px solid #5DCAA5; color: #7fe6c4; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 9px; font-weight: 600; padding: 2px 8px; border-radius: 20px; cursor: pointer; }
+.ng-swaphint:hover { background: #5DCAA5; color: #10231d; }
 .ng-swaprow { grid-column: 1 / -1; padding: 4px 10px 8px; border-bottom: 1px solid #2a2a30; margin-bottom: 6px; }
 .ng-swapbtn { width: 100%; text-align: left; background: #1e1e22; border: 1px solid #3a3a42; color: #cdd6e6; font-size: 12px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
 .ng-swapbtn:hover, .ng-swapbtn.on { border-color: #5DCAA5; color: #e8e6dd; }
