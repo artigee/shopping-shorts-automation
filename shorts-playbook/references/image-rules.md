@@ -25,8 +25,11 @@ Sweet spot: instantly recognizable as the real product, yet the viewer still has
 
 ## 4. Emotion & beat — ONE frozen expression, not a sequence
 - Render **this scene's** emotion / expression (provided per scene), in the creator's **persona register** — do NOT default every shot to the same expression (e.g. the same skeptical squint on every frame).
-- Describe **ONE frozen facial expression — a single held instant.** A still can only show one moment, so **never write a sequence of movements**: no "gaze drifts up **then returns**", no "mouth **settling into** a wry turn", no before→after in one frame. Those average out into a generic soft face.
-- Freeze the beat's **peak / resolved moment** — the money look the shot is about (the "end" state of the reaction), described as a static pose: e.g. ✅ "eyes just back to center, one brow slightly raised, a small wry half-smile held" (not "her eyes drift then return"). This frozen frame is also the clip's base keyframe; the motion prompt adds subtle life (a breath, a small settle), not a full expression change.
+- Describe **ONE frozen facial expression — a single held instant.** A still can only show one moment, so **never write a sequence of movements**: no "gaze drifts up **then returns**", no "mouth **settling into** a wry turn". Those average out into a generic soft face. Describe it as a static held pose: e.g. ✅ "one brow slightly raised, a small wry half-smile held" (not "her eyes drift then return").
+- **Which instant to freeze depends on the image's FRAME ROLE** (a clip renders motion between a start frame and an end frame):
+  - **start frame** = the ONSET of the beat — the reaction just beginning (first flicker of doubt, gaze just landing, mouth about to move).
+  - **end frame** = the RESOLVED / peak moment — the settled payoff look (the "oh, that's why", the earned half-smile).
+  - The two frames are the two ends of the SAME micro-reaction, so the clip can animate smoothly between them. If a scene has only one frame, freeze the resolved/peak.
 - The emotion must match the beat: a doubt beat reads as doubt, a value-reveal reads as a small realization, the CTA reads as warm/inviting.
 - **Show, don't tell:** only what the camera literally sees (subject, setting, action, framing, light) — no emotional narration ("quiet triumph", "relief").
 
