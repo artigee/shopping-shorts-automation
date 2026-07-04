@@ -197,6 +197,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const [histN, setHistN] = useState({ u: 0, r: 0 })
   const [analyses, setAnalyses] = useState([])          // 릴스 스왑용 분석 컬렉션 (② 이전 단계)
   const staleAllOnLoad = useRef(false)                   // 스왑 후 하류 노드 stale 표시
+  const [swapUndo, setSwapUndo] = useState(null)         // 마지막 릴스 스왑 되돌리기 { fromId }
 
   useLayoutEffect(() => { const h = document.querySelector('header')?.offsetHeight; if (h) setTop(h) }, [])
   useEffect(() => {
@@ -267,7 +268,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   // 노드 실행 — 각 노드를 백엔드 엔드포인트로 재생성하고 결과를 노드에 반영. 지원: overall · image-prompt · image · clip · vo.
   async function runNode(n) {
     if (cid == null || running) return
-    setErr(null)
+    setErr(null); setSwapUndo(null)   // 재생성이 시작되면 스왑-되돌리기는 더 이상 깨끗하지 않으므로 배너 닫음
     const t0 = Date.now()
     if (n.kind === 'overall') {
       setRunning({ id: n.id, msg: 'starting…', t0 })
@@ -360,22 +361,24 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   }
   async function runBatchAll() { for (const k of ['images', 'clips', 'vo']) await runBatchKind(k) }
   // 릴스(분석) 스왑 — 이 콘텐츠를 다른 분석 릴스 템플릿으로 갈아끼운다. 제품은 유지, 하류는 stale.
-  async function swapAnalysis(analysisId) {
+  async function swapAnalysis(analysisId, opts = {}) {
     if (cid == null || running) return
-    if (analysisId === graph.nodes.find((n) => n.kind === 'analysis')?.data?.analysisId) return   // 같은 릴스면 무시
+    const curId = graph.nodes.find((n) => n.kind === 'analysis')?.data?.analysisId
+    if (analysisId === curId) return                    // 같은 릴스면 무시
     setErr(null)
     try {
       await postJSON(`/api/contents/${cid}/analysis`, { analysisId })
       const r = await api(`/api/contents/${cid}`)
       staleAllOnLoad.current = true                     // 다음 빌드에서 하류 노드 stale 표시
       srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setData(adapt(r))
+      setSwapUndo(opts.isUndo ? null : (curId ? { fromId: curId } : null))   // 되돌리기용 이전 릴스 기억
     } catch (e) { setErr(String(e.message || e)) }
   }
   // 씬 스크립트 생성 (overall → scene[] 분해) — 구조가 바뀌므로 재로드/재빌드. 기존 씬 자산은 초기화됨.
   async function runScenes() {
     if (cid == null || running) return
     if (!window.confirm('Generate scene scripts from the Script Engine? This rebuilds the scene chain and clears existing scene images/clips/VO.')) return
-    const t0 = Date.now(); setErr(null); setRunning({ id: 'overall', msg: 'generating scene scripts…', t0 })
+    const t0 = Date.now(); setErr(null); setSwapUndo(null); setRunning({ id: 'overall', msg: 'generating scene scripts…', t0 })
     try {
       const resp = await postJSON(`/api/contents/${cid}/script`, {})
       if (resp && resp.jobId) await pollJob(resp.jobId, (jb) => setRunning({ id: 'overall', msg: jb.message || 'generating…', t0 }))
@@ -597,6 +600,13 @@ function NodeGraphInner({ openId, onOpenHandled }) {
           <span>⟳ Source analysis was updated.</span>
           <button onClick={refreshSource} title="rebuild graph from the new analysis — discards local graph edits">Refresh graph</button>
           <button className="dismiss" onClick={() => setSourceStale(false)}>Dismiss</button>
+        </div>
+      )}
+      {swapUndo && !running && (
+        <div className="ng-stale" style={{ top: sourceStale ? 92 : undefined }}>
+          <span>⇄ Reel swapped.</span>
+          <button onClick={() => swapAnalysis(swapUndo.fromId, { isUndo: true })} title="revert to the previous reel (restores your script/scenes as they were)">↩ Undo swap</button>
+          <button className="dismiss" onClick={() => setSwapUndo(null)}>Dismiss</button>
         </div>
       )}
       {err && <div className="ng-err">{err}</div>}
