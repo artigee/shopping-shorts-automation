@@ -621,7 +621,11 @@ function NodeGraphInner({ openId, onOpenHandled }) {
           {['product', 'character', 'environment'].map((role) => {
             const items = graph.refLib[role] || []
             return (
-              <div key={role} className="ng-libzone" onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('drag') }} onDragLeave={(e) => e.currentTarget.classList.remove('drag')} onDrop={(e) => dropRefs(e, role)}>
+              <div key={role} className="ng-libzone"
+                onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('drag') }}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); try { e.dataTransfer.dropEffect = 'copy' } catch { /* noop */ } e.currentTarget.classList.add('drag') }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag') }}
+                onDrop={(e) => dropRefs(e, role)}>
                 <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="add by URL" onClick={() => { const url = window.prompt(role + ' reference — image URL:'); if (url) addRefAsset(role, url, role + ' ' + (items.length + 1)) }}>＋</span></h4>
                 {items.length
                   ? <div className="ng-libgrid">{items.map((a) => (
