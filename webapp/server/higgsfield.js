@@ -133,9 +133,10 @@ Do EXACTLY these steps and then print ONLY the final media id — never print th
 export async function genImageViaCLI({ prompt, productImageUrls = [], productImageUrl, characterRef, envRef, productName, dimensions }) {
   const prod = (productImageUrls && productImageUrls.length ? productImageUrls : (productImageUrl ? [productImageUrl] : [])).filter(Boolean).slice(0, 4)
   // 역할 라벨된 레퍼런스 (제품·캐릭터·환경) — 순서대로 media로 전달, 프롬프트에 역할 명시
+  // 캐릭터를 최우선(먼저)으로 → 모델이 인물 정체성을 제품보다 우선 반영. 얼굴 락 강화.
   const labeled = [
+    ...(characterRef ? [{ r: characterRef, role: 'CHARACTER (HIGHEST PRIORITY) — the person in the shot MUST be the EXACT same individual as this reference: identical face, hair, skin tone, age and build. Do NOT restyle, beautify, age, slim, or swap them. Their identity is LOCKED to this reference and overrides any wording in the prompt.' }] : []),
     ...prod.map((r) => ({ r, role: 'PRODUCT — reproduce this EXACT product (design, color, parts, proportions) faithfully' })),
-    ...(characterRef ? [{ r: characterRef, role: 'CHARACTER — the person in the shot MUST be this same person (same face, look, build)' }] : []),
     ...(envRef ? [{ r: envRef, role: 'ENVIRONMENT — match this setting / space / mood / lighting' }] : []),
   ].filter((x) => x.r).slice(0, 6)
   const total = labeled.length
@@ -155,7 +156,7 @@ export async function genImageViaCLI({ prompt, productImageUrls = [], productIma
 ${importLines}${directLines ? '\n' + directLines : ''}
 Reference roles:
 ${roleList}
-Then call generate_image {"model":"${model}","prompt":"<your scale-corrected prompt>. Use the references by ROLE: reproduce the PRODUCT exactly; if a CHARACTER reference is provided, the person in the shot is THAT same person; if an ENVIRONMENT reference is provided, match its setting, space and mood. Only the camera angle / action change.","aspect_ratio":"9:16","medias":[ one {"value":"<media_id>","role":"image"} for EACH reference above, in order ]}.`
+Then call generate_image {"model":"${model}","prompt":"<your scale-corrected prompt>. Use the references by ROLE: ${characterRef ? 'IDENTITY LOCK — the person in the shot is EXACTLY the CHARACTER reference (same face, hair, skin, age, build); this overrides any appearance wording in the prompt. ' : ''}reproduce the PRODUCT exactly; if an ENVIRONMENT reference is provided, match its setting, space and mood. Only the camera angle / action change.","aspect_ratio":"9:16","medias":[ one {"value":"<media_id>","role":"image"} for EACH reference above, in order ]}.`
   } else {
     genStep = `Call generate_image {"model":"marketing_studio_image","prompt":"<your scale-corrected prompt>","aspect_ratio":"9:16","count":1}.`
   }

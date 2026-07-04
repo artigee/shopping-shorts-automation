@@ -919,10 +919,21 @@ function isCosmeticContent(c, product) {
   const txt = `${product?.title || ''} ${product?.features || ''} ${a?.category || ''}`.toLowerCase()
   return /뷰티|skin\s?care|skincare|serum|toner|moisturi[sz]|sunscreen|\bspf\b|cleanser|cosmetic|make[\s-]?up|lip\s?gloss|lipstick|mascara|foundation|\bbeauty\b|essence|ampoule|retinol|hyaluron|collagen|k-?beauty|sheet\s?mask|face\s?mask|micellar|exfoliat/i.test(txt)
 }
+// 이 씬에 캐릭터 레퍼런스가 걸려있는지 (c.character_ref 또는 그래프 refLib character 역할)
+function sceneHasCharacterRef(c, scenes, i) {
+  if (c.character_ref) return true
+  try {
+    const rl = c.ref_lib ? JSON.parse(c.ref_lib) : null, gr = scenes[i]?.graphRefs
+    if (rl && gr) { const cmap = {}; (rl.character || []).forEach((a) => { if (a && a.id) cmap[a.id] = a.thumb }); if ((gr.character || []).some((id) => cmap[id])) return true }
+  } catch { /* ignore */ }
+  return false
+}
 async function genPromptForScene(c, scenes, i, guidance) {
   const product = c.product ? JSON.parse(c.product) : null
   const cosmetic = isCosmeticContent(c, product)
-  const p = await generateImagePrompt({ scene: scenes[i], productName: product?.title, product, style: c.style, sceneIndex: i, sceneTotal: scenes.length, guidance, cosmetic, lang: genLang() })
+  const hasCharacterRef = sceneHasCharacterRef(c, scenes, i)
+  const siblingTitles = scenes.map((s) => s.onScreenText || '')
+  const p = await generateImagePrompt({ scene: scenes[i], productName: product?.title, product, style: c.style, sceneIndex: i, sceneTotal: scenes.length, guidance, cosmetic, hasCharacterRef, siblingTitles, lang: genLang() })
   if (!p) throw new Error('이미지 프롬프트 생성 실패')
   scenes[i] = { ...scenes[i], imagePrompt: p }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
