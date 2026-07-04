@@ -78,7 +78,7 @@ ALL text in English. Output ONLY JSON: {"asin":"<matching asin or null>","confid
 // 핵심: 릴스 제품과 같은 "디자인"의 아마존 후보를 비전으로 고른다.
 // 과하게 구체적인 쿼리를 줄인다: 노이즈/과장 단어 제거 후 핵심 3단어까지. (Amazon 키워드 검색은 단어가 적을수록 결과가 많다)
 const QUERY_NOISE = new Set(['toy', 'replica', 'fake', 'clone', 'copy', 'knockoff', 'imitation', 'novelty', 'cheap', 'best', 'new', 'the', 'a', 'an', 'for', 'with', 'style', 'like', 'small', 'tiny', 'cute', 'viral', 'trending', 'gadget', 'device', 'item', 'product'])
-function simplerQuery(q) {
+export function simplerQuery(q) {
   const words = String(q || '').trim().split(/\s+/).filter((w) => w && !QUERY_NOISE.has(w.toLowerCase().replace(/[^a-z0-9]/gi, '')))
   return (words.length > 3 ? words.slice(0, 3) : words).join(' ')
 }

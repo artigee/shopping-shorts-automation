@@ -9,7 +9,7 @@ import { collect } from './collect.js'
 import { extractProducts, identifyReel } from './extract.js'
 import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon.js'
 import { analyzeReel } from './analyze.js'
-import { matchProductByVision } from './match.js'
+import { matchProductByVision, simplerQuery } from './match.js'
 import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
 import { getPersonas, getHooks, getVoStyles, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
 import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady } from './higgsfield.js'
@@ -299,7 +299,9 @@ app.get('/api/amazon/search', async (req, res) => {
   const q = (req.query.q || '').toString().trim()
   if (!q) return res.status(400).json({ error: '검색어 없음' })
   try {
-    res.json({ query: q, items: await amazonSearch(q, { domain: AMZ_DOMAIN }) })
+    let items = await amazonSearch(q, { domain: AMZ_DOMAIN }), usedQuery = q
+    if (!items.length) { const sq = simplerQuery(q); if (sq && sq.toLowerCase() !== q.toLowerCase()) { const r2 = await amazonSearch(sq, { domain: AMZ_DOMAIN }); if (r2.length) { items = r2; usedQuery = sq } } }   // 0건 → 단순화 재시도
+    res.json({ query: usedQuery, items })
   } catch (e) {
     res.status(500).json({ error: e.message || String(e), code: e.code || null })
   }

@@ -99,7 +99,7 @@ function ProductSelectDetail({ data, onClose, onChange, goContents }) {
         setQ((r.match && r.match.query) || '')
         if (!product) {
           if (r.product) { await postJSON(`/api/contents/${content.id}/product`, { setProduct: r.product }); onChange?.() }
-          else if (r.candidates && r.candidates.length) { setShowSearch(true) }   // 정확 매칭 없음 → 후보에서 고르기
+          else { setShowSearch(true) }   // 매칭 실패(후보 0건 포함) → 수동 검색을 항상 열어둔다
         }
       } catch (e) { if (!cancelled) setErr(String(e.message || e)) }
       finally { if (!cancelled) setSuggesting(false) }
