@@ -360,9 +360,10 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   async function runScenes() {
     if (cid == null || running) return
     if (!window.confirm('Generate scene scripts from the Script Engine? This rebuilds the scene chain and clears existing scene images/clips/VO.')) return
-    setErr(null); setRunning({ id: 'overall', msg: 'generating scene scripts…', t0: Date.now() })
+    const t0 = Date.now(); setErr(null); setRunning({ id: 'overall', msg: 'generating scene scripts…', t0 })
     try {
-      await postJSON(`/api/contents/${cid}/script`, {})
+      const resp = await postJSON(`/api/contents/${cid}/script`, {})
+      if (resp && resp.jobId) await pollJob(resp.jobId, (jb) => setRunning({ id: 'overall', msg: jb.message || 'generating…', t0 }))
       const r = await api(`/api/contents/${cid}`)
       srcSig.current = r.analysis?.analyzed_at || null; setContentMode(r.content?.content_mode || ''); setSel(null); setData(adapt(r))
     } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }

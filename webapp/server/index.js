@@ -846,17 +846,23 @@ app.post('/api/contents/:id/script', async (req, res) => {
     shotCount = (Number.isInteger(n) && n >= 3 && n <= 12) ? n : null
     db.prepare(`UPDATE contents SET shot_count = ? WHERE id = ?`).run(shotCount, c.id)
   }
-  try {
+  // 씬 분해는 sonnet 체인으로 ~2-3분 → 잡으로(즉시 jobId 반환 + 폴링). 동기 3분 요청은 프록시/소켓에서 끊긴다.
+  const existing = activeJob('contents', c.id, 'scenes')
+  if (existing) return res.json({ jobId: existing.id, already: true })
+  const job = startJob({ agent: 'scenes', refType: 'contents', refId: c.id, message: 'decomposing into scenes…' }, async (progress) => {
     const analysis = JSON.parse(a.analysis)
     let overall = c.overall ? JSON.parse(c.overall) : null
     const hasFootage = c.content_mode === 'direct_review'
-    if (!overall) { overall = await generateOverall({ analysis, productName: p?.title || a.title, product: p, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() }); db.prepare(`UPDATE contents SET overall = ? WHERE id = ?`).run(JSON.stringify(overall), c.id) }
+    if (!overall) { progress('writing the overall story… (~1min)', 20); overall = await generateOverall({ analysis, productName: p?.title || a.title, product: p, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() }); db.prepare(`UPDATE contents SET overall = ? WHERE id = ?`).run(JSON.stringify(overall), c.id) }
+    progress('writing scene scripts… (~1-2min)', 55)
     const scenes = await generateScenes({ analysis, productName: p?.title || a.title, product: p, overall, base, guidance, direction: c.direction, shotCount, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() })
+    progress('saving…', 90)
     // 새 씬 구성 → 기존 이미지/클립/VO/프리뷰 초기화 (어긋남 방지). 새로 생성해야 함.
     flushContentAssets(c.id)
     db.prepare(`UPDATE contents SET scenes = ?, preview = NULL, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
-    res.json({ scenes, overall })
-  } catch (e) { res.status(500).json({ error: e.message || String(e) }) }
+    return { scenes, overall }
+  })
+  res.json({ jobId: job.id })
 })
 
 // 씬 저장(편집) — 생성 산출물(이미지/클립/VO)은 절대 덮어쓰지 않고 보존한다.
