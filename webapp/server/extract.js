@@ -110,8 +110,9 @@ function heuristicIdentify(reel) {
 // CLI/LLM 공용 식별 지시문
 const ID_SYSTEM = `You identify the MAIN shoppable product in one Instagram shopping reel, for searching Amazon US.
 The caption is often a "funnel" that hides the exact product ("comment LINK"). Infer the product from any hint.
+The amazonQuery must be a SHORT keyword search of 2–3 core product words only (the noun + one defining attribute) — how a shopper actually types it. Do NOT add qualifiers like "toy", "replica", "novelty", "cheap", "cute", "viral", "gadget", or subjective adjectives; those return zero Amazon results. E.g. a tiny working phone → "mini phone", NOT "mini iPhone phone toy replica".
 Output a single JSON object (no prose):
-{"nameKo":"짧은 한국어 제품명","category":"패션|뷰티|주방|수납정리|조명|가전|문구|여행|생활|기타","amazonQuery":"best ENGLISH Amazon search query (English words only)","confidence":0.0,"note":"short Korean note; if the caption truly hides the product, say so"}`
+{"nameKo":"짧은 한국어 제품명","category":"패션|뷰티|주방|수납정리|조명|가전|문구|여행|생활|기타","amazonQuery":"best ENGLISH Amazon search query — 2-3 core keywords, English words only","confidence":0.0,"note":"short Korean note; if the caption truly hides the product, say so"}`
 
 // 로컬 claude CLI 호출 — Max 구독 인증, API 키·추가 과금 없음.
 const CLI_MODEL = process.env.EXTRACT_CLI_MODEL || 'haiku'

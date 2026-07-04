@@ -76,16 +76,31 @@ ALL text in English. Output ONLY JSON: {"asin":"<matching asin or null>","confid
 }
 
 // 핵심: 릴스 제품과 같은 "디자인"의 아마존 후보를 비전으로 고른다.
+// 과하게 구체적인 쿼리를 줄인다: 노이즈/과장 단어 제거 후 핵심 3단어까지. (Amazon 키워드 검색은 단어가 적을수록 결과가 많다)
+const QUERY_NOISE = new Set(['toy', 'replica', 'fake', 'clone', 'copy', 'knockoff', 'imitation', 'novelty', 'cheap', 'best', 'new', 'the', 'a', 'an', 'for', 'with', 'style', 'like', 'small', 'tiny', 'cute', 'viral', 'trending', 'gadget', 'device', 'item', 'product'])
+function simplerQuery(q) {
+  const words = String(q || '').trim().split(/\s+/).filter((w) => w && !QUERY_NOISE.has(w.toLowerCase().replace(/[^a-z0-9]/gi, '')))
+  return (words.length > 3 ? words.slice(0, 3) : words).join(' ')
+}
+
 // 1차 검색에서 못 찾으면 비전이 제안한 더 정확한 검색어로 1번 재시도.
 // 출력: { product|null, candidates, match:{asin,confidence,reason}, query }
 export async function matchProductByVision({ code, query, domain = 'www.amazon.com', assocTag = '' }) {
   if (!query || !query.trim()) return { product: null, candidates: [], match: null, query: '' }
   let usedQuery = query
   let { m, cand, items } = await attempt({ code, query, domain, round: 0 })
+  // 0건 → 쿼리가 과하게 구체적(예: "mini iPhone phone toy replica")일 때가 많다. 노이즈 단어 제거 + 핵심 3단어로 줄여 재검색.
+  if (!items.length) {
+    const sq = simplerQuery(query)
+    if (sq && sq.toLowerCase() !== query.trim().toLowerCase()) {
+      const rs = await attempt({ code, query: sq, domain, round: 1 })
+      if (rs.items.length) { m = rs.m; cand = rs.cand; items = rs.items; usedQuery = sq }
+    }
+  }
   // 못 찾았고 더 나은 검색어를 제안하면 → 그걸로 재검색 1회
-  if (!m.asin && m.betterQuery && m.betterQuery.trim() && m.betterQuery.trim().toLowerCase() !== query.trim().toLowerCase()) {
-    const r2 = await attempt({ code, query: m.betterQuery.trim(), domain, round: 1 })
-    if (r2.cand.length) { m = r2.m; cand = r2.cand; items = r2.items; usedQuery = m.asin ? m.betterQuery.trim() : query }
+  if (!m.asin && m.betterQuery && m.betterQuery.trim() && m.betterQuery.trim().toLowerCase() !== usedQuery.trim().toLowerCase()) {
+    const r2 = await attempt({ code, query: m.betterQuery.trim(), domain, round: 2 })
+    if (r2.cand.length) { m = r2.m; cand = r2.cand; items = r2.items; usedQuery = m.asin ? m.betterQuery.trim() : usedQuery }
   }
 
   let product = null
