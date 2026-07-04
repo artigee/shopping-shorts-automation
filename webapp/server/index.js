@@ -574,11 +574,12 @@ app.post('/api/contents/:id/analysis', (req, res) => {
   res.json({ ok: true })
 })
 
-// 스왑 undo — 스왑 직전 스냅샷(analysis_id + overall + scenes)을 그대로 되돌린다(정확 복원, 병합 없음).
+// undo/redo — 스냅샷(콘텐츠의 되돌릴 수 있는 전체 상태)을 그대로 되돌린다(정확 복원, 병합 없음).
 app.post('/api/contents/:id/restore', (req, res) => {
   const b = req.body || {}
-  db.prepare(`UPDATE contents SET analysis_id = ?, overall = ?, scenes = ?, updated_at = datetime('now') WHERE id = ?`)
-    .run(b.analysisId || null, b.overall != null ? JSON.stringify(b.overall) : null, b.scenes != null ? JSON.stringify(b.scenes) : null, req.params.id)
+  const js = (v) => (v != null ? JSON.stringify(v) : null)
+  db.prepare(`UPDATE contents SET analysis_id = ?, overall = ?, scenes = ?, persona = ?, hook = ?, vo_style = ?, vo_style_note = ?, style = ?, direction = ?, shot_count = ?, character_ref = ?, ref_lib = ?, product = ?, node_meta = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(b.analysisId || null, js(b.overall), js(b.scenes), b.persona ?? null, b.hook ?? null, b.voStyle ?? null, b.voStyleNote ?? null, b.style ?? null, b.direction ?? null, b.shotCount ?? null, b.characterRef ?? null, js(b.refLib), js(b.product), js(b.nodeMeta), req.params.id)
   res.json({ ok: true })
 })
 

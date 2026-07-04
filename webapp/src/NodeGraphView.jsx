@@ -197,7 +197,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const [histN, setHistN] = useState({ u: 0, r: 0 })
   const [analyses, setAnalyses] = useState([])          // 릴스 스왑용 분석 컬렉션 (② 이전 단계)
   const staleAllOnLoad = useRef(false)                   // 스왑 후 하류 노드 stale 표시
-  const swapStack = useRef([])                            // 릴스 스왑 undo 스택: 스왑 직전 콘텐츠 스냅샷 {analysisId, overall, scenes}
+  const undoStack = useRef([]), redoStack = useRef([])    // 데이터 액션 undo/redo: 액션 직전 콘텐츠 스냅샷 스택
 
   useLayoutEffect(() => { const h = document.querySelector('header')?.offsetHeight; if (h) setTop(h) }, [])
   useEffect(() => {
@@ -222,7 +222,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     tick(); const iv = setInterval(tick, 4000)
     return () => { alive = false; clearInterval(iv) }
   }, [cid])
-  useEffect(() => { if (cid == null) return; swapStack.current = []; setData(null); setErr(null); setSel(null); setSourceStale(false); api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setContentMode(r.content?.content_mode || ''); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }, [cid])
+  useEffect(() => { if (cid == null) return; undoStack.current = []; redoStack.current = []; setData(null); setErr(null); setSel(null); setSourceStale(false); api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setContentMode(r.content?.content_mode || ''); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }, [cid])
   useEffect(() => { api('/api/content-modes').then((r) => setModes(r.modes || [])).catch(() => {}) }, [])
   function saveContentMode(v) { setContentMode(v); if (cid != null) postJSON(`/api/contents/${cid}/content-mode`, { mode: v || null }).catch(() => {}) }
   // 소스 분석 변경 감지 — 재분석(잡)이 끝나 analyzed_at가 바뀌면 stale 배너. 창 포커스 + 25s 주기.
@@ -268,7 +268,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   // 노드 실행 — 각 노드를 백엔드 엔드포인트로 재생성하고 결과를 노드에 반영. 지원: overall · image-prompt · image · clip · vo.
   async function runNode(n) {
     if (cid == null || running) return
-    setErr(null)
+    setErr(null); await pushUndo()   // 재생성 전 스냅샷 → ↶로 되돌리기
     const t0 = Date.now()
     if (n.kind === 'overall') {
       setRunning({ id: n.id, msg: 'starting…', t0 })
@@ -345,7 +345,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   // 배치 생성 (순차 큐) — 기존 /batch 엔드포인트 재사용. kind: images | clips | vo
   async function runBatchKind(kind) {
     if (cid == null || running) return
-    setErr(null)
+    setErr(null); await pushUndo()   // 배치 생성 전 스냅샷
     const prefix = kind === 'clips' ? 'clip-' : kind === 'vo' ? 'vo-' : 'image-', t0 = Date.now()
     try {
       const resp = await postJSON(`/api/contents/${cid}/batch`, { kind })
@@ -360,39 +360,38 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
   }
   async function runBatchAll() { for (const k of ['images', 'clips', 'vo']) await runBatchKind(k) }
-  // 릴스(분석) 스왑 — 이 콘텐츠를 다른 분석 릴스 템플릿으로 갈아끼운다. 제품은 유지, 하류는 stale.
-  // 스왑 직전 콘텐츠 상태(analysis_id + overall + scenes)를 스냅샷해 두면 ↶/Cmd+Z로 정확히 되돌릴 수 있다.
+  // 콘텐츠의 되돌릴 수 있는 전체 상태를 스냅샷 (서버에서 최신을 읽어 drift 방지).
+  const snapFromContent = (c) => { c = c || {}; return { analysisId: c.analysis_id ?? null, overall: parse(c.overall), scenes: parse(c.scenes), persona: c.persona ?? null, hook: c.hook ?? null, voStyle: c.vo_style ?? null, voStyleNote: c.vo_style_note ?? null, style: c.style ?? null, direction: c.direction ?? null, shotCount: c.shot_count ?? null, characterRef: c.character_ref ?? null, refLib: parse(c.ref_lib), product: parse(c.product), nodeMeta: parse(c.node_meta) } }
+  // 데이터 액션 실행 직전 호출 — 현재 상태를 undo 스택에 쌓고 redo는 비운다.
+  async function pushUndo() {
+    if (cid == null) return
+    try { const r = await api(`/api/contents/${cid}`); undoStack.current.push(snapFromContent(r.content)); redoStack.current = []; sync() } catch { /* best-effort */ }
+  }
+  // 스냅샷을 서버에 그대로 복원하고 재로드.
+  async function restoreSnapshot(snap) {
+    await postJSON(`/api/contents/${cid}/restore`, snap)
+    const r = await api(`/api/contents/${cid}`)
+    staleAllOnLoad.current = false                      // 정확한 이전 상태로 복원 → stale 아님 (undo = 원상복구)
+    srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setData(adapt(r)); sync()
+  }
+  // 릴스(분석) 스왑 — 이 콘텐츠를 다른 분석 릴스 템플릿으로 갈아끼운다. 제품 유지, 하류 stale. undo 가능.
   async function swapAnalysis(analysisId) {
     if (cid == null || running) return
     const curId = graph.nodes.find((n) => n.kind === 'analysis')?.data?.analysisId
     if (analysisId === curId) return                    // 같은 릴스면 무시
-    setErr(null)
-    const snap = { analysisId: curId ?? data?.analysisRow?.id ?? null, overall: data?.overall ?? null, scenes: data?.scenes ?? null }
-    swapStack.current.push(snap)                        // undo 스냅샷 (재생성 후에도 스크립트/씬까지 복원)
+    setErr(null); await pushUndo()
     try {
       await postJSON(`/api/contents/${cid}/analysis`, { analysisId })
       const r = await api(`/api/contents/${cid}`)
-      staleAllOnLoad.current = true                     // 다음 빌드에서 하류 노드 stale 표시
+      staleAllOnLoad.current = true
       srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setData(adapt(r)); sync()
-    } catch (e) { swapStack.current.pop(); setErr(String(e.message || e)) }   // 실패 시 스냅샷 롤백
-  }
-  // 스왑 undo — 스냅샷을 서버에 그대로 복원(analysis_id + overall + scenes)하고 재로드. ↶가 로컬 편집 소진 후 호출.
-  async function restoreSwapSnapshot() {
-    const snap = swapStack.current.pop()
-    if (!snap || cid == null) return
-    setErr(null)
-    try {
-      await postJSON(`/api/contents/${cid}/restore`, snap)
-      const r = await api(`/api/contents/${cid}`)
-      staleAllOnLoad.current = false                    // 정확 복원 → stale 아님
-      srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setData(adapt(r)); sync()
-    } catch (e) { swapStack.current.push(snap); setErr(String(e.message || e)) }
+    } catch (e) { undoStack.current.pop(); setErr(String(e.message || e)) }
   }
   // 씬 스크립트 생성 (overall → scene[] 분해) — 구조가 바뀌므로 재로드/재빌드. 기존 씬 자산은 초기화됨.
   async function runScenes() {
     if (cid == null || running) return
     if (!window.confirm('Generate scene scripts from the Script Engine? This rebuilds the scene chain and clears existing scene images/clips/VO.')) return
-    const t0 = Date.now(); setErr(null); setRunning({ id: 'overall', msg: 'generating scene scripts…', t0 })
+    const t0 = Date.now(); setErr(null); await pushUndo(); setRunning({ id: 'overall', msg: 'generating scene scripts…', t0 })
     try {
       const resp = await postJSON(`/api/contents/${cid}/script`, {})
       if (resp && resp.jobId) await pollJob(resp.jobId, (jb) => setRunning({ id: 'overall', msg: jb.message || 'generating…', t0 }))
@@ -428,7 +427,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       commitRun(n.id, (x) => ({ ...x, dirty: false }))
     } catch (e) { setErr(String(e.message || e)) }
   }
-  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; if (staleAllOnLoad.current) { const gen = new Set(['overall', 'script', 'prompt', 'image', 'clip', 'vo', 'movie']); g.nodes.forEach((n) => { if (gen.has(n.kind)) n.dirty = true }); staleAllOnLoad.current = false } loadedRefKey.current = JSON.stringify(g.refLib); loadedNameKey.current = g.nodes.map((n) => n.id + '=' + n.hd).join('|'); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: swapStack.current.length, r: 0 }); setNg(g) }, [data])
+  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; if (staleAllOnLoad.current) { const gen = new Set(['overall', 'script', 'prompt', 'image', 'clip', 'vo', 'movie']); g.nodes.forEach((n) => { if (gen.has(n.kind)) n.dirty = true }); staleAllOnLoad.current = false } loadedRefKey.current = JSON.stringify(g.refLib); loadedNameKey.current = g.nodes.map((n) => n.id + '=' + n.hd).join('|'); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: undoStack.current.length, r: redoStack.current.length }); setNg(g) }, [data])
   // 레퍼런스 라이브러리 정리(추가/이동/삭제)를 자동 저장 — 로드값과 다를 때만
   const refLibKey = JSON.stringify(ng.refLib)
   useEffect(() => {
@@ -465,7 +464,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const wireFrom = wireEnd ? nodeById[wireEnd.fromId] : null
 
   // ── undo / redo (snapshot stack over the graph) ──
-  const sync = () => setHistN({ u: hist.current.past.length + swapStack.current.length, r: hist.current.future.length })
+  const sync = () => setHistN({ u: hist.current.past.length + undoStack.current.length, r: hist.current.future.length + redoStack.current.length })
   function pushSnap(snap, coalesceKey) {
     const h = hist.current
     if (coalesceKey && h.key === coalesceKey && h.past.length) return   // same continuous edit → keep first snapshot
@@ -477,8 +476,24 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     if (next === prev) return                                            // no-op (e.g. duplicate edge)
     pushSnap(prev, coalesceKey); ngRef.current = next; setNg(next)
   }
-  function undo() { const h = hist.current; if (h.past.length) { h.future.push(ngRef.current); const p = h.past.pop(); h.key = null; ngRef.current = p; setNg(p); sync(); return } if (swapStack.current.length) restoreSwapSnapshot() }   // 로컬 편집 먼저, 없으면 스왑 되돌리기
-  function redo() { const h = hist.current; if (!h.future.length) return; h.past.push(ngRef.current); const n = h.future.pop(); h.key = null; ngRef.current = n; setNg(n); sync() }
+  // ↶ : 로컬 편집을 먼저 소진하고, 없으면 데이터 액션(스왑/생성/페르소나…) 스냅샷을 되돌린다.
+  async function undo() {
+    const h = hist.current
+    if (h.past.length) { h.future.push(ngRef.current); const p = h.past.pop(); h.key = null; ngRef.current = p; setNg(p); sync(); return }
+    if (!undoStack.current.length || cid == null) return
+    const snap = undoStack.current.pop()
+    try { const r = await api(`/api/contents/${cid}`); redoStack.current.push(snapFromContent(r.content)); await restoreSnapshot(snap) }
+    catch (e) { undoStack.current.push(snap); setErr(String(e.message || e)) }
+  }
+  // ↷ : 로컬 redo 먼저, 없으면 데이터 액션 redo.
+  async function redo() {
+    const h = hist.current
+    if (h.future.length) { h.past.push(ngRef.current); const n = h.future.pop(); h.key = null; ngRef.current = n; setNg(n); sync(); return }
+    if (!redoStack.current.length || cid == null) return
+    const snap = redoStack.current.pop()
+    try { const r = await api(`/api/contents/${cid}`); undoStack.current.push(snapFromContent(r.content)); await restoreSnapshot(snap) }
+    catch (e) { redoStack.current.push(snap); setErr(String(e.message || e)) }
+  }
   useEffect(() => { hist.current.key = null }, [selId])                  // node switch breaks edit-coalescing
   useEffect(() => {
     const onKey = (e) => {
@@ -700,15 +715,17 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         fromArray={selFromArray} onScene={(v) => setNodeScene(drawerNode.id, v)} locked={locked} onLock={() => setLocked((l) => !l)} onFrame={frameNode}
         onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (fmtDur(runSecs) + (running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ' · running…')) : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)} onRecommend={applyRecommend}
         onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })}
-        onField={(f, v) => {
+        onField={async (f, v) => {
           if (f === '__nodeval') {   // persona/hook 선택 → 노드 값 + 하류 stale + 콘텐츠에 저장(생성에 반영)
             commitRun(drawerNode.id, (x) => ({ ...x, dirty: false, t: v }))
+            await pushUndo()   // 커밋(즉시 UI) 후, 변경 전 서버 상태를 스냅샷 → 이어서 저장
             if (drawerNode.hd === 'persona') postJSON(`/api/contents/${cid}/persona`, { persona: v }).catch(() => {})
             else if (drawerNode.hd === 'hook') postJSON(`/api/contents/${cid}/hook`, { hook: v }).catch(() => {})
           } else if (f === '__vostyle' || f === '__vostylenote') {   // 스피킹 스타일(프리셋/refine) → 노드 데이터 + 콘텐츠 저장 + 하류 stale
             const key = f === '__vostyle' ? 'voStyle' : 'voStyleNote', cur = drawerNode.data || {}
             const merged = { voStyle: cur.voStyle || '', voStyleNote: cur.voStyleNote || '', [key]: v }
             commitRun(drawerNode.id, (x) => ({ ...x, dirty: false, data: { ...x.data, [key]: v } }))
+            await pushUndo()
             postJSON(`/api/contents/${cid}/vo-style`, merged).catch(() => {})
           } else setNodeData(drawerNode.id, { [f]: v })
         }}
