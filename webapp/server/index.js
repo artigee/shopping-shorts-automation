@@ -992,9 +992,14 @@ async function upgradeRefsToHf(c, refLib, refGroups) {
   const cache = new Map()
   const up = async (ref) => {
     if (!ref || typeof ref !== 'string') return ref
-    if (ref.startsWith('hfmedia:') || /^https?:/i.test(ref)) return ref     // 이미 HF 사용가능
+    if (ref.startsWith('hfmedia:')) return ref                               // 이미 업로드됨
     if (cache.has(ref)) return cache.get(ref)
-    const local = ref.replace(/^.*\|/, '')                                   // 접두어 제거 → 순수 로컬 경로
+    // 'hfmedia:..|경로' 접두어 + http://host 접두어 제거 → 순수 경로. localhost/output도 로컬 파일로 취급(HF는 로컬 못 읽음).
+    const local = ref.replace(/^.*\|/, '').replace(/^https?:\/\/[^/]+/i, '')
+    if (!/^\/output\//.test(local)) {                                        // /output 로컬 파일이 아니면
+      if (/^https?:/i.test(ref)) return ref                                  // 진짜 외부 공개 URL → 그대로 import
+      cache.set(ref, ref); return ref
+    }
     const abs = path.join(OUTPUT_DIR, local.replace(/^\/output\//, ''))
     if (!fs.existsSync(abs)) { cache.set(ref, ref); return ref }             // 파일 없음 → 그대로(폴백)
     const ct = 'image/' + (path.extname(abs).slice(1).replace('jpg', 'jpeg') || 'png')
