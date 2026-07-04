@@ -92,7 +92,7 @@ KEEP the original reel's STRUCTURE only — hook archetype, beat order, pacing, 
 This OVERALL script is the product's story/context. The single most important field is "vo".
 [VO = the through-line] Write "vo" as ONE continuous spoken monologue in the PERSONA below — one person thinking out loud, moving through the energy ARC: ${VO_ARC}. REACT and reveal the mechanism; do NOT just explain or list features. Specific sensory detail and real numbers, never generic ad language.
 This is the FULL story / context — it may be richer and longer than the final short. Write it complete and good; the SCENE step will distill it down to fit the video length. Do NOT pre-truncate here.
-${personaBlock(persona)}${voStyleBlock(voStyle, voStyleNote)}${hookBlock(hook)}${banBlock()}${contentSafetyBlock(contentMode, { hasFootage })}
+${personaBlock(persona)}${voStyleBlock(voStyle, voStyleNote)}${hookBlock(hook)}${banBlock()}${rulesBlock()}${contentSafetyBlock(contentMode, { hasFootage })}
 ${guideBlock(base, guidance, 'overall script')}
 [Reel analysis (structure reference only)]
 ${JSON.stringify(analysis).slice(0, 6500)}
@@ -102,8 +102,8 @@ ${productLine(productName, product)}
 
 Rules (all text in English):
 - angle: one line for the new narrative angle (e.g. "problem→solution", "before/after", "you're doing it wrong").
-- hookLine: the 0-2s opening line — a fresh scroll-stopping hook.
-- beats: 4-7 items, one line each, the video flow (product strengths surface naturally).
+- hookLine: THE most important line — the 0-2s cold open that must be genuinely INTERESTING and impossible to scroll past. Use a bold claim, a sharp contradiction, a specific number, or a relatable pain that opens a loop the viewer NEEDS closed. Be concrete — name or evoke the real thing. BANNED weak openers: vague "I did not believe X was real / existed", "Everyone does X" generalities, anything a viewer can't picture in 1 second. If the hook wouldn't stop YOUR thumb, rewrite it.
+- beats: follow the shopping-short arc HOOK → PROBLEM → APPLY/DEMO → RESULT/TURN → CTA (rule 3b). The product FIRST appears in the APPLY beat (shown in use), NOT in the hook or problem — those are product-free. The RESULT (payoff) lands after apply, then the CTA. A beat like "Demo: <ProductName>" at position 2 is WRONG — hook + problem come first; withhold the result until the turn. Fold beats for fewer shots, expand for more, but keep this order.
 - vo: the full voiceover as ONE continuous persona monologue (see [VO = the through-line] above) — the through-line that scenes will later slice. NOT a paragraph that explains the beats.
 - cta: the final call to action (comment keyword → link funnel).
 - durationSec: total video length in seconds — DEFAULT to the reference reel's length${Number(analysis?._meta?.duration) > 0 ? ' (~' + Math.round(analysis._meta.duration) + 's)' : ''}; only deviate if the story clearly needs it, and keep it in the 12-40s range.
@@ -163,6 +163,7 @@ STRONG STORY RULE: the AI image/video can't show transformations (folding, unfol
 [VO vs TITLE — the most important craft rule]
 - vo (per scene) = a FRESH, tight, SPOKEN line in the PERSONA — DISTILLED from the story, NOT a verbatim slice of the long monologue. It REACTS / reveals the mechanism "aha" / gives sensory or number texture. Across scenes the vo lines form the ARC: ${VO_ARC}.
 - onScreenText (per scene) = the on-screen TITLE: a SHORT punchy claim or spec (<= ~5 words) that carries the FACT.
+- SAME BEAT: the title and its vo are TWO ANGLES ON ONE MOMENT — the vo reacts to / deepens the title's fact. They must NOT be about different topics. ❌ title "No purge. Barrier held." + vo "the bad-review posts are just harder to find" (two unrelated ideas, and it sounds like hiding complaints). ✅ title "No purge. Barrier held." + vo "Three weeks in. Still waiting for the flare-up." (same beat, reacts).
 - TITLE and VO must NEVER say the same thing. TEST: delete the vo — if the title still delivers the same info, the vo FAILED; rewrite it to react, not narrate. Do NOT inflate the title back into a full sentence.
 - EAR-CATCHING (see storytelling rules): line 1 is a cold open that lands in 1.5s (no "so/okay so"). VARY line length — at least TWO vo lines are short 2-5 word fragments. One clean TURN. Cut filler. Keep each line short enough to actually say within its scene's seconds.
 ${personaBlock(persona)}${voStyleBlock(voStyle, voStyleNote)}${hookBlock(hook)}${banBlock()}${rulesBlock()}${contentSafetyBlock(contentMode, { hasFootage })}

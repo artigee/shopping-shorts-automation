@@ -128,8 +128,9 @@ export function banBlock() {
 
 // 크래프트 규칙 (references 핵심 파일 주입 — 폴더가 권위, 프롬프트는 가볍게)
 export function rulesBlock() {
+  // 파일 전체를 주입 (예전 2200자 컷은 storytelling.md의 대부분 — arc·훅·시그니처 규칙 — 을 잘라먹었다). 파일이 곧 규칙 다이얼.
   const parts = [readText('references/vo-rules.md'), readText('references/title-rules.md'), readText('references/storytelling.md')]
-    .map((s) => s.trim().slice(0, 2200)).filter(Boolean)
+    .map((s) => s.trim().slice(0, 9000)).filter(Boolean)
   if (!parts.length) return ''
   return `\n[SHORTS-PLAYBOOK RULES — follow these exactly]\n${parts.join('\n\n---\n\n')}\n`
 }

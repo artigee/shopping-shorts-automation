@@ -29,13 +29,16 @@ Set up a doubt or a question, hold it for a beat, THEN pay it off. The gap is wh
 - ❌ "It snaps on in one second and works great."
 - ✅ "It snaps on — and I kept waiting for that to be the annoying part. It just… wasn't."
 
-## 3b. Withhold the product — the reveal IS the payoff (this is a SHOPPING short)
-This is a shopping short, not a story for its own sake: the job is to stop the scroll and earn the **DM/comment**. The product reveal is the **payoff**, never the setup.
-- The **hook and the early build sell the PROBLEM / doubt / curiosity — NOT the product.** Do not name, hero, or fully explain the product (or its exact mechanism) in scene 1–2.
-- If you hand over the product + how it works in the first few seconds, the open loop closes and there's no reason left to keep watching or to DM. That is the #1 way a shopping short leaks its reason-to-reach-out.
-- The product **enters at the turn** as the answer to the loop, lands at the payoff, then the CTA converts.
-- ❌ scene 2: "The retinol duo — one damages, one repairs." (reveal + mechanism in 4s → loop closed, scroll gone)
-- ✅ build the "why did my skin freak out?" loop first; reveal the fix / product only as the turn.
+## 3b. The shopping-short arc: HOOK → PROBLEM → APPLY → RESULT → CTA
+This is a shopping short — lead with a genuinely gripping hook, then earn the DM. This is the natural, high-converting flow (fold beats for 3 shots, expand for more, but keep the order):
+
+1. **HOOK** — a genuinely INTERESTING, scroll-stopping open: a bold claim, a contradiction, a relatable pain, a curiosity gap. This is the single most important line — specific and impossible to scroll past. **Not** a vague "I didn't believe X existed."
+2. **PROBLEM** — the pain / mistake / doubt the viewer recognizes in themselves. Still no product pitch here.
+3. **APPLY / DEMO** — the product enters HERE, shown in use (skincare: applied on skin). This is where it first appears — not in the hook.
+4. **RESULT / TURN** — the payoff: the visible result, the reluctant "okay… it actually worked." Withhold the RESULT until here — never give the payoff away in the hook.
+5. **CTA** — casual spoken ask to comment the keyword.
+
+Do NOT dump the product + its mechanism as a dry reveal in beat 1–2 — that closes the open loop before it's earned. Hook + problem first; the product shows up when it's *used*, and the result is the payoff.
 
 ## 4. One clean TURN
 Every good short has one line where it flips: doubt → belief, problem → fix, "that's it?" → payoff. Give that line its own beat. Don't bury it mid-sentence.
