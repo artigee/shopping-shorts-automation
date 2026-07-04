@@ -344,7 +344,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   }
   // 배치 생성 (순차 큐) — 기존 /batch 엔드포인트 재사용. kind: images | clips | vo
   async function runBatchKind(kind) {
-    if (cid == null || running) return
+    if (cid == null) { setErr('No content is open.'); return }
+    if (running) { setErr(`Busy: "${running.msg || 'a task'}" is running. If it's stuck, reload (Cmd+Shift+R).`); return }
     setErr(null); await pushUndo()   // 배치 생성 전 스냅샷
     const prefix = kind === 'clips' ? 'clip-' : kind === 'vo' ? 'vo-' : 'image-', t0 = Date.now()
     try {
@@ -389,9 +390,9 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   }
   // 씬 스크립트 생성 (overall → scene[] 분해) — 구조가 바뀌므로 재로드/재빌드. 기존 씬 자산은 초기화됨.
   async function runScenes() {
-    if (cid == null || running) return
-    // 예전엔 window.confirm 게이트였는데, 브라우저가 dialog를 차단하면 조용히 no-op(=아무 일도 안 남)이 된다.
-    // 이 액션은 이제 undo 가능(Cmd+Z로 이전 스크립트 복원)하므로 blocking confirm 제거.
+    if (cid == null) { setErr('No content is open.'); return }
+    if (running) { setErr(`Busy: "${running.msg || 'a task'}" is running. If it's stuck, reload (Cmd+Shift+R).`); return }
+    // 예전엔 window.confirm 게이트였는데, 브라우저가 dialog를 차단하면 조용히 no-op(=아무 일도 안 남)이 된다. 이제 undo 가능하므로 제거.
     const t0 = Date.now(); setErr(null); await pushUndo(); setRunning({ id: 'overall', msg: 'generating scene scripts…', t0 })
     try {
       const resp = await postJSON(`/api/contents/${cid}/script`, {})
