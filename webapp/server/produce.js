@@ -90,9 +90,11 @@ Rules (all text in English):
 - vo: the full voiceover as ONE continuous persona monologue (see [VO = the through-line] above) — the through-line that scenes will later slice. NOT a paragraph that explains the beats.
 - cta: the final call to action (comment keyword → link funnel).
 - durationSec: total video length in seconds — DEFAULT to the reference reel's length${Number(analysis?._meta?.duration) > 0 ? ' (~' + Math.round(analysis._meta.duration) + 's)' : ''}; only deviate if the story clearly needs it, and keep it in the 12-40s range.
+- shotCount: the number of SHOTS this short should have, chosen for MAXIMUM impact — NOT a default. Decide it from THIS story: how many DISTINCT beats it truly needs, the reel's pacing (fast cuts → more shots; slow/lingering → fewer), and the durationSec above. Range 3-9: a simple/punchy story folds roles into as few as 3 (hook+product+CTA); a rich or fast-cut one expands up to 9. The last shot is always the CTA. Do NOT default to 5 — justify the number by the beats.
+- shotCountWhy: one short line — why that count fits this story.
 
 Output ONLY JSON (no explanation):
-{"angle":"...","title":"...","hookLine":"...","durationSec":25,"beats":["...","..."],"vo":"...","cta":"..."}`
+{"angle":"...","title":"...","hookLine":"...","durationSec":25,"shotCount":5,"shotCountWhy":"...","beats":["...","..."],"vo":"...","cta":"..."}`
   let o
   for (let k = 0; k < 2 && !o; k++) { const out = await runClaude(prompt); try { const j = JSON.parse(stripFence(out)); if (j && typeof j === 'object' && !Array.isArray(j)) o = j } catch {} }
   if (!o) throw new Error('전체 스크립트 응답 파싱 실패 — 다시 [생성] 눌러주세요.')
@@ -124,7 +126,13 @@ export function allocateDurations(weights, totalSec, min = 2, max = 10) {
 }
 
 export async function generateScenes({ analysis, productName, product, overall, base, guidance, direction, shotCount, persona, voStyle, voStyleNote, hook, contentMode, hasFootage = false, lang = 'English (US, American audience)' }) {
-  const countRule = shotCount ? `Produce EXACTLY ${shotCount} scenes` : 'Produce 5-8 scenes'
+  // 샷 수: 사용자가 지정하면 그대로, 아니면 Script Engine(overall)이 스토리 기반으로 정한 추천 수, 없으면 3-9 판단.
+  const recCount = Number(overall?.shotCount) || 0
+  const countRule = shotCount
+    ? `Produce EXACTLY ${shotCount} scenes`
+    : (recCount >= 3 && recCount <= 12)
+      ? `Produce EXACTLY ${recCount} scenes — the plan chose this shot count for THIS story${overall?.shotCountWhy ? ' (' + overall.shotCountWhy + ')' : ''}`
+      : 'Produce 3-9 scenes — choose the count that best fits the beats and pacing; do NOT default to 5'
   const reelLen = Math.round(Number(analysis?._meta?.duration) || 0)
   const totalSec = Math.round(Number(overall?.durationSec) || reelLen || 22)   // 목표 총 길이 = overall(=릴스 길이 기본)
   const reelBeats = (analysis?.sceneScript || []).map((s, i) => `${s.t || 'beat ' + (i + 1)}≈${s.durationSec || '?'}s`).join(', ')
