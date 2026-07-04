@@ -1022,11 +1022,17 @@ async function genImageForScene(c, scenes, i, promptOverride) {
   let refLib = null; try { refLib = c.ref_lib ? JSON.parse(c.ref_lib) : null } catch { refLib = null }
   const gr = scenes[i].graphRefs
   let gProduct = null, gChar = null, gEnv = null
-  if (refLib && gr) {
+  if (refLib) {
     const map = {}; ['product', 'character', 'environment'].forEach((role) => (refLib[role] || []).forEach((a) => { if (a && a.id) map[a.id] = a.thumb }))
-    gProduct = (gr.product || []).map((id) => map[id]).filter(Boolean)
-    gChar = (gr.character || []).map((id) => map[id]).find(Boolean) || null
-    gEnv = (gr.environment || []).map((id) => map[id]).find(Boolean) || null
+    if (gr) {   // 씬에 명시 지정이 있으면 그대로
+      gProduct = (gr.product || []).map((id) => map[id]).filter(Boolean)
+      gChar = (gr.character || []).map((id) => map[id]).find(Boolean) || null
+      gEnv = (gr.environment || []).map((id) => map[id]).find(Boolean) || null
+    } else {   // 명시 지정 없음 → 라이브러리 전체를 기본 적용 (프론트 defRefs와 동일). 캐릭터 레퍼런스가 실제로 이미지에 반영되도록.
+      gProduct = (refLib.product || []).map((a) => a.thumb).filter(Boolean)
+      gChar = (refLib.character || []).map((a) => a.thumb).find(Boolean) || null
+      gEnv = (refLib.environment || []).map((a) => a.thumb).find(Boolean) || null
+    }
   }
   let refs = (gProduct && gProduct.length) ? gProduct : (Array.isArray(scenes[i].refs) && scenes[i].refs.length) ? scenes[i].refs : [product?.image || (product?.images || [])[0]].filter(Boolean)
   let characterRef = gChar || c.character_ref || null
