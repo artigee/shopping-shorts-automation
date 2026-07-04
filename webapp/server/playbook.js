@@ -36,6 +36,12 @@ export function getHook(key) {
   return y[key] ? { key, ...y[key] } : null
 }
 
+// 이미지/클립 비주얼 규칙 — references/image-rules.md 를 그대로 주입(소스 오브 트루스). 파일 편집이 곧 생성 규칙.
+export function imageRulesBlock() {
+  const md = readText('references/image-rules.md')
+  return md && md.trim() ? `\n[VISUAL RULES — follow ALL of these; the product/text/person/emotion policy is authoritative]\n${md.trim()}\n` : ''
+}
+
 // ── VO speaking styles (how the persona paces the line; layered on persona) ──
 export function getVoStyles() {
   const y = readYaml('data/vo-styles.yaml')

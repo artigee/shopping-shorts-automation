@@ -11,7 +11,7 @@ import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon
 import { analyzeReel } from './analyze.js'
 import { matchProductByVision, simplerQuery } from './match.js'
 import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
-import { getPersonas, getHooks, getVoStyles, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
+import { getPersonas, getPersona, getHooks, getVoStyles, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
 import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady } from './higgsfield.js'
 import { buildPreview } from './preview.js'
 import { renderShort, probeDuration, FPS } from './remotion-render.js'
@@ -944,7 +944,10 @@ async function genPromptForScene(c, scenes, i, guidance) {
   const cosmetic = isCosmeticContent(c, product)
   const hasCharacterRef = sceneHasCharacterRef(c, scenes, i)
   const siblingTitles = scenes.map((s) => s.onScreenText || '')
-  const p = await generateImagePrompt({ scene: scenes[i], productName: product?.title, product, style: c.style, sceneIndex: i, sceneTotal: scenes.length, guidance, cosmetic, hasCharacterRef, siblingTitles, lang: genLang() })
+  // 데메아너(표정 톤) = 페르소나 register, 없으면 릴스 분석의 voice.register
+  let demeanor = (c.persona ? getPersona(c.persona)?.register : '') || ''
+  if (!demeanor && c.analysis_id) { try { const a = db.prepare('SELECT analysis FROM analyses WHERE id = ?').get(c.analysis_id); demeanor = (a?.analysis ? (JSON.parse(a.analysis).voice || {}).register : '') || '' } catch { /* ignore */ } }
+  const p = await generateImagePrompt({ scene: scenes[i], productName: product?.title, product, style: c.style, sceneIndex: i, sceneTotal: scenes.length, guidance, cosmetic, hasCharacterRef, siblingTitles, demeanor, lang: genLang() })
   if (!p) throw new Error('이미지 프롬프트 생성 실패')
   scenes[i] = { ...scenes[i], imagePrompt: p }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
@@ -957,7 +960,7 @@ async function genSceneScriptForScene(c, scenes, i, guidance) {
   const product = c.product ? JSON.parse(c.product) : null
   const a = c.analysis_id ? db.prepare('SELECT title FROM analyses WHERE id = ?').get(c.analysis_id) : null
   const r = await generateSceneScript({ overall, product, productName: product?.title || a?.title, scenes, sceneIndex: i, sceneTotal: scenes.length, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', guidance, durationSec: scenes[i].durationSec, lang: genLang() })
-  scenes[i] = { ...scenes[i], onScreenText: r.onScreenText, vo: r.vo }
+  scenes[i] = { ...scenes[i], onScreenText: r.onScreenText, vo: r.vo, ...(r.emotion ? { emotion: r.emotion } : {}), ...(r.purpose ? { purpose: r.purpose } : {}) }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
   return scenes[i]
 }

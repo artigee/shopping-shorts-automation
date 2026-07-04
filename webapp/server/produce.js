@@ -1,7 +1,7 @@
 // 콘텐츠 제작 — 릴스 분석(설계도) + 선택 제품 → ① 전체 스크립트 → ② 씬 스크립트 (Claude CLI).
 // 핵심: 원본 릴스의 "구조"만 이해해 빌리고, 카피는 선택 제품으로 "새로" 작성 (복붙 금지).
 import { spawn } from 'node:child_process'
-import { personaBlock, voStyleBlock, hookBlock, banBlock, rulesBlock, contentSafetyBlock, getBanlist } from './playbook.js'
+import { personaBlock, voStyleBlock, hookBlock, banBlock, rulesBlock, contentSafetyBlock, imageRulesBlock, getBanlist } from './playbook.js'
 
 const CLI_MODEL = process.env.PRODUCE_CLI_MODEL || 'sonnet' // 스크립트 품질 → sonnet
 
@@ -161,9 +161,12 @@ Rules:
   weight: relative pacing weight per the DURATION PLAN above (a number ~0.5-2.0; the app converts it to seconds)
   onScreenText: on-screen TITLE — short claim/spec (<= ~5 words), carries the FACT, NEVER the same as vo
   vo: a FRESH tight spoken line distilled from the story (NOT a verbatim slice) — reacts / reveals mechanism / sensory; in persona; length fits its weight's share; DIFFERENT job than the title
+  emotion: this beat's emotional tone / the creator's FACIAL EXPRESSION for this shot, concrete and SPECIFIC to this line (e.g. "narrow-eyed doubt", "small surprised recalibration", "quiet relief", "warm conspiratorial invite") — it MUST differ across scenes, not the same expression every time
+  purpose: this scene's role in the flow (hook / build / turn / proof / CTA)
+  shot: the camera framing for this beat (angle · distance · movement), distinct from the other scenes (e.g. "tight UGC selfie, low angle", "over-the-shoulder at a desk", "hands-only macro on skin")
 
 Output ONLY a JSON array (no explanation):
-[{"weight":1.0,"onScreenText":"...","vo":"..."}]`
+[{"weight":1.0,"onScreenText":"...","vo":"...","emotion":"...","purpose":"...","shot":"..."}]`
   const runParse = async (pr) => { for (let k = 0; k < 2; k++) { const out = await runClaude(pr); try { const j = JSON.parse(stripFence(out)); if (Array.isArray(j) && j.length) return j } catch { /* 다음 시도 */ } } return null }
   let scenes = await runParse(prompt)
   if (!scenes) throw new Error('씬 스크립트 응답 파싱 실패 — 다시 [재생성] 눌러주세요.')
@@ -202,17 +205,24 @@ ${JSON.stringify(overall).slice(0, 2600)}
 [My product] ${productLine(productName, product)}
 [All scenes — context, keep THIS one distinct]
 ${others}
-Output ONLY JSON: {"onScreenText":"...","vo":"..."}`
-  for (let k = 0; k < 2; k++) { const out = await runClaude(prompt); try { const j = JSON.parse(stripFence(out)); if (j && (j.onScreenText || j.vo)) return { onScreenText: j.onScreenText || '', vo: j.vo || '' } } catch { /* retry */ } }
+Also give this beat's "emotion" (the creator's concrete facial expression for this shot — specific to this line, different from the other scenes) and "purpose" (its role in the flow).
+Output ONLY JSON: {"onScreenText":"...","vo":"...","emotion":"...","purpose":"..."}`
+  for (let k = 0; k < 2; k++) { const out = await runClaude(prompt); try { const j = JSON.parse(stripFence(out)); if (j && (j.onScreenText || j.vo)) return { onScreenText: j.onScreenText || '', vo: j.vo || '', emotion: j.emotion || '', purpose: j.purpose || '' } } catch { /* retry */ } }
   throw new Error('씬 스크립트 생성 파싱 실패')
 }
 
 // 씬 1개의 이미지 프롬프트(영어) 생성 — 씬 스크립트는 Title+VO만 있으므로 여기서 비주얼을 정한다. 빠르게 haiku.
-export async function generateImagePrompt({ scene = {}, productName, product, style, sceneIndex = 0, sceneTotal = 1, guidance, cosmetic = false, hasCharacterRef = false, siblingTitles = null, lang = 'English (US)' }) {
-  // 캐릭터 레퍼런스가 있으면: 외모를 절대 서술하지 말고(레퍼런스가 정체성을 담당) 행동/포즈만.
-  const charBlk = hasCharacterRef
-    ? `\n[CHARACTER IS LOCKED TO A REFERENCE PHOTO — critical] A fixed reference of the on-screen PERSON is supplied to the image model. Do NOT describe their face, hair, age, ethnicity, skin or body — refer to them ONLY as "the creator" or "the same person". NEVER invent appearance details that could conflict with the reference. Describe only their ACTION, pose, hands, expression, framing and setting; their identity comes 100% from the reference photo.`
-    : ''
+export async function generateImagePrompt({ scene = {}, productName, product, style, sceneIndex = 0, sceneTotal = 1, guidance, cosmetic = false, hasCharacterRef = false, siblingTitles = null, demeanor = '', lang = 'English (US)' }) {
+  // 인물: 캐릭터 레퍼런스가 있으면 레퍼런스에 100% 위임(외모 서술 금지). 없으면 인종/지역 특정 금지 + 전 씬 동일 룩.
+  const personBlk = hasCharacterRef
+    ? `\n[PERSON — LOCKED TO A REFERENCE PHOTO] A fixed reference of the on-screen person is supplied to the image model. Do NOT describe their face, hair, age, ethnicity, skin or body — call them only "the creator". Describe ONLY their action, pose, hands, expression and framing; identity comes 100% from the reference.`
+    : `\n[PERSON — no reference; keep her CONSISTENT and NEUTRAL] The creator is a young woman in her mid-20s with natural, bare skin. Do NOT specify ethnicity, nationality, or regional features — keep it neutral. Keep her EXACT same look in every scene (same hair, same face) — she must NOT change shot to shot. Describe her action / pose / expression, not a fresh appearance each time.`
+  // 이 씬의 감정·목적·샷 → 표정/프레이밍을 이 비트에 정확히 맞춘다 (분석→씬에서 전달). 매 씬 같은 표정 금지.
+  const beatBlk = `\n[THIS SCENE'S BEAT — render exactly this, NOT a generic/default expression]`
+    + (scene.emotion ? `\n  emotion / facial expression: ${scene.emotion}` : '')
+    + (scene.purpose ? `\n  role in the flow: ${scene.purpose}` : '')
+    + (scene.shot ? `\n  shot (angle / distance / movement): ${scene.shot}` : '')
+    + (demeanor ? `\n  the creator's persona register is "${demeanor}" — her overall demeanor reads that way, but the per-shot expression above still varies beat to beat` : '')
   // 형제 씬 제목 목록 → 이 씬을 시각적으로 확실히 다르게 (동일 구도/세팅 반복 금지).
   const listBlk = Array.isArray(siblingTitles) && siblingTitles.length > 1
     ? `\n[THE FULL SHOT LIST — this is scene ${sceneIndex + 1}; make it VISUALLY DISTINCT from every other shot: different composition, angle, distance, setting or action. Do NOT reuse the same framing or location twice]\n${siblingTitles.map((t, k) => `  ${k + 1}. ${t || '(untitled)'}${k === sceneIndex ? '   ← THIS scene' : ''}`).join('\n')}`
@@ -234,26 +244,20 @@ export async function generateImagePrompt({ scene = {}, productName, product, st
   const prompt = `Write ONE English image-generation prompt (a single photorealistic still frame, vertical 9:16) for ONE specific scene of a shopping short. The scene gives a Title and a voiceover — the image MUST clearly depict THIS scene's exact beat and moment, driven by that Title and VO.
 
 [Scene Title] ${scene.onScreenText || ''}
-[Scene voiceover] ${scene.vo || ''}
+[Scene voiceover] ${scene.vo || ''}${beatBlk}
 [Product] ${productLine(productName, product)}
 ${product?.dimensions ? '[Real dimensions] ' + product.dimensions : ''}
 ${product?.features ? '[Features/mechanics] ' + String(product.features).slice(0, 400) : ''}
 ${style && style.trim() ? '[Style direction — apply] ' + style.trim() : ''}
 
-[Framing for this scene] ${roleNote}${cosmeticBlk}${guideBlk}${charBlk}${listBlk}
-
-RULES (must follow):
+[Framing for this scene] ${roleNote}${cosmeticBlk}${guideBlk}${personBlk}${listBlk}
+${imageRulesBlock()}
+[This shot's motion rule]
 ${cosmetic
-    ? '- Application/use motions are GOOD — show the product being applied or used on skin/lips and its visible result; that IS the demo. (Skip the "no action" rule; cosmetics sell on the using.)'
-    : '- STRONG — NO transformation actions: never depict the product being folded, unfolded, assembled, collapsed, popped open, or set up. AI renders these motions badly. Show ONE clear STATE instead — fully assembled & in use, OR fully folded & in/with its carry bag. Convey "easy/fast setup" via the RESULT (it\'s already standing, ready), never the act of setting it up.'}
-- GROUND the image in THIS scene's Title + VO — depict that specific moment. Do NOT default to a generic "product beautifully assembled, problem solved" beauty shot; each scene's image is DIFFERENT and matches its own beat. If the VO is disbelief/doubt/a problem, show THAT tension or context — not the resolved happy ending (the payoff is a LATER scene).
-- SHOW, don't tell: describe only what the camera literally sees — subject, setting, action, framing, light. Do NOT write emotional narration or conclusions ("quiet triumph", "problem solved", "relief", "the answer found", "radiates"); those are not visual.
-- Depict the product accurately at its TRUE real-world size (no shrinking a large product into a tiny prop).
-- PRODUCT VISIBILITY (Instagram shopping short — IMPORTANT): the product is clearly PRESENT and recognizable (its real shape, color and design accurate), but it is NOT the readable hero. Keep it SECONDARY to the person/reaction/result — held or used naturally, at a normal distance, the label turned away or cropped so it isn't legible. Do NOT bury it (no full blur, no shrinking it to a tiny prop) and do NOT make it a tight, catalog-style label close-up. The viewer should recognize the product but still need to comment/DM for the link.
-- NO READABLE TEXT anywhere — this means overlay captions AND legible letters/logos/label text on the product or any object. AI renders label text garbled and mirrored, so keep every product label turned away, cropped, or out of focus so NO text is legible; if a brand name or label would be readable, angle or blur it out of legibility.
-- People and faces (including a baby's face) are fine — show them naturally; vary the camera angle scene to scene for visual interest.
-- Tone stays clean and light (never distressing: no crying/upset child, no exhausted despair, no bleak grime) — but a tension/problem beat still reads as tension, not as the solved finale.
-Output ONLY the prompt text (one paragraph), ending with "vertical 9:16, photorealistic, no text, no letters, no readable labels, no captions".`
+    ? '- Application/use motions are GOOD — show the product being applied or used on skin/lips and its visible result; that IS the demo. (Cosmetics sell on the using.)'
+    : '- NO transformation actions: never depict the product being folded, unfolded, assembled, collapsed, popped open, or set up (AI renders these badly). Show ONE clear STATE — assembled & in use, OR folded & in its carry bag. Convey "easy setup" via the RESULT, not the act.'}
+
+Output ONLY the prompt text (one paragraph). It must faithfully realize the REAL product (accurate design + branding from the reference), render THIS scene's specific emotion/expression, keep the person neutral & consistent, and follow every VISUAL RULE above. End with "vertical 9:16, photorealistic, no overlay captions".`
   const out = await runClaude(prompt, { timeout: 90000 })   // sonnet — grounds the visual in the scene's beat
   return stripFence(out).trim().replace(/^["']|["']$/g, '')
 }
