@@ -162,6 +162,15 @@
 .ng-crash button { background: #232328; color: #ddd; border: 1px solid #43434c; border-radius: 7px; padding: 6px 14px; cursor: pointer; }
 .ng-db { flex: 1; overflow: auto; display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); gap: 0; }
 .ng-db.ng-analysis { grid-template-columns: 1fr 1fr; }
+.ng-swaprow { grid-column: 1 / -1; padding: 4px 10px 8px; border-bottom: 1px solid #2a2a30; margin-bottom: 6px; }
+.ng-swapbtn { width: 100%; text-align: left; background: #1e1e22; border: 1px solid #3a3a42; color: #cdd6e6; font-size: 12px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.ng-swapbtn:hover, .ng-swapbtn.on { border-color: #5DCAA5; color: #e8e6dd; }
+.ng-swapgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 7px; margin-top: 8px; max-height: 220px; overflow: auto; padding: 2px; }
+.ng-swapcard { cursor: pointer; border: 1px solid #33333b; border-radius: 8px; overflow: hidden; background: #17171a; transition: border-color .12s, transform .12s; }
+.ng-swapcard:hover { border-color: #5DCAA5; transform: translateY(-1px); }
+.ng-swapcard.cur { border-color: #5DCAA5; box-shadow: 0 0 0 1px #5DCAA5 inset; cursor: default; }
+.ng-swapcard img, .ng-swapcard .ph { width: 100%; aspect-ratio: 9/16; object-fit: cover; display: block; background: #20262e; }
+.ng-swapcard .nm { font-family: ui-monospace, monospace; font-size: 8.5px; color: #9c9a92; padding: 3px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ng-col { padding: 14px 18px; min-width: 0; }
 .ng-col.right { border-left: 1px solid #2f2f36; background: rgba(255,255,255,.015); }
 .ng-analysis .ng-col.right { border-left: 2px solid #43434c; background: transparent; }

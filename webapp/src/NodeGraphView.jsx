@@ -126,7 +126,7 @@ function buildGraph(data) {
 
   mk({ id: 'in-0', role: 'input', hd: 'persona', t: ctx.persona, sub: 'VO voice', x: COL.input, y: 100, data: { guidance: '', voStyle: data.voStyle || '', voStyleNote: data.voStyleNote || '' } })
   mk({ id: 'in-1', role: 'input', hd: 'hook', t: ctx.hook, sub: 'story shape', x: COL.input, y: 240, data: { guidance: '' } })
-  mk({ id: 'analysis', role: 'analysis', kind: 'analysis', hd: 'reel', x: COL.input, y: 400, data: { angle: ctx.angle, hook: aj.hook || null, audience: aj.audience || null, voice: aj.voice || null, struct: aj.structure || null, visualStyle: aj.visualStyle || null, sceneScript: aj.sceneScript || null, assets: aj.assets || null, viralFactors: aj.viralFactors || null, reel: { url: ar.reel_url, thumb: ar.reel_thumbnail, user: ar.reel_username, caption: ar.reel_caption, comments: ar.reel_comments, play: ar.reel_play, category: ar.category, title: ar.title }, product: { title: p.title, price: p.price, rating: p.rating, reviews: p.reviewCount, dimensions: p.dimensions, asin: p.asin, url: p.amazon_url, image: p.image } } })
+  mk({ id: 'analysis', role: 'analysis', kind: 'analysis', hd: 'reel', x: COL.input, y: 400, data: { analysisId: ar.id, angle: ctx.angle, hook: aj.hook || null, audience: aj.audience || null, voice: aj.voice || null, struct: aj.structure || null, visualStyle: aj.visualStyle || null, sceneScript: aj.sceneScript || null, assets: aj.assets || null, viralFactors: aj.viralFactors || null, reel: { url: ar.reel_url, thumb: ar.reel_thumbnail, user: ar.reel_username, caption: ar.reel_caption, comments: ar.reel_comments, play: ar.reel_play, category: ar.category, title: ar.title }, product: { title: p.title, price: p.price, rating: p.rating, reviews: p.reviewCount, dimensions: p.dimensions, asin: p.asin, url: p.amazon_url, image: p.image } } })
   mk({ id: 'overall', role: 'overall', kind: 'overall', hd: 'Script Engine', x: COL.overall, y: midY, data: { shotCount: data.shot_count ? String(data.shot_count) : '', durationSec: o.durationSec ? String(o.durationSec) : '', direction: data.direction || '', angle: ctx.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || ''), guidance: '' } })
   const slug = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24)
   mk({ id: 'movie', role: 'movie', kind: 'movie', hd: 'final movie', x: COL.movie, y: midY, video: media(data.export_mp4 || data.preview), data: { sceneCount: scenes.length, final_form: data.final_form || 'card', output: data.export_mp4 || data.preview || '', exportMode: 'preview', outputDir: 'output/content-' + (data.id || 'x') + '/', outputName: (slug(ctx.product) || 'short') + '_' + (slug(data.hook) || 'hook') + '_v1' } })
@@ -195,6 +195,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const hist = useRef({ past: [], future: [], key: null })
   const dragSnap = useRef(null)
   const [histN, setHistN] = useState({ u: 0, r: 0 })
+  const [analyses, setAnalyses] = useState([])          // 릴스 스왑용 분석 컬렉션 (② 이전 단계)
+  const staleAllOnLoad = useRef(false)                   // 스왑 후 하류 노드 stale 표시
 
   useLayoutEffect(() => { const h = document.querySelector('header')?.offsetHeight; if (h) setTop(h) }, [])
   useEffect(() => {
@@ -204,6 +206,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       api('/api/camera-moves').then((d) => d.moves || []).catch(() => []),
       api('/api/vo-styles').then((d) => d.voStyles || []).catch(() => []),
     ]).then(([personas, hooks, moves, voStyles]) => setLib({ personas, hooks, moves, voStyles }))
+    api('/api/analyses').then((rows) => setAnalyses(Array.isArray(rows) ? rows : [])).catch(() => {})   // 스왑 갤러리용
   }, [])
   useEffect(() => {
     api('/api/contents').then((cs) => setList(cs)).catch((e) => setErr(String(e.message || e)))   // cid=null → 카드 보드로 시작
@@ -356,6 +359,18 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
   }
   async function runBatchAll() { for (const k of ['images', 'clips', 'vo']) await runBatchKind(k) }
+  // 릴스(분석) 스왑 — 이 콘텐츠를 다른 분석 릴스 템플릿으로 갈아끼운다. 제품은 유지, 하류는 stale.
+  async function swapAnalysis(analysisId) {
+    if (cid == null || running) return
+    if (analysisId === graph.nodes.find((n) => n.kind === 'analysis')?.data?.analysisId) return   // 같은 릴스면 무시
+    setErr(null)
+    try {
+      await postJSON(`/api/contents/${cid}/analysis`, { analysisId })
+      const r = await api(`/api/contents/${cid}`)
+      staleAllOnLoad.current = true                     // 다음 빌드에서 하류 노드 stale 표시
+      srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setData(adapt(r))
+    } catch (e) { setErr(String(e.message || e)) }
+  }
   // 씬 스크립트 생성 (overall → scene[] 분해) — 구조가 바뀌므로 재로드/재빌드. 기존 씬 자산은 초기화됨.
   async function runScenes() {
     if (cid == null || running) return
@@ -396,7 +411,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       commitRun(n.id, (x) => ({ ...x, dirty: false }))
     } catch (e) { setErr(String(e.message || e)) }
   }
-  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; loadedRefKey.current = JSON.stringify(g.refLib); loadedNameKey.current = g.nodes.map((n) => n.id + '=' + n.hd).join('|'); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
+  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; if (staleAllOnLoad.current) { const gen = new Set(['overall', 'script', 'prompt', 'image', 'clip', 'vo', 'movie']); g.nodes.forEach((n) => { if (gen.has(n.kind)) n.dirty = true }); staleAllOnLoad.current = false } loadedRefKey.current = JSON.stringify(g.refLib); loadedNameKey.current = g.nodes.map((n) => n.id + '=' + n.hd).join('|'); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: 0, r: 0 }); setNg(g) }, [data])
   // 레퍼런스 라이브러리 정리(추가/이동/삭제)를 자동 저장 — 로드값과 다를 때만
   const refLibKey = JSON.stringify(ng.refLib)
   useEffect(() => {
@@ -663,6 +678,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       </>)}
 
       {drawerNode && <Drawer n={drawerNode} closing={closing && !selId} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
+        analyses={analyses} onSwapAnalysis={swapAnalysis}
         fromArray={selFromArray} onScene={(v) => setNodeScene(drawerNode.id, v)} locked={locked} onLock={() => setLocked((l) => !l)} onFrame={frameNode}
         onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (fmtDur(runSecs) + (running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ' · running…')) : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)} onRecommend={applyRecommend}
         onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })}
@@ -784,7 +800,8 @@ function Field({ c, d, onField, onCommit }) {
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} onBlur={onCommit} />
 }
 
-function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, onRecommend, incoming, outgoing }) {
+function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, onRecommend, incoming, outgoing, analyses, onSwapAnalysis }) {
+  const [swapOpen, setSwapOpen] = useState(false)
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
   // re-run = 씬 스크립트 기반으로 생성하는 노드: overall · image-prompt · motion-prompt · VO-text · image · clip · vo.
   // scene-script(script-)만 "편집이 소스" → re-run 없음. 생성된 노드들은 생성 후 편집 가능.
@@ -808,8 +825,24 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
   if (n.kind === 'analysis') {
     const r = d.reel || {}, p = d.product || {}, hk = d.hook || {}, st = d.struct || {}, aud = d.audience || {}, vs = d.visualStyle || {}
     const ss = Array.isArray(d.sceneScript) ? d.sceneScript : [], assets = Array.isArray(d.assets) ? d.assets : [], vf = Array.isArray(d.viralFactors) ? d.viralFactors : []
+    const curAid = d.analysisId
     body = (
       <div className="ng-db ng-analysis">
+        <div className="ng-swaprow">
+          <button className={'ng-swapbtn' + (swapOpen ? ' on' : '')} onClick={() => setSwapOpen((s) => !s)}>⇄ swap reel{swapOpen ? ' ▲' : ' ▼'} <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· re-base this product on another analyzed reel</em></button>
+          {swapOpen && (
+            <div className="ng-swapgrid">
+              {(analyses || []).length === 0 && <div className="ng-none" style={{ padding: 8 }}>— no analyzed reels yet —</div>}
+              {(analyses || []).map((a) => (
+                <div key={a.id} className={'ng-swapcard' + (a.id === curAid ? ' cur' : '')} title={a.title || a.reel_username || ('#' + a.id)}
+                  onClick={() => { if (a.id !== curAid) { setSwapOpen(false); onSwapAnalysis?.(a.id) } }}>
+                  {a.reel_thumbnail ? <img src={a.reel_thumbnail} referrerPolicy="no-referrer" onError={(e) => { e.target.style.visibility = 'hidden' }} /> : <div className="ph" />}
+                  <div className="nm">{a.id === curAid ? '● ' : ''}{(a.title || a.reel_username || ('reel ' + a.id)).slice(0, 40)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="ng-col">
           <div className="ng-sh" style={{ color: '#9bb8e8' }}>reference reel</div>
           {r.thumb && <img className="ng-athumb" src={r.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} />}
