@@ -23,8 +23,10 @@ Sweet spot: instantly recognizable as the real product, yet the viewer still has
 - If a **character reference** is provided, the person is EXACTLY that individual — describe only action / pose / expression, never appearance.
 - If **no** character reference, keep **one consistent look** across every shot (same young woman, same hair, same face) — she must NOT change scene to scene.
 
-## 4. Emotion & beat
+## 4. Emotion & beat — ONE frozen expression, not a sequence
 - Render **this scene's** emotion / expression (provided per scene), in the creator's **persona register** — do NOT default every shot to the same expression (e.g. the same skeptical squint on every frame).
+- Describe **ONE frozen facial expression — a single held instant.** A still can only show one moment, so **never write a sequence of movements**: no "gaze drifts up **then returns**", no "mouth **settling into** a wry turn", no before→after in one frame. Those average out into a generic soft face.
+- Freeze the beat's **peak / resolved moment** — the money look the shot is about (the "end" state of the reaction), described as a static pose: e.g. ✅ "eyes just back to center, one brow slightly raised, a small wry half-smile held" (not "her eyes drift then return"). This frozen frame is also the clip's base keyframe; the motion prompt adds subtle life (a breath, a small settle), not a full expression change.
 - The emotion must match the beat: a doubt beat reads as doubt, a value-reveal reads as a small realization, the CTA reads as warm/inviting.
 - **Show, don't tell:** only what the camera literally sees (subject, setting, action, framing, light) — no emotional narration ("quiet triumph", "relief").
 
