@@ -574,6 +574,14 @@ app.post('/api/contents/:id/analysis', (req, res) => {
   res.json({ ok: true })
 })
 
+// 스왑 undo — 스왑 직전 스냅샷(analysis_id + overall + scenes)을 그대로 되돌린다(정확 복원, 병합 없음).
+app.post('/api/contents/:id/restore', (req, res) => {
+  const b = req.body || {}
+  db.prepare(`UPDATE contents SET analysis_id = ?, overall = ?, scenes = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(b.analysisId || null, b.overall != null ? JSON.stringify(b.overall) : null, b.scenes != null ? JSON.stringify(b.scenes) : null, req.params.id)
+  res.json({ ok: true })
+})
+
 // 전 씬 공통 이미지 스타일/지시 (예: "여성 손, 한국 가정집, 밝은 자연광")
 app.post('/api/contents/:id/style', (req, res) => {
   db.prepare(`UPDATE contents SET style = ?, updated_at = datetime('now') WHERE id = ?`).run((req.body && req.body.style) || '', req.params.id)
