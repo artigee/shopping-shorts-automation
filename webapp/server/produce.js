@@ -1,7 +1,7 @@
 // 콘텐츠 제작 — 릴스 분석(설계도) + 선택 제품 → ① 전체 스크립트 → ② 씬 스크립트 (Claude CLI).
 // 핵심: 원본 릴스의 "구조"만 이해해 빌리고, 카피는 선택 제품으로 "새로" 작성 (복붙 금지).
 import { spawn } from 'node:child_process'
-import { personaBlock, voStyleBlock, hookBlock, banBlock, rulesBlock, contentSafetyBlock, imageRulesBlock, getBanlist } from './playbook.js'
+import { personaBlock, voStyleBlock, hookBlock, banBlock, rulesBlock, contentSafetyBlock, imageRulesBlock, getBanlist, getPersona } from './playbook.js'
 
 const CLI_MODEL = process.env.PRODUCE_CLI_MODEL || 'sonnet' // 스크립트 품질 → sonnet
 
@@ -24,13 +24,30 @@ function stripFence(t = '') {
 const VO_STOP = new Set(['a', 'an', 'the', 'and', 'or', 'but', 'so', 'to', 'of', 'in', 'on', 'it', 'is', 'this', 'that', 'your', 'you', 'with', 'for', 'into', 'just', 'one', 'no', 'i', 'my', 'me', 'at', 'its', 'then', 'now', 'up'])
 function contentWords(t = '') { return (String(t).toLowerCase().match(/[a-z0-9']+/g) || []).filter((w) => !VO_STOP.has(w) && w.length > 1) }
 function noveltyRatio(caption, vo) { const cap = new Set(contentWords(caption)); const v = contentWords(vo); if (!v.length) return 1; return v.filter((w) => !cap.has(w)).length / v.length }
-function validateScenes(scenes, banlist, threshold = 0.35) {
+// 페르소나 시그니처(관용구/예시 라인)를 그대로(4단어+ 연속) 베꼈는지 — 룰10을 하드 가드로 강제.
+const normTell = (s) => String(s).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
+function reusedPersonaTell(vo, tells) {
+  const v = normTell(vo)
+  for (const tell of tells) {
+    const tw = normTell(tell).split(' ')
+    for (let n = Math.min(7, tw.length); n >= 4; n--) {
+      for (let i = 0; i + n <= tw.length; i++) {
+        const gram = tw.slice(i, i + n).join(' ')
+        if (gram.length >= 10 && v.includes(gram)) return gram
+      }
+    }
+  }
+  return null
+}
+function validateScenes(scenes, banlist, threshold = 0.35, personaTells = []) {
   const fails = []
   scenes.forEach((s, i) => {
     const cap = s.onScreenText || '', vo = s.vo || ''
     const banned = [...new Set([cap, vo].flatMap((txt) => banlist.filter((p) => String(txt).toLowerCase().includes(p))))]
     if (banned.length) fails.push(`scene ${i + 1}: banned phrase(s) [${banned.join(', ')}] — rewrite without them.`)
     if (cap && vo) { const nov = noveltyRatio(cap, vo); if (nov < threshold / 2) fails.push(`scene ${i + 1}: the VO just restates the title (only ${Math.round(nov * 100)}% new words) — rewrite the VO to REACT / reveal the mechanism, not narrate. title="${cap}" vo="${vo}"`) }
+    const tell = personaTells.length ? reusedPersonaTell(vo, personaTells) : null
+    if (tell) fails.push(`scene ${i + 1}: the VO reuses the persona's signature phrase ("${tell}") verbatim — that's a generic tell (see rule 10). Express this beat a COMPLETELY fresh way; do not lean on the persona's example/idiom lines. vo="${vo}"`)
   })
   return fails
 }
@@ -180,8 +197,9 @@ Output ONLY a JSON array (no explanation):
   if (!scenes) throw new Error('씬 스크립트 응답 파싱 실패 — 다시 [재생성] 눌러주세요.')
   // 스킬 검증 루프 — ban-list + VO≠Title(react-don't-narrate). 실패 라인만 지목해 재작성(최대 2회).
   const banlist = getBanlist().map((p) => p.toLowerCase())
+  const pObj = getPersona(persona), personaTells = pObj ? [...(pObj.idiom_markers || []), ...(pObj.example_lines || [])] : []
   for (let attempt = 0; attempt < 2; attempt++) {
-    const fails = validateScenes(scenes, banlist)
+    const fails = validateScenes(scenes, banlist, 0.35, personaTells)
     if (!fails.length) break
     const fixed = await runParse(`${prompt}\n\n[GUARDRAIL FAILED on your previous output — FIX ONLY these lines, keep every other scene exactly as-is, and re-output the SAME full JSON array]:\n${fails.join('\n')}`)
     if (!fixed) break
