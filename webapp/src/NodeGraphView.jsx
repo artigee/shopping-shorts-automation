@@ -173,6 +173,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const [drawerH, setDrawerH] = useState(300)
   const [menu, setMenu] = useState(null)
   const [libOpen, setLibOpen] = useState(false)
+  const [upBusy, setUpBusy] = useState({})   // role별 업로드 진행 개수 (HF CLI 업로드가 ~50s 걸려 즉시 피드백 필요)
   const [preview, setPreview] = useState(null)
   const [wireEnd, setWireEnd] = useState(null)
   const [locked, setLocked] = useState(false)
@@ -513,23 +514,28 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   function startDrawerResize(ev) { ev.preventDefault(); const sy = ev.clientY, h0 = drawerH, maxH = Math.round(window.innerHeight * 0.85); const mv = (e) => setDrawerH(Math.min(maxH, Math.max(140, h0 - (e.clientY - sy)))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
   function addRefAsset(role, thumb, name) { if (!thumb) return; commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: [...(g.refLib[role] || []), { id: 'lib-' + (libUid.current++), thumb, role, name: name || role }] } })) }
   function deleteRefAsset(role, id) { commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: (g.refLib[role] || []).filter((a) => a.id !== id) }, nodes: g.nodes.map((n) => (n.data && n.data.refs && n.data.refs[role]) ? { ...n, data: { ...n.data, refs: { ...n.data.refs, [role]: n.data.refs[role].filter((x) => x !== id) } } } : n) })) }
+  const bumpUp = (role, d) => setUpBusy((u) => ({ ...u, [role]: Math.max(0, (u[role] || 0) + d) }))
   async function dropRefs(ev, role) {
-    ev.preventDefault(); ev.currentTarget.classList.remove('drag')
+    ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.classList.remove('drag')
     const files = [...(ev.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/'))
-    if (files.length) {   // 파일 드롭 → 서버 업로드(Higgsfield) → 생성에 쓸 수 있는 ref 저장
+    if (files.length) {   // 파일 드롭 → 서버 업로드(Higgsfield, ~50s) → 생성에 쓸 수 있는 ref 저장
       if (cid == null) { setErr('open a content first'); return }
+      setLibOpen(true)                                  // 패널 열어서 진행 표시가 보이도록
       for (const f of files) {
+        bumpUp(role, 1)
         try {
           const dataB64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f) })
           const p = await postJSON(`/api/contents/${cid}/ref-upload`, { filename: f.name, contentType: f.type, dataB64 })
           const ref = (p.images && p.images[0]) || null
           if (ref) addRefAsset(role, ref, f.name)
-        } catch (e) { setErr(String(e.message || e)) }
+          else setErr('upload returned no image')
+        } catch (e) { setErr('ref upload failed: ' + String(e.message || e)) } finally { bumpUp(role, -1) }
       }
       return
     }
     const uri = ev.dataTransfer?.getData('text/uri-list') || ev.dataTransfer?.getData('text/plain') || ''
     if (/^https?:/.test(uri)) addRefAsset(role, uri.trim(), role)
+    else setErr('no image file in that drop')
   }
   const hoverPreview = { onMouseEnter: (e) => setPreview({ url: e.target.src, x: e.clientX, y: e.clientY }), onMouseMove: (e) => setPreview((p) => p ? { ...p, x: e.clientX, y: e.clientY } : p), onMouseLeave: () => setPreview(null) }
 
@@ -627,14 +633,18 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag') }}
                 onDrop={(e) => dropRefs(e, role)}>
                 <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="add by URL" onClick={() => { const url = window.prompt(role + ' reference — image URL:'); if (url) addRefAsset(role, url, role + ' ' + (items.length + 1)) }}>＋</span></h4>
-                {items.length
-                  ? <div className="ng-libgrid">{items.map((a) => (
+                {items.length || upBusy[role]
+                  ? <div className="ng-libgrid">
+                    {Array.from({ length: upBusy[role] || 0 }, (_, i) => (
+                      <div key={'up' + i} className="ng-libitem"><div className="ng-upimg"><span className="ng-upspin" />uploading…</div></div>
+                    ))}
+                    {items.map((a) => (
                     <div key={a.id} className="ng-libitem">
                       <img src={media(a.thumb)} onError={(e) => { e.target.style.opacity = .2 }} {...hoverPreview} />
                       <span className="ng-libdel" title="delete" onClick={() => deleteRefAsset(role, a.id)}>×</span>
                       <div className="nm">{a.name}</div>
                     </div>))}</div>
-                  : <div className="ng-empty">drop image here · or ＋ URL</div>}
+                  : <div className="ng-empty">drop image here · or ＋ URL{'\n'}(upload takes ~30–60s)</div>}
               </div>
             )
           })}

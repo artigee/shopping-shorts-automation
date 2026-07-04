@@ -119,7 +119,10 @@
 .ng-libdel { position: absolute; top: 4px; right: 4px; width: 17px; height: 17px; border-radius: 50%; background: rgba(0,0,0,.6); color: #e8e6dd; font-size: 12px; line-height: 17px; text-align: center; cursor: pointer; }
 .ng-libdel:hover { background: #e0655e; }
 .ng-libitem .nm { font-family: ui-monospace, monospace; font-size: 9px; color: #9c9a92; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ng-empty { font-family: ui-monospace, monospace; font-size: 10px; color: #6b6a64; border: 1px dashed #2f2f36; border-radius: 8px; padding: 14px 8px; text-align: center; }
+.ng-empty { font-family: ui-monospace, monospace; font-size: 10px; color: #6b6a64; border: 1px dashed #2f2f36; border-radius: 8px; padding: 14px 8px; text-align: center; white-space: pre-line; line-height: 1.5; }
+.ng-upimg { width: 100%; aspect-ratio: 9/16; border-radius: 7px; background: #20262e; border: 1px dashed #5DCAA5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-family: ui-monospace, monospace; font-size: 8.5px; color: #7fd8bb; text-align: center; }
+.ng-upspin { width: 14px; height: 14px; border: 2px solid #2f4a42; border-top-color: #5DCAA5; border-radius: 50%; animation: ng-spin .8s linear infinite; }
+@keyframes ng-spin { to { transform: rotate(360deg); } }
 .ng-refpreview { position: fixed; z-index: 60; pointer-events: none; border: 1px solid #43434c; border-radius: 10px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
 .ng-refpreview img { display: block; max-width: 260px; max-height: 260px; }
 
