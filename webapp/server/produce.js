@@ -242,14 +242,14 @@ Output ONLY JSON: {"onScreenText":"...","vo":"...","emotion":"...","purpose":"..
 export async function generateImagePrompt({ scene = {}, productName, product, style, sceneIndex = 0, sceneTotal = 1, guidance, cosmetic = false, hasCharacterRef = false, siblingTitles = null, demeanor = '', lang = 'English (US)' }) {
   // 인물: 캐릭터 레퍼런스가 있으면 레퍼런스에 100% 위임(외모 서술 금지). 없으면 인종/지역 특정 금지 + 전 씬 동일 룩.
   const personBlk = hasCharacterRef
-    ? `\n[PERSON — LOCKED TO A REFERENCE PHOTO] A fixed reference of the on-screen person is supplied to the image model. Do NOT describe their face, hair, age, ethnicity, skin or body — call them only "the creator". Describe ONLY their action, pose, hands, expression and framing; identity comes 100% from the reference.`
-    : `\n[PERSON — no reference; keep her CONSISTENT and NEUTRAL] The creator is a young woman in her mid-20s with natural, bare skin. Do NOT specify ethnicity, nationality, or regional features — keep it neutral. Keep her EXACT same look in every scene (same hair, same face) — she must NOT change shot to shot. Describe her action / pose / expression, not a fresh appearance each time.`
-  // 이 씬의 감정·목적·샷 → 표정/프레이밍을 이 비트에 정확히 맞춘다 (분석→씬에서 전달). 매 씬 같은 표정 금지.
-  const beatBlk = `\n[THIS SCENE'S BEAT — render exactly this, NOT a generic/default expression]`
-    + (scene.emotion ? `\n  emotion / facial expression: ${scene.emotion}` : '')
+    ? `\n[PERSON — IDENTITY from reference, EXPRESSION from this scene] A reference photo supplies the person's IDENTITY only (face structure, hair, skin, build). Do NOT describe their appearance — call them "the creator". Her FACIAL EXPRESSION and pose come from THIS scene's beat below, NOT from the reference — do NOT copy the reference photo's neutral/resting face. She is REACTING, not posing.`
+    : `\n[PERSON — no reference; keep her CONSISTENT and NEUTRAL] The creator is a young woman in her mid-20s with natural, bare skin. Do NOT specify ethnicity, nationality, or regional features — keep it neutral. Keep her EXACT same look in every scene (same hair, same face). Her EXPRESSION comes from this scene's beat below — she is reacting, not posing.`
+  // 이 씬의 감정·목적·샷 → 표정/프레이밍을 이 비트에 정확히 맞춘다. 페르소나 register는 목소리 톤일 뿐, 무표정 얼굴이 아님.
+  const beatBlk = `\n[THIS SCENE'S BEAT — the FACE must react to this; never a blank/staring/default expression]`
+    + (scene.emotion ? `\n  facial expression (render THIS): ${scene.emotion}` : '')
     + (scene.purpose ? `\n  role in the flow: ${scene.purpose}` : '')
     + (scene.shot ? `\n  shot (angle / distance / movement): ${scene.shot}` : '')
-    + (demeanor ? `\n  the creator's persona register is "${demeanor}" — her overall demeanor reads that way, but the per-shot expression above still varies beat to beat` : '')
+    + (demeanor ? `\n  persona tone: "${demeanor}" — this is her VOICE/attitude, a SUBTLE undertone only. It is NOT a facial instruction: do NOT render a flat, lifeless, "utterly deadpan" blank stare into the lens. Even a dry/deadpan persona still visibly REACTS to the beat above — a flicker of doubt, a small brow move, a suppressed reaction. Understated ≠ expressionless.` : '')
   // 형제 씬 제목 목록 → 이 씬을 시각적으로 확실히 다르게 (동일 구도/세팅 반복 금지).
   const listBlk = Array.isArray(siblingTitles) && siblingTitles.length > 1
     ? `\n[THE FULL SHOT LIST — this is scene ${sceneIndex + 1}; make it VISUALLY DISTINCT from every other shot: different composition, angle, distance, setting or action. Do NOT reuse the same framing or location twice]\n${siblingTitles.map((t, k) => `  ${k + 1}. ${t || '(untitled)'}${k === sceneIndex ? '   ← THIS scene' : ''}`).join('\n')}`

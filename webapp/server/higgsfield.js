@@ -135,7 +135,7 @@ export async function genImageViaCLI({ prompt, productImageUrls = [], productIma
   // 역할 라벨된 레퍼런스 (제품·캐릭터·환경) — 순서대로 media로 전달, 프롬프트에 역할 명시
   // 캐릭터를 최우선(먼저)으로 → 모델이 인물 정체성을 제품보다 우선 반영. 얼굴 락 강화.
   const labeled = [
-    ...(characterRef ? [{ r: characterRef, role: 'CHARACTER (HIGHEST PRIORITY) — the person in the shot MUST be the EXACT same individual as this reference: identical face, hair, skin tone, age and build. Do NOT restyle, beautify, age, slim, or swap them. Their identity is LOCKED to this reference and overrides any wording in the prompt.' }] : []),
+    ...(characterRef ? [{ r: characterRef, role: 'CHARACTER (HIGHEST PRIORITY) — match this reference for IDENTITY ONLY: same face structure, hair, skin tone, age and build (do NOT swap or restyle the person). But take her FACIAL EXPRESSION and pose from the PROMPT, not from the reference — do NOT copy the reference photo\'s neutral/resting expression; she reacts as the scene describes.' }] : []),
     ...prod.map((r) => ({ r, role: 'PRODUCT — reproduce this EXACT product (design, color, parts, proportions) faithfully' })),
     ...(envRef ? [{ r: envRef, role: 'ENVIRONMENT — match this setting / space / mood / lighting' }] : []),
   ].filter((x) => x.r).slice(0, 6)
