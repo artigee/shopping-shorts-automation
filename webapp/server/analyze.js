@@ -130,16 +130,28 @@ Output ONLY JSON (no explanation). Ground every field in the keyframes + caption
  "assets": [{"scene":1,"need":"footage/image needed","type":"footage|image|ai"}],
  "viralFactors": ["3-6 concrete, reusable reasons this format holds attention & converts (in ${lang})"]
 }`
-  const out = await run('claude', ['-p', prompt, '--model', CLI_MODEL], { timeout: 120000 })
-  const obj = JSON.parse(stripFence(out))
+  // 비전+큰 스키마 → sonnet이 120s를 넘길 수 있음. 240s로 늘리고 타임아웃/파싱 실패 시 1회 재시도.
+  let obj, lastErr
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const out = await run('claude', ['-p', prompt, '--model', CLI_MODEL], { timeout: 240000 })
+      obj = JSON.parse(stripFence(out))
+      if (obj && typeof obj === 'object') break
+    } catch (e) { lastErr = e /* 타임아웃 또는 파싱 실패 → 재시도 */ }
+  }
+  if (!obj) throw (lastErr || new Error('vision analysis failed'))
   return obj
 }
 
 // ── 전체 실행 ──
-export async function analyzeReel({ code, url, caption, productName, lang }) {
+export async function analyzeReel({ code, url, caption, productName, lang, onProgress }) {
+  const tick = (m, p) => { try { onProgress && onProgress(m, p) } catch { /* ignore */ } }
   const mp4 = resolve(DATA, 'reels', `${code}.mp4`)
+  tick('릴스 영상 받는 중…', 15)
   const dl = await downloadReel(url, mp4)
+  tick('키프레임 추출 중…', 28)
   const { duration, frames } = await extractFrames(mp4, resolve(DATA, 'frames', code))
+  tick('키프레임 비전 분석 중… (~1–2분)', 40)                 // 15%에 멈춰 보이던 구간 — 진행 표시
   const analysis = await analyzeFrames({ frames, caption, duration, productName, lang })
   return { ...analysis, _meta: { duration, frameCount: frames.length, bytes: dl.bytes } }
 }

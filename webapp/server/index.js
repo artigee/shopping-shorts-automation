@@ -460,7 +460,7 @@ app.post('/api/analyses/:id/analyze', (req, res) => {
   if (existing) return res.json({ jobId: existing.id, already: true })
   const job = startJob({ agent: 'analyze', refType: 'analyses', refId: a.id, message: 'queued…' }, async (progress) => {
     progress('릴스 영상 받는 중…', 15)
-    const result = await analyzeReel({ code: a.reel_code, url: a.reel_url, caption: a.reel_caption, productName: a.title, lang: genLang() })
+    const result = await analyzeReel({ code: a.reel_code, url: a.reel_url, caption: a.reel_caption, productName: a.title, lang: genLang(), onProgress: (m, pct) => progress(m, pct) })
     // Analyze가 제품까지 한 번에: 식별 → 비전으로 "생김새" 매칭 (best-effort)
     progress('제품 매칭 중…', 70)
     let product = a.product ? JSON.parse(a.product) : null   // 직접 입력으로 이미 제품이 있으면 그걸 사용
