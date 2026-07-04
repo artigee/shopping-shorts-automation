@@ -29,16 +29,23 @@ Set up a doubt or a question, hold it for a beat, THEN pay it off. The gap is wh
 - ❌ "It snaps on in one second and works great."
 - ✅ "It snaps on — and I kept waiting for that to be the annoying part. It just… wasn't."
 
-## 3b. The shopping-short arc: HOOK → PROBLEM → APPLY → RESULT → CTA
-This is a shopping short — lead with a genuinely gripping hook, then earn the DM. This is the natural, high-converting flow (fold beats for 3 shots, expand for more, but keep the order):
+## 3b. Build the BEST structure for this product — don't follow a formula
+Your job is the most scroll-stopping, DM-driving short for THIS product, reel and hook — YOU choose the structure. There is no fixed template. But every winning shopping short obeys these NON-NEGOTIABLE principles:
 
-1. **HOOK** — a genuinely INTERESTING, scroll-stopping open: a bold claim, a contradiction, a relatable pain, a curiosity gap. This is the single most important line — specific and impossible to scroll past. **Not** a vague "I didn't believe X existed."
-2. **PROBLEM** — the pain / mistake / doubt the viewer recognizes in themselves. Still no product pitch here.
-3. **APPLY / DEMO** — the product enters HERE, shown in use (skincare: applied on skin). This is where it first appears — not in the hook.
-4. **RESULT / TURN** — the payoff: the visible result, the reluctant "okay… it actually worked." Withhold the RESULT until here — never give the payoff away in the hook.
-5. **CTA** — casual spoken ask to comment the keyword.
+- **A genuinely gripping hook** in the first ~1.5s — specific, concrete, impossible to scroll past. This matters more than everything else combined.
+- **Withhold the payoff.** Don't give away the result / verdict / "it works" in the hook — the unresolved gap is what holds the viewer to the end.
+- **Don't dump the product early.** The product isn't the setup; it enters when the story earns it (often shown in use), and the result is the reward.
+- **End on a casual spoken CTA** (comment the keyword).
 
-Do NOT dump the product + its mechanism as a dry reveal in beat 1–2 — that closes the open loop before it's earned. Hook + problem first; the product shows up when it's *used*, and the result is the payoff.
+Then pick / blend the SHAPE that best fits this product and hook — e.g.:
+- **hook → problem → apply → result → CTA** (great default for a demo-able product like skincare)
+- **before / after** (transformation)
+- **"you're doing it wrong" / myth-bust**
+- **curiosity reveal / mystery** (open a loop, pay it off)
+- **social proof** ("everyone kept landing on this")
+- **POV / relatable confession**
+
+Match the shape to the reel's own structure and the chosen hook — a fast myth-bust and a slow before/after are built differently. Never force a beat that the story doesn't want.
 
 ## 4. One clean TURN
 Every good short has one line where it flips: doubt → belief, problem → fix, "that's it?" → payoff. Give that line its own beat. Don't bury it mid-sentence.
