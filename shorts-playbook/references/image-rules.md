@@ -28,7 +28,10 @@ Sweet spot: instantly recognizable as the real product, yet the viewer still has
 - The emotion must match the beat: a doubt beat reads as doubt, a value-reveal reads as a small realization, the CTA reads as warm/inviting.
 - **Show, don't tell:** only what the camera literally sees (subject, setting, action, framing, light) — no emotional narration ("quiet triumph", "relief").
 
-## 5. Framing
+## 5. NEVER show a phone / camera / recording device
+"Selfie", "UGC", "front camera", "mirror", "phone held at chest height / angled up" and similar describe the **camera PERSPECTIVE only** (a first-person, arm's-length POV) — they are NOT a phone or camera held in the shot. **Never render a phone, camera, tripod, or any recording device in frame, and never show her holding a phone.** If a shot note mentions a phone or selfie angle, treat it purely as the camera position and show her face / hands / the product — no device. Her hands hold the product or gesture, never a phone.
+
+## 6. Framing
 - Ground the shot in this scene's Title + VO — not a generic "product beautifully placed, problem solved" beauty shot.
 - Depict the product at its TRUE real-world size.
 - Vary framing / angle / distance per scene (the shot type is provided) — no two shots share the same composition or setting.
