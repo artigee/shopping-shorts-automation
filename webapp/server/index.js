@@ -593,6 +593,23 @@ app.post('/api/contents/:id/product-ref', (req, res) => {
   res.json(p)
 })
 
+// 로컬 파일 레퍼런스 저장만 (base64 → 디스크). Higgsfield 업로드는 첫 '사용' 시로 지연(lazy).
+// 즉시 응답 → 드롭이 바로 썸네일로 뜬다. 반환 ref = 로컬 경로(hfmedia: 접두어 없음 = 아직 미업로드).
+app.post('/api/contents/:id/ref-save', (req, res) => {
+  const { filename, contentType, dataB64 } = req.body || {}
+  const c = db.prepare('SELECT id FROM contents WHERE id = ?').get(req.params.id)
+  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
+  if (!dataB64) return res.status(400).json({ error: '파일 데이터 없음' })
+  try {
+    const buffer = Buffer.from(dataB64.replace(/^data:[^;]+;base64,/, ''), 'base64')
+    const dir = path.join(OUTPUT_DIR, `content-${c.id}`); fs.mkdirSync(dir, { recursive: true })
+    const ext = ((contentType || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg').replace('+xml', '')
+    const fname = `uref-${Date.now().toString().slice(-7)}.${ext}`
+    fs.writeFileSync(path.join(dir, fname), buffer)
+    res.json({ ref: `/output/content-${c.id}/${fname}` })
+  } catch (e) { res.status(500).json({ error: e.message || String(e) }) }
+})
+
 // 로컬 파일 레퍼런스 업로드 (base64) → Higgsfield 업로드 → product.images 맨 앞(첫 레퍼런스)
 app.post('/api/contents/:id/ref-upload', async (req, res) => {
   const { filename, contentType, dataB64 } = req.body || {}
@@ -934,6 +951,30 @@ async function genVoTextForScene(c, scenes, i, guidance) {
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
   return scenes[i]
 }
+// lazy 업로드: 로컬 전용 ref(/output/…, hfmedia: 없음)를 첫 사용 시 HF에 업로드하고
+// refLib에 media_id를 박아 upload-once로 만든다. 이미 hfmedia:/http면 그대로 둔다.
+async function upgradeRefsToHf(c, refLib, refGroups) {
+  let changed = false
+  const cache = new Map()
+  const up = async (ref) => {
+    if (!ref || typeof ref !== 'string') return ref
+    if (ref.startsWith('hfmedia:') || /^https?:/i.test(ref)) return ref     // 이미 HF 사용가능
+    if (cache.has(ref)) return cache.get(ref)
+    const local = ref.replace(/^.*\|/, '')                                   // 접두어 제거 → 순수 로컬 경로
+    const abs = path.join(OUTPUT_DIR, local.replace(/^\/output\//, ''))
+    if (!fs.existsSync(abs)) { cache.set(ref, ref); return ref }             // 파일 없음 → 그대로(폴백)
+    const ct = 'image/' + (path.extname(abs).slice(1).replace('jpg', 'jpeg') || 'png')
+    const mediaRef = await uploadRefViaCLI({ buffer: fs.readFileSync(abs), filename: path.basename(abs), contentType: ct })
+    const upgraded = `${mediaRef}|${local}`
+    cache.set(ref, upgraded)
+    if (refLib) for (const role of ['product', 'character', 'environment']) for (const a of (refLib[role] || [])) if (a && a.thumb === ref) { a.thumb = upgraded; changed = true }
+    return upgraded
+  }
+  const out = {}
+  for (const k of Object.keys(refGroups)) { const v = refGroups[k]; out[k] = Array.isArray(v) ? await Promise.all(v.map(up)) : await up(v) }
+  if (changed) db.prepare(`UPDATE contents SET ref_lib = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(refLib), c.id)
+  return out
+}
 async function genImageForScene(c, scenes, i, promptOverride) {
   const product = c.product ? JSON.parse(c.product) : null
   const scenePrompt = promptOverride || scenes[i].imagePrompt || buildImagePrompt(scenes[i], product)
@@ -953,12 +994,16 @@ async function genImageForScene(c, scenes, i, promptOverride) {
     gChar = (gr.character || []).map((id) => map[id]).find(Boolean) || null
     gEnv = (gr.environment || []).map((id) => map[id]).find(Boolean) || null
   }
-  const refs = (gProduct && gProduct.length) ? gProduct : (Array.isArray(scenes[i].refs) && scenes[i].refs.length) ? scenes[i].refs : [product?.image || (product?.images || [])[0]].filter(Boolean)
-  const characterRef = gChar || c.character_ref || null
-  const envRef = gEnv || scenes[i].envRef || null
-  const url = hfReady()
-    ? await genImage({ prompt, aspect: '9:16' })
-    : await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, productName: product?.title, dimensions: product?.dimensions })
+  let refs = (gProduct && gProduct.length) ? gProduct : (Array.isArray(scenes[i].refs) && scenes[i].refs.length) ? scenes[i].refs : [product?.image || (product?.images || [])[0]].filter(Boolean)
+  let characterRef = gChar || c.character_ref || null
+  let envRef = gEnv || scenes[i].envRef || null
+  let url
+  if (hfReady()) { url = await genImage({ prompt, aspect: '9:16' }) }
+  else {
+    const up = await upgradeRefsToHf(c, refLib, { refs, characterRef, envRef })   // 로컬 전용 ref → 첫 사용 시 HF 업로드(once)
+    refs = up.refs; characterRef = up.characterRef; envRef = up.envRef
+    url = await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, productName: product?.title, dimensions: product?.dimensions })
+  }
   const rel = await saveAsset(c.id, i, url, false)
   scenes[i] = { ...scenes[i], ...(promptOverride ? { imagePrompt: promptOverride } : {}), image: rel, imageSrc: url }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)

@@ -520,16 +520,16 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     const files = [...(ev.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/'))
     if (files.length) {   // 파일 드롭 → 서버 업로드(Higgsfield, ~50s) → 생성에 쓸 수 있는 ref 저장
       if (cid == null) { setErr('open a content first'); return }
-      setLibOpen(true)                                  // 패널 열어서 진행 표시가 보이도록
+      setLibOpen(true)                                  // 패널 열어서 새 ref가 보이도록
       for (const f of files) {
         bumpUp(role, 1)
         try {
           const dataB64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f) })
-          const p = await postJSON(`/api/contents/${cid}/ref-upload`, { filename: f.name, contentType: f.type, dataB64 })
-          const ref = (p.images && p.images[0]) || null
+          const p = await postJSON(`/api/contents/${cid}/ref-save`, { filename: f.name, contentType: f.type, dataB64 })   // 로컬 저장만 (즉시) — HF 업로드는 첫 사용 시
+          const ref = p.ref || null
           if (ref) addRefAsset(role, ref, f.name)
-          else setErr('upload returned no image')
-        } catch (e) { setErr('ref upload failed: ' + String(e.message || e)) } finally { bumpUp(role, -1) }
+          else setErr('save returned no ref')
+        } catch (e) { setErr('ref save failed: ' + String(e.message || e)) } finally { bumpUp(role, -1) }
       }
       return
     }
@@ -636,7 +636,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 {items.length || upBusy[role]
                   ? <div className="ng-libgrid">
                     {Array.from({ length: upBusy[role] || 0 }, (_, i) => (
-                      <div key={'up' + i} className="ng-libitem"><div className="ng-upimg"><span className="ng-upspin" />uploading…</div></div>
+                      <div key={'up' + i} className="ng-libitem"><div className="ng-upimg"><span className="ng-upspin" />saving…</div></div>
                     ))}
                     {items.map((a) => (
                     <div key={a.id} className="ng-libitem">
@@ -644,7 +644,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                       <span className="ng-libdel" title="delete" onClick={() => deleteRefAsset(role, a.id)}>×</span>
                       <div className="nm">{a.name}</div>
                     </div>))}</div>
-                  : <div className="ng-empty">drop image here · or ＋ URL{'\n'}(upload takes ~30–60s)</div>}
+                  : <div className="ng-empty">drop image here · or ＋ URL{'\n'}(uploads to Higgsfield on first use)</div>}
               </div>
             )
           })}
