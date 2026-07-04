@@ -2,19 +2,21 @@
 
 These govern the visuals (image prompt → image → clip), not the VO. They are **injected into every image prompt as the source of truth** — edit this file to change the output.
 
-## 1. Product — realize it ACCURATELY, but tease (don't showcase)
-The product must look like the REAL product. Reproduce its exact design, shape, color, proportions **and its own branding/logo** faithfully from the reference image. A generic, unbranded, blurred-out blob is WRONG — accurate product realization and brand identity are critical.
+## 1. Product — real & recognizable, but TEASED (never a readable hero)
+Reproduce the product's REAL design, shape, color and proportions faithfully from the reference so it looks like the actual product — NOT a generic unbranded blob. Its identity must be recognizable.
 
-At the same time, the short's job is to make the viewer DM for the link, so it is NOT a clean catalog hero shot:
-- Keep the product at a **natural distance** — clearly present and recognizable, held or in use, **secondary** to the person / skin / reaction / result.
-- Do **not** do a tight macro close-up where the fine print / paragraph text is readable, and do **not** blur, hide, or turn the product away to the point its identity is lost.
-- The sweet spot: the viewer instantly recognizes the real product (design + logo), but still has to comment / DM to get the link — recognizable brand, not a legible spec sheet.
+BUT it is **never** a clean, readable hero shot — that's what kills the DM:
+- **DO NOT hold the product up centered, facing the camera, with its label readable.** No catalog / "presenting the product to camera" shot. This is the #1 mistake.
+- Keep it **secondary and at a natural distance** — held low or to the side, in the middle of being applied/used, partially cropped, angled, or turned — so the viewer **recognizes the product's shape and brand at a glance but CANNOT read the full label** off the screen.
+- The **person / skin / reaction / result is the subject**; the product supports the moment, it isn't the moment.
+- The brand mark may be *glimpsed*, but the full label/text is NOT presented legible to the camera.
+
+Sweet spot: instantly recognizable as the real product, yet the viewer still has to comment / DM to get the link.
 
 ## 2. Text
-- The product's **own branding / logo SHOULD render** (accurately, from the reference) — that is part of realizing it. Do not blank it out.
+- Reproduce the product's real design from the reference — but frame it (angle / crop / distance) so the label does **NOT** read as clean legible text to the camera.
 - **No overlay captions, subtitles, or added on-screen text.**
 - **No random or garbled signage / paragraph text** on background objects.
-- AI garbles tiny print, so keep any small fine print on the product non-legible — but the product and its brand mark stay clearly recognizable.
 
 ## 3. The person (creator)
 - Do **NOT** specify ethnicity, nationality, or regional features. Keep the person neutral.
