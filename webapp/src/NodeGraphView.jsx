@@ -141,7 +141,7 @@ function buildGraph(data) {
     mk({ id: 'promptV-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y: y + 160, scene: k, t: (s.voEn || s.vo || '').slice(0, 90), data: { prompt: s.voEn || s.vo || '', guidance: '' } })
     mk({ id: 'image-' + k, role: 'image', kind: 'image', hd: 'scene ' + k, x: COL.image, y, scene: k, thumb: bust(media(s.image), lv), data: { imagePrompt: s.imagePrompt || '', image: s.image || '', aspect: '9:16', model: 'auto', seed: '', style: data.style || '', frameRole: 'start', guidance: '', refs: (s.graphRefs && typeof s.graphRefs === 'object') ? { product: [], character: [], environment: [], ...s.graphRefs } : defRefs() } })
     mk({ id: 'vo-' + k, role: 'vo', kind: 'vo', hd: 'scene ' + k, x: COL.vo, y, scene: k, audio: bust(media(s.audio), lv), data: { voiceId: data.persona || 'default', lang: 'US EN', audio: s.audio || '' } })
-    const clip = s.makeVideo !== false
+    const clip = true   // clip + motion 노드는 항상 존재(파이프라인 고정). makeVideo는 노드 안 animate/still 토글일 뿐 — 노드 유무를 좌우하지 않음.
     if (clip) {
       mk({ id: 'promptM-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y: y + 80, scene: k, t: (s.motionPrompt || '').slice(0, 90), data: { prompt: s.motionPrompt || '', guidance: '' } })
       mk({ id: 'clip-' + k, role: 'clip', kind: 'clip', hd: 'scene ' + k, x: COL.clip, y, scene: k, video: bust(media(s.video), lv), image: bust(media(s.image), lv), data: { makeVideo: s.makeVideo === false ? 'still' : 'animate', cameraMove: s.cameraMove || '', duration: s.durationSec || 4, model: 'kling3_0' } })
