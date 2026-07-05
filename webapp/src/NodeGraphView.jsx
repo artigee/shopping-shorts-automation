@@ -96,7 +96,7 @@ function adapt(resp) {
     voStyle: c.vo_style || '', voStyleNote: c.vo_style_note || '',
     shot_count: c.shot_count, direction: c.direction, preview: c.preview, export_mp4: c.export_mp4,
     analysisRow: resp.analysis || {}, product: resp.product || parse(c.product) || {},
-    scenes: parse(c.scenes) || [], overall: parse(c.overall) || null, refLibSaved: parse(c.ref_lib) || null, nodeMetaSaved: parse(c.node_meta) || null, mediaVer: Date.now(),
+    scenes: parse(c.scenes) || [], overall: parse(c.overall) || null, refLibSaved: parse(c.ref_lib) || null, nodeMetaSaved: parse(c.node_meta) || null, graphSaved: parse(c.graph_state) || null, mediaVer: Date.now(),
   }
 }
 
@@ -154,8 +154,29 @@ function buildGraph(data) {
     edges.push({ from: 'vo-' + k, to: 'movie', cls: 'audio' })
   })
   if (data.nodeMetaSaved) nodes.forEach((n) => { const nm = data.nodeMetaSaved[n.id]; if (nm) n.hd = nm })   // 편집한 노드 이름 복원
+  // 저장된 그래프 레이아웃 병합 — 수동 추가 노드/연결/위치/노드 설정 복원 (재빌드해도 유지)
+  const gs = data.graphSaved
+  if (gs) {
+    const byId = {}; nodes.forEach((n) => (byId[n.id] = n))
+    if (gs.pos) nodes.forEach((n) => { const p = gs.pos[n.id]; if (Array.isArray(p)) { n.x = p[0]; n.y = p[1] } })       // 위치 복원
+    if (gs.data) nodes.forEach((n) => { const d = gs.data[n.id]; if (d) n.data = { ...n.data, ...d } })                  // 노드 설정(frameRole 등) 복원
+    if (Array.isArray(gs.extraNodes)) gs.extraNodes.forEach((en) => { if (en && en.id && !byId[en.id]) { const nn = { ...en }; nodes.push(nn); byId[en.id] = nn } })  // 수동 노드 복원
+    if (Array.isArray(gs.edges)) { const has = new Set(edges.map((e) => e.from + '>' + e.to)); gs.edges.forEach((e) => { const kk = e.from + '>' + e.to; if (!has.has(kk) && byId[e.from] && byId[e.to]) { edges.push(e); has.add(kk) } }) }  // 수동 연결 복원(중복 제외)
+  }
   return { nodes, edges, refLib }
 }
+
+// 그래프 레이아웃 직렬화 — 위치·수동노드·연결·노드설정만(콘텐츠는 씬에서 신선하게). 재빌드해도 사용자 커스터마이즈 유지.
+const GSAVE_KEYS = ['frameRole', 'aspect', 'model', 'style', 'seed', 'makeVideo', 'cameraMove', 'duration', 'voiceId', 'lang', 'exportMode']
+function graphStateOf(g) {
+  const pos = {}, data = {}
+  g.nodes.forEach((n) => {
+    pos[n.id] = [Math.round(n.x || 0), Math.round(n.y || 0)]
+    const d = {}; GSAVE_KEYS.forEach((k) => { if (n.data && n.data[k] != null && n.data[k] !== '') d[k] = n.data[k] }); if (Object.keys(d).length) data[n.id] = d
+  })
+  return { pos, data, extraNodes: g.nodes.filter((n) => String(n.id).includes('-u')), edges: g.edges }
+}
+const graphKeyOf = (g) => JSON.stringify({ n: g.nodes.map((n) => [n.id, Math.round(n.x || 0), Math.round(n.y || 0), n.data?.frameRole, n.data?.makeVideo, n.data?.model, n.data?.cameraMove]), e: g.edges.map((e) => e.from + '>' + e.to) })
 
 export default function NodeGraphView({ openId, onOpenHandled }) { return <ErrorBoundary><NodeGraphInner openId={openId} onOpenHandled={onOpenHandled} /></ErrorBoundary> }
 function NodeGraphInner({ openId, onOpenHandled }) {
@@ -192,6 +213,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const srcSig = useRef(null)               // 로드 당시 소스 분석 시그니처(analyzed_at)
   const loadedRefKey = useRef('')           // 로드 당시 refLib 시그니처 (변경 감지용)
   const loadedNameKey = useRef('')          // 로드 당시 노드 이름 시그니처
+  const loadedGraphKey = useRef('')         // 로드 당시 그래프 레이아웃 시그니처
   const hist = useRef({ past: [], future: [], key: null })
   const dragSnap = useRef(null)
   const [histN, setHistN] = useState({ u: 0, r: 0 })
@@ -430,7 +452,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       commitRun(n.id, (x) => ({ ...x, dirty: false }))
     } catch (e) { setErr(String(e.message || e)) }
   }
-  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; if (staleAllOnLoad.current) { const gen = new Set(['overall', 'script', 'prompt', 'image', 'clip', 'vo', 'movie']); g.nodes.forEach((n) => { if (gen.has(n.kind)) n.dirty = true }); staleAllOnLoad.current = false } loadedRefKey.current = JSON.stringify(g.refLib); loadedNameKey.current = g.nodes.map((n) => n.id + '=' + n.hd).join('|'); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: undoStack.current.length, r: redoStack.current.length }); setNg(g) }, [data])
+  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; if (staleAllOnLoad.current) { const gen = new Set(['overall', 'script', 'prompt', 'image', 'clip', 'vo', 'movie']); g.nodes.forEach((n) => { if (gen.has(n.kind)) n.dirty = true }); staleAllOnLoad.current = false } loadedRefKey.current = JSON.stringify(g.refLib); loadedNameKey.current = g.nodes.map((n) => n.id + '=' + n.hd).join('|'); loadedGraphKey.current = graphKeyOf(g); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: undoStack.current.length, r: redoStack.current.length }); setNg(g) }, [data])
   // 레퍼런스 라이브러리 정리(추가/이동/삭제)를 자동 저장 — 로드값과 다를 때만
   const refLibKey = JSON.stringify(ng.refLib)
   useEffect(() => {
@@ -444,6 +466,13 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     const t = setTimeout(() => { const meta = {}; ng.nodes.forEach((n) => { meta[n.id] = n.hd }); postJSON(`/api/contents/${cid}/node-meta`, { nodeMeta: meta }, 'PUT').catch(() => {}) }, 700)
     return () => clearTimeout(t)
   }, [nameKey])
+  // 그래프 레이아웃(위치·수동노드·연결·설정) 자동 저장 (디바운스) — 로드값과 다를 때만. 재빌드/보드왕복해도 유지.
+  const graphKey = graphKeyOf(ng)
+  useEffect(() => {
+    if (cid == null || !data || graphKey === loadedGraphKey.current) return
+    const t = setTimeout(() => { postJSON(`/api/contents/${cid}/graph-state`, { state: graphStateOf(ng) }, 'PUT').catch(() => {}) }, 700)
+    return () => clearTimeout(t)
+  }, [graphKey])
 
   const graph = ng
   const nodeById = useMemo(() => { const m = {}; graph.nodes.forEach((n) => (m[n.id] = n)); return m }, [graph])

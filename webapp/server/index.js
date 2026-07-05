@@ -846,6 +846,12 @@ app.put('/api/contents/:id/node-meta', (req, res) => {
   db.prepare(`UPDATE contents SET node_meta = ?, updated_at = datetime('now') WHERE id = ?`).run(nodeMeta ? JSON.stringify(nodeMeta) : null, req.params.id)
   res.json({ ok: true })
 })
+// 그래프 레이아웃 저장 — 수동 추가 노드/연결/위치/노드 설정을 보존 (재빌드해도 유지)
+app.put('/api/contents/:id/graph-state', (req, res) => {
+  const state = (req.body && req.body.state) || null
+  db.prepare(`UPDATE contents SET graph_state = ?, updated_at = datetime('now') WHERE id = ?`).run(state ? JSON.stringify(state) : null, req.params.id)
+  res.json({ ok: true })
+})
 
 // ④ 씬 스크립트 생성 (편집된 전체 스크립트를 씬 단위로 분해; 없으면 자동 생성). body.guidance로 guided regeneration.
 app.post('/api/contents/:id/script', async (req, res) => {
