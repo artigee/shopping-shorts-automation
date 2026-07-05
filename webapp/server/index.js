@@ -1023,10 +1023,11 @@ async function upgradeRefsToHf(c, refLib, refGroups) {
 async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
   const product = c.product ? JSON.parse(c.product) : null
   const scenePrompt = promptOverride || scenes[i].imagePrompt || buildImagePrompt(scenes[i], product)
-  // 프레임 역할 → 이 키프레임의 표정 순간을 지정 (start=반응 시작, end=해소/피크). 클립은 start→end 사이를 렌더.
+  // 프레임 역할 → 클립은 start 프레임에서 end 프레임으로 '움직임'을 렌더한다. 두 프레임은 같은 그림이면 안 되고, 이 씬 모션(motionPrompt)의 시작 상태 / 끝 상태를 각각 담아야 한다.
+  const motion = (scenes[i].motionPrompt || '').trim()
   const frameDir = frameRole === 'end'
-    ? '[FRAME = END KEYFRAME] Render the RESOLVED / settled version of this beat: the expression AFTER the reaction has landed (the payoff look — e.g. the earned half-smile, the settled "oh, that\'s why"). This is the end of the same micro-reaction, so the clip can morph from the start frame to here.'
-    : '[FRAME = START KEYFRAME] Render the ONSET of this beat: the reaction just BEGINNING (the first flicker — e.g. the eyes just landing, the brow starting to move), a natural opening pose the motion can animate forward from.'
+    ? `[FRAME = END KEYFRAME — the LAST frame of the clip] This is a DIFFERENT moment than the start frame — the clip animates motion FROM the start frame TO this one, so it CANNOT be the same picture. Render the state AFTER this scene's action has played out${motion ? ` (the motion between the frames: ${motion})` : ''}: the pose has CHANGED — hand / product / gaze / body moved to their END position — and the expression has RESOLVED to its payoff (the earned half-smile, the settled "oh, that's why"). It MUST be visibly different from the start frame in pose AND expression. Do NOT reproduce the start frame.`
+    : `[FRAME = START KEYFRAME — the FIRST frame of the clip] Render the state at the START of this scene's action${motion ? ` (the motion that follows: ${motion})` : ''}: the OPENING pose — hand / product / gaze / body in their starting position — and the expression just BEGINNING (the first flicker). A clearly EARLIER, different moment than the end frame; the motion animates forward from here toward a changed end pose.`
   const prompt = [
     scenePrompt,
     frameDir,
