@@ -311,7 +311,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     if (!ep || k == null) { setErr(`'${n.hd}' re-run isn't wired (supported: overall · scene-script · image-prompt · motion · VO-text · image · clip · vo).`); return }
     setRunning({ id: n.id, msg: 'running…', t0 })
     try {
-      const body = (ep === 'prompt' || ep === 'motion' || ep === 'votext' || ep === 'script') ? { guidance: n.data.guidance || '' } : {}
+      const body = (ep === 'prompt' || ep === 'motion' || ep === 'votext' || ep === 'script') ? { guidance: n.data.guidance || '' } : ep === 'image' ? { frameRole: n.data.frameRole || 'start' } : {}   // 이미지 노드는 frameRole(start/end)을 보내 표정 순간을 결정
       await postJSON(`/api/contents/${cid}/scene/${k}/${ep}`, body)   // 씬 스크립트 + input prompt(guidance) 기반 생성
       const r = await api(`/api/contents/${cid}`)                   // 새 씬 데이터 가져와 (buildGraph와 동일 필드로) 노드 갱신
       const s = (parse(r.content?.scenes) || [])[k] || {}

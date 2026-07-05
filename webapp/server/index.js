@@ -1014,11 +1014,16 @@ async function upgradeRefsToHf(c, refLib, refGroups) {
   if (changed) db.prepare(`UPDATE contents SET ref_lib = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(refLib), c.id)
   return out
 }
-async function genImageForScene(c, scenes, i, promptOverride) {
+async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
   const product = c.product ? JSON.parse(c.product) : null
   const scenePrompt = promptOverride || scenes[i].imagePrompt || buildImagePrompt(scenes[i], product)
+  // 프레임 역할 → 이 키프레임의 표정 순간을 지정 (start=반응 시작, end=해소/피크). 클립은 start→end 사이를 렌더.
+  const frameDir = frameRole === 'end'
+    ? '[FRAME = END KEYFRAME] Render the RESOLVED / settled version of this beat: the expression AFTER the reaction has landed (the payoff look — e.g. the earned half-smile, the settled "oh, that\'s why"). This is the end of the same micro-reaction, so the clip can morph from the start frame to here.'
+    : '[FRAME = START KEYFRAME] Render the ONSET of this beat: the reaction just BEGINNING (the first flicker — e.g. the eyes just landing, the brow starting to move), a natural opening pose the motion can animate forward from.'
   const prompt = [
     scenePrompt,
+    frameDir,
     c.style && c.style.trim() ? `Style direction: ${c.style.trim()}.` : '',
     product?.dimensions ? `The real product's actual dimensions are ${product.dimensions} — depict it at exactly that real-world size.` : '',
     product?.features ? `Depict the product accurately per these real specs/mechanics: ${String(product.features).slice(0, 700)}` : '',
@@ -1201,7 +1206,7 @@ app.post('/api/contents/:id/scene/:index/image', async (req, res) => {
   const i = Number(req.params.index)
   if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
   try {
-    const scene = await genImageForScene(c, scenes, i, req.body && req.body.prompt)
+    const scene = await genImageForScene(c, scenes, i, req.body && req.body.prompt, req.body && req.body.frameRole)
     res.json({ ok: true, scene })
   } catch (e) {
     const m = e.message || String(e)
