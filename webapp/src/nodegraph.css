@@ -120,6 +120,13 @@
 .ng-libdel:hover { background: #e0655e; }
 .ng-libitem .nm { font-family: ui-monospace, monospace; font-size: 9px; color: #9c9a92; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ng-empty { font-family: ui-monospace, monospace; font-size: 10px; color: #6b6a64; border: 1px dashed #2f2f36; border-radius: 8px; padding: 14px 8px; text-align: center; white-space: pre-line; line-height: 1.5; }
+.ng-refform { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 8px; padding: 7px; border: 1px solid #2f2f36; border-radius: 8px; background: #1b1b1f; }
+.ng-refin { font-family: ui-monospace, monospace; font-size: 11px; color: #d8d6cc; background: #131316; border: 1px solid #34343c; border-radius: 6px; padding: 5px 7px; outline: none; }
+.ng-refin:focus { border-color: #5DCAA5; }
+.ng-refbtns { display: flex; gap: 6px; }
+.ng-refbtns button { font-family: ui-monospace, monospace; font-size: 10px; padding: 4px 9px; border-radius: 6px; border: 1px solid #5DCAA5; background: rgba(93,202,165,.14); color: #cfeee2; cursor: pointer; }
+.ng-refbtns button.ghost { border-color: #3a3a42; background: transparent; color: #8a8880; }
+.ng-refbtns button:disabled { opacity: .5; cursor: default; }
 .ng-elstrip { margin: 2px 0 8px; }
 .ng-elhdr { font-family: ui-monospace, monospace; font-size: 9px; color: #7fb8a0; letter-spacing: .04em; margin: 0 0 4px; }
 .ng-elitem .nm { color: #7fb8a0; }

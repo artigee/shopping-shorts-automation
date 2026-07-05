@@ -208,15 +208,19 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const [upBusy, setUpBusy] = useState({})   // role별 업로드 진행 개수 (HF CLI 업로드가 ~50s 걸려 즉시 피드백 필요)
   const [hfEls, setHfEls] = useState(null)   // 히긱스필드 등록 element 목록 (available)
   const [hfElsBusy, setHfElsBusy] = useState(false)
+  const [refInput, setRefInput] = useState(null)   // 인라인 입력 폼 {role, mode:'ref'|'element', url, name} — window.prompt이 VSCode 웹뷰에서 안 떠서 대체
   const roleCat = { product: 'prop', character: 'character', environment: 'environment' }   // 패널 role → HF element category
   const loadHfEls = (refresh) => { setHfElsBusy(true); return api('/api/hf/elements' + (refresh ? '?refresh=1' : '')).then((r) => setHfEls(r.elements || [])).catch(() => setHfEls([])).finally(() => setHfElsBusy(false)) }
   useEffect(() => { if (libOpen && hfEls == null) loadHfEls(false) }, [libOpen])   // 패널 열 때 1회 로드
-  async function registerHfElement(role) {
-    const url = window.prompt(role + ' — element로 등록할 이미지 URL (https):'); if (!url) return
-    const name = window.prompt('element 이름 (영문/숫자/-):', ''); if (!name) return
-    setHfElsBusy(true)
-    try { await postJSON('/api/hf/elements', { name, category: roleCat[role], imageUrl: url }); await loadHfEls(true) }
-    catch (e) { setErr('element 등록 실패: ' + (e.message || e)) } finally { setHfElsBusy(false) }
+  async function submitRefInput() {
+    const f = refInput; if (!f) return
+    const url = (f.url || '').trim(); if (!url) { setErr('이미지 URL을 입력하세요'); return }
+    if (f.mode === 'element') {
+      if (!(f.name || '').trim()) { setErr('element 이름을 입력하세요'); return }
+      setHfElsBusy(true)
+      try { await postJSON('/api/hf/elements', { name: f.name.trim(), category: roleCat[f.role], imageUrl: url }); setRefInput(null); await loadHfEls(true) }
+      catch (e) { setErr('element 등록 실패: ' + (e.message || e)) } finally { setHfElsBusy(false) }
+    } else { addRefAsset(f.role, url, (f.name || '').trim() || f.role); setRefInput(null) }
   }
   const [preview, setPreview] = useState(null)
   const [wireEnd, setWireEnd] = useState(null)
@@ -864,7 +868,17 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); try { e.dataTransfer.dropEffect = 'copy' } catch { /* noop */ } e.currentTarget.classList.add('drag') }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag') }}
                 onDrop={(e) => dropRefs(e, role)}>
-                <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="add local reference by URL" onClick={() => { const url = window.prompt(role + ' reference — image URL:'); if (url) addRefAsset(role, url, role + ' ' + (items.length + 1)) }}>＋</span><span className="add" title="register a NAMED Higgsfield element (callable by @name)" onClick={() => registerHfElement(role)}>⬡</span></h4>
+                <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="add local reference by URL" onClick={() => setRefInput({ role, mode: 'ref', url: '', name: '' })}>＋</span><span className="add" title="register a NAMED Higgsfield element (callable by @name)" onClick={() => setRefInput({ role, mode: 'element', url: '', name: '' })}>⬡</span></h4>
+                {refInput && refInput.role === role && (
+                  <div className="ng-refform">
+                    {refInput.mode === 'element' && <input className="ng-refin" placeholder="element name (a-z 0-9 -)" value={refInput.name} autoFocus onChange={(e) => setRefInput({ ...refInput, name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') submitRefInput(); if (e.key === 'Escape') setRefInput(null) }} />}
+                    <input className="ng-refin" placeholder="image URL (https://…)" value={refInput.url} autoFocus={refInput.mode === 'ref'} onChange={(e) => setRefInput({ ...refInput, url: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') submitRefInput(); if (e.key === 'Escape') setRefInput(null) }} />
+                    <div className="ng-refbtns">
+                      <button onClick={submitRefInput} disabled={hfElsBusy}>{refInput.mode === 'element' ? (hfElsBusy ? 'registering…' : '⬡ register') : '＋ add'}</button>
+                      <button className="ghost" onClick={() => setRefInput(null)}>cancel</button>
+                    </div>
+                  </div>
+                )}
                 {(() => { const els = (hfEls || []).filter((e) => (e.category || '').replace('auto:', '') === roleCat[role]); return els.length ? (
                   <div className="ng-elstrip">
                     <div className="ng-elhdr">⬡ Higgsfield elements{hfElsBusy ? ' · …' : ''}</div>
