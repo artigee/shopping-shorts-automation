@@ -491,6 +491,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       const has = new Set(g.edges.map((e) => e.from + '>' + e.to)); ngRef.current.edges.forEach((e) => { const kk = e.from + '>' + e.to; if (!has.has(kk) && byId[e.from] && byId[e.to]) { g.edges.push(e); has.add(kk) } })
     }
     prevCidRef.current = cid
+    // 복원된 수동 노드(-uN)보다 높은 값에서 새 id 시작 — 보드 왕복(재마운트)으로 카운터가 0으로 리셋돼 id 충돌 → 새 노드가 사라지는 것 방지
+    let maxU = -1; g.nodes.forEach((n) => { const m = /-u(\d+)$/.exec(String(n.id)); if (m) maxU = Math.max(maxU, +m[1]) }); if (uidN.current <= maxU) uidN.current = maxU + 1
     if (staleAllOnLoad.current) { const gen = new Set(['overall', 'script', 'prompt', 'image', 'clip', 'vo', 'movie']); g.nodes.forEach((n) => { if (gen.has(n.kind)) n.dirty = true }); staleAllOnLoad.current = false } loadedRefKey.current = JSON.stringify(g.refLib); loadedNameKey.current = g.nodes.map((n) => n.id + '=' + n.hd).join('|'); loadedGraphKey.current = graphKeyOf(g); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: undoStack.current.length, r: redoStack.current.length }); setNg(g) }, [data])
   // 레퍼런스 라이브러리 정리(추가/이동/삭제)를 자동 저장 — 로드값과 다를 때만
   const refLibKey = JSON.stringify(ng.refLib)
