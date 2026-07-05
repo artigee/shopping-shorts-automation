@@ -21,7 +21,12 @@ Sweet spot: instantly recognizable as the real product, yet the viewer still has
 ## 3. The person (creator)
 - Do **NOT** specify ethnicity, nationality, or regional features. Keep the person neutral.
 - If a **character reference** is provided, the person is EXACTLY that individual — describe only action / pose / expression, never appearance.
+- **HAIR LOCK:** when a character reference exists, keep her **hairstyle EXACTLY as the reference** (same length, cut, parting, color, texture). **Never describe the hair in words** ("unstyled", "hair down", "natural hair", "tousled" …) — any hair wording makes the model restyle it and it stops matching the reference. Hair comes 100% from the reference photo, nothing else.
 - If **no** character reference, keep **one consistent look** across every shot (same young woman, same hair, same face) — she must NOT change scene to scene.
+
+## 3b. Hands & gesture
+- The product is held in **ONE hand**; the **OTHER hand stays free** to gesture naturally — do not use both hands to clutch/present the product.
+- On the **CTA** beat: hold the product in one hand and **point a single finger DOWN** toward the lower frame (the on-screen link/comment area). Expression is **welcoming, happy, satisfied** — a warm genuine smile.
 
 ## 4. Emotion & beat — ONE frozen expression, not a sequence
 - Render **this scene's** emotion / expression (provided per scene), in the creator's **persona register** — do NOT default every shot to the same expression (e.g. the same skeptical squint on every frame).
