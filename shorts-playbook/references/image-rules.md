@@ -7,6 +7,7 @@ When a reference image is provided (character, product, or environment), **the r
 - The prompt describes **only** what the reference does NOT fix: the **action, expression, framing, camera, and light** for this scene.
 - It must **never** add appearance/design details for a referenced subject: for the **character**, no hair/face/skin/age/body/clothing words; for the **product**, no invented colors, parts, text, or features not visible in the reference.
 - If a detail is defined by the reference, it comes 100% from the reference — describing it in words only makes the model drift away from the reference.
+- **ONE exception — wardrobe/modesty (see 3c):** she must ALWAYS wear a simple casual top. If the character reference is cropped at the shoulders or bare, still put her in a top — never reproduce bare shoulders/chest.
 Reproduce the product's REAL design, shape, color and proportions faithfully from the reference so it looks like the actual product — NOT a generic unbranded blob. Its identity must be recognizable.
 
 BUT it is **never** a clean, readable hero shot — that's what kills the DM:
@@ -31,6 +32,11 @@ Sweet spot: instantly recognizable as the real product, yet the viewer still has
 ## 3b. Hands & gesture
 - The product is held in **ONE hand**; the **OTHER hand stays free** to gesture naturally — do not use both hands to clutch/present the product.
 - On the **CTA** beat: hold the product in one hand and **point a single finger DOWN** toward the lower frame (the on-screen link/comment area). Expression is **welcoming, happy, satisfied** — a warm genuine smile.
+
+## 3c. Wardrobe / modesty (ALWAYS clothed)
+- She **always wears a simple, casual top** (plain tee, tank, sweater, or similar) in **every** shot.
+- **NEVER** bare shoulders, bare chest, cleavage, topless, nude, underwear, or a towel-only look — even for a "bare skin" / skincare beat, the skincare content is her **face**, not her body.
+- This **overrides the character reference:** if the reference photo is cropped at the shoulders or appears bare, still put her in a normal top. Modesty wins over reference-fidelity here.
 
 ## 4. Emotion & beat — ONE frozen expression, not a sequence
 - Render **this scene's** emotion / expression (provided per scene), in the creator's **persona register** — do NOT default every shot to the same expression (e.g. the same skeptical squint on every frame).
