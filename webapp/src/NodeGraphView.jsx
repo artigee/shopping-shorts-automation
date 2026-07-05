@@ -163,6 +163,16 @@ function buildGraph(data) {
     if (Array.isArray(gs.extraNodes)) gs.extraNodes.forEach((en) => { if (en && en.id && !byId[en.id]) { const nn = { ...en, dirty: false }; nodes.push(nn); byId[en.id] = nn } })  // 수동 노드 복원 (dirty는 초기화 — 복원=변경 아님)
     if (Array.isArray(gs.edges)) { const has = new Set(edges.map((e) => e.from + '>' + e.to)); gs.edges.forEach((e) => { const kk = e.from + '>' + e.to; if (!has.has(kk) && byId[e.from] && byId[e.to]) { edges.push(e); has.add(kk) } }) }  // 수동 연결 복원(중복 제외)
   }
+  // 이미지/클립/보이스 노드의 썸네일은 항상 현재 씬 데이터에서 새로 계산한다 — 복원/복제된 낡은 썸네일(예: end 노드가 start 파일을 가리키던 버그)이 아니라, 그 노드의 frameRole + 연결된 씬 기준. start→scene-N.png, end→scene-N-end.png.
+  const nById = {}; nodes.forEach((n) => (nById[n.id] = n))
+  const sceneOf = (nd, depth = 0) => { if (!nd || depth > 6) return null; for (const e of edges) if (e.to === nd.id) { const s = sceneOf(nById[e.from], depth + 1); if (s) return s } return nd.scene || null }
+  nodes.forEach((n) => {
+    if (!['image', 'clip', 'vo'].includes(n.kind)) return
+    const sc = sceneOf(n); const s = sc ? scenes[sc - 1] : null; if (!s) return
+    if (n.kind === 'image') { const img = n.data?.frameRole === 'end' ? s.imageEnd : s.image; n.thumb = bust(media(img), lv); if (n.data) n.data.image = img || '' }
+    else if (n.kind === 'clip') { n.video = bust(media(s.video), lv); n.image = bust(media(s.image), lv) }
+    else if (n.kind === 'vo') { n.audio = bust(media(s.audio), lv) }
+  })
   return { nodes, edges, refLib }
 }
 
@@ -174,7 +184,8 @@ function graphStateOf(g) {
     pos[n.id] = [Math.round(n.x || 0), Math.round(n.y || 0)]
     const d = {}; GSAVE_KEYS.forEach((k) => { if (n.data && n.data[k] != null && n.data[k] !== '') d[k] = n.data[k] }); if (Object.keys(d).length) data[n.id] = d
   })
-  return { pos, data, extraNodes: g.nodes.filter((n) => String(n.id).includes('-u')).map(({ dirty, ...n }) => n), edges: g.edges }
+  // 수동 노드 저장 시 미디어(thumb/video/image/audio)는 제외 — 로드할 때 씬 데이터에서 다시 계산하므로 낡은 썸네일을 저장하지 않는다.
+  return { pos, data, extraNodes: g.nodes.filter((n) => String(n.id).includes('-u')).map(({ dirty, thumb, video, audio, image, ...n }) => n), edges: g.edges }
 }
 const graphKeyOf = (g) => JSON.stringify({ n: g.nodes.map((n) => [n.id, Math.round(n.x || 0), Math.round(n.y || 0), n.data?.frameRole, n.data?.makeVideo, n.data?.model, n.data?.cameraMove]), e: g.edges.map((e) => e.from + '>' + e.to) })
 
