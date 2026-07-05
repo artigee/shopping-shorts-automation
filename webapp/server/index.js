@@ -1209,22 +1209,32 @@ app.post('/api/contents/:id/scene/:index/votext', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || String(e) }) }
 })
 
+// 씬 미디어 생성(이미지/클립/VO)을 '잡'으로 실행 — 페이지 이동/새로고침 후에도 서버에서 계속 돌고, 돌아오면 노드가 재접속(재부착)한다.
+// agent 키에 씬 index(+ 이미지 frameRole)를 인코딩 → 노드별 활성 잡을 찾아 붙는다: img#3 / img#3e / clip#3 / vo#3.
+function genFriendly(m) {
+  return /credit/i.test(m) ? 'Higgsfield 크레딧 부족 — 충전 후 다시 시도하세요.'
+    : /nsfw/i.test(m) ? '이미지가 콘텐츠 필터에 걸렸습니다 — 프롬프트를 수정하세요.'
+    : m === 'NO_CREDENTIALS' ? 'HF_CREDENTIALS 미설정' : m === 'NO_IMAGE' ? '먼저 씬 이미지를 생성하세요.' : m
+}
+function startSceneGen(res, c, agent, message, fn) {
+  const existing = activeJob('contents', c.id, agent)
+  if (existing) return res.json({ jobId: existing.id, agent, already: true })   // 이미 도는 잡에 재접속
+  const job = startJob({ agent, refType: 'contents', refId: c.id, message }, async (progress) => {
+    try { return await fn(progress) } catch (e) { throw new Error(genFriendly(e.message || String(e))) }
+  })
+  res.json({ jobId: job.id, agent })
+}
 app.post('/api/contents/:id/scene/:index/image', async (req, res) => {
   const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   const i = Number(req.params.index)
   if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
-  try {
-    const scene = await genImageForScene(c, scenes, i, req.body && req.body.prompt, req.body && req.body.frameRole)
-    res.json({ ok: true, scene })
-  } catch (e) {
-    const m = e.message || String(e)
-    const friendly = /credit/i.test(m) ? 'Higgsfield 크레딧 부족 — 계정에서 충전 후 다시 시도하세요.'
-      : /nsfw/i.test(m) ? '이미지가 콘텐츠 필터에 걸렸습니다 — 프롬프트를 수정하세요.'
-      : m === 'NO_CREDENTIALS' ? 'HF_CREDENTIALS 미설정' : m
-    res.status(500).json({ error: friendly, credits: /credit/i.test(m) })
-  }
+  const frameRole = req.body && req.body.frameRole === 'end' ? 'end' : 'start'
+  startSceneGen(res, c, `img#${i}${frameRole === 'end' ? 'e' : ''}`, '이미지 생성 중…', async (progress) => {
+    progress('이미지 생성 중… (~1분)', 30)
+    return await genImageForScene(c, scenes, i, req.body && req.body.prompt, frameRole)
+  })
 })
 
 // 씬 클립 생성 (image→video, 풀무비). 씬 이미지가 먼저 있어야 함.
@@ -1235,14 +1245,10 @@ app.post('/api/contents/:id/scene/:index/clip', async (req, res) => {
   const i = Number(req.params.index)
   if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
   if (!scenes[i].imageSrc) return res.status(400).json({ error: '먼저 이 씬의 이미지를 생성하세요 (클립은 이미지 기반).', needImage: true })
-  try {
-    const scene = await genClipForScene(c, scenes, i, req.body && req.body.prompt)
-    res.json({ ok: true, scene })
-  } catch (e) {
-    const m = e.message || String(e)
-    const friendly = /credit/i.test(m) ? 'Higgsfield 크레딧 부족 — 충전 후 다시 시도.' : m === 'NO_IMAGE' ? '먼저 씬 이미지를 생성하세요.' : m
-    res.status(500).json({ error: friendly })
-  }
+  startSceneGen(res, c, `clip#${i}`, '클립 생성 중…', async (progress) => {
+    progress('클립 렌더링 중… (~1-2분)', 30)
+    return await genClipForScene(c, scenes, i, req.body && req.body.prompt)
+  })
 })
 
 // 씬 VO 생성 (영어). 한국어 vo → 영어 번역 → 음성 → mp3 저장. scene.voEn + scene.audio.
@@ -1252,13 +1258,10 @@ app.post('/api/contents/:id/scene/:index/vo', async (req, res) => {
   const scenes = getScenes(c)
   const i = Number(req.params.index)
   if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
-  try {
-    const scene = await genVoForScene(c, scenes, i, req.body && req.body.text)
-    res.json({ ok: true, scene })
-  } catch (e) {
-    const m = e.message || String(e)
-    res.status(500).json({ error: /credit/i.test(m) ? 'Higgsfield 크레딧 부족' : m })
-  }
+  startSceneGen(res, c, `vo#${i}`, 'VO 생성 중…', async (progress) => {
+    progress('음성 생성 중…', 40)
+    return await genVoForScene(c, scenes, i, req.body && req.body.text)
+  })
 })
 
 // 임시 프리뷰 무비 합성 (ffmpeg) — 현재 씬들의 클립/이미지 + VO를 이어붙임

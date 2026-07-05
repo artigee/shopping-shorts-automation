@@ -226,6 +226,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const loadedNameKey = useRef('')          // 로드 당시 노드 이름 시그니처
   const loadedGraphKey = useRef('')         // 로드 당시 그래프 레이아웃 시그니처
   const prevCidRef = useRef(null)           // 이전 빌드의 콘텐츠 id (같은 콘텐츠 재빌드면 수동 노드 유지)
+  const reattachedJobs = useRef(new Set())  // 이미 폴링 중/재부착한 잡 id (미디어 생성 잡 — 페이지 이동 후 재접속)
   const hist = useRef({ past: [], future: [], key: null })
   const dragSnap = useRef(null)
   const [histN, setHistN] = useState({ u: 0, r: 0 })
@@ -257,6 +258,33 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     return () => { alive = false; clearInterval(iv) }
   }, [cid])
   useEffect(() => { if (cid == null) return; undoStack.current = []; redoStack.current = []; setData(null); setErr(null); setSel(null); setSourceStale(false); api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setContentMode(r.content?.content_mode || ''); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }, [cid])
+  // 재부착: 이 콘텐츠에서 도는 미디어 생성 잡(img#/clip#/vo#)을 찾아 해당 노드에 다시 붙는다 — 클립 생성 중 보드로 나갔다 와도 running 표시 + 완료 시 자동 갱신. (프로토타입: 실행 상태는 노드에 귀속되어 이동에도 유지)
+  useEffect(() => {
+    if (cid == null) return
+    let alive = true
+    const parseAgent = (a) => { let m; if ((m = /^img#(\d+)(e?)$/.exec(a))) return { kind: 'image', scene: +m[1] + 1, end: m[2] === 'e' }; if ((m = /^clip#(\d+)$/.exec(a))) return { kind: 'clip', scene: +m[1] + 1 }; if ((m = /^vo#(\d+)$/.exec(a))) return { kind: 'vo', scene: +m[1] + 1 }; return null }
+    const check = async () => {
+      try {
+        const r = await api('/api/jobs?status=running'); const g = ngRef.current; if (!alive || !g) return
+        const nById = {}; g.nodes.forEach((n) => (nById[n.id] = n))
+        const sceneOf = (nd, d = 0) => { if (!nd || d > 6) return null; for (const e of g.edges) if (e.to === nd.id) { const s = sceneOf(nById[e.from], d + 1); if (s) return s } return nd.scene || null }
+        for (const jb of (r.jobs || [])) {
+          if (jb.ref_type !== 'contents' || String(jb.ref_id) !== String(cid) || reattachedJobs.current.has(jb.id)) continue
+          const info = parseAgent(jb.agent); if (!info) continue
+          const node = g.nodes.find((n) => n.kind === info.kind && sceneOf(n) === info.scene && (info.kind !== 'image' || ((n.data?.frameRole === 'end') === !!info.end)))
+          if (!node) continue
+          reattachedJobs.current.add(jb.id)
+          setRunning({ id: node.id, msg: jb.message || 'running…', t0: Date.now() })
+          pollJob(jb.id, (j2) => { if (alive) setRunning({ id: node.id, msg: j2.message || 'running…', t0: Date.now() }) })
+            .then(async () => { if (!alive) return; const rr = await api(`/api/contents/${cid}`); const s = (parse(rr.content?.scenes) || [])[info.scene - 1] || {}; commitRun(node.id, (x) => (x.kind === 'image' ? { ...x, dirty: false, thumb: bust(media(x.data?.frameRole === 'end' ? s.imageEnd : s.image), Date.now()) } : x.kind === 'clip' ? { ...x, dirty: false, video: bust(media(s.video), Date.now()), image: bust(media(s.image), Date.now()) } : { ...x, dirty: false, audio: bust(media(s.audio), Date.now()) })) })
+            .catch(() => {})
+            .finally(() => { if (alive) setRunning((cur) => (cur && cur.id === node.id ? null : cur)) })
+        }
+      } catch { /* ignore */ }
+    }
+    check(); const iv = setInterval(check, 5000)
+    return () => { alive = false; clearInterval(iv) }
+  }, [cid])
   useEffect(() => { api('/api/content-modes').then((r) => setModes(r.modes || [])).catch(() => {}) }, [])
   function saveContentMode(v) { setContentMode(v); if (cid != null) postJSON(`/api/contents/${cid}/content-mode`, { mode: v || null }).catch(() => {}) }
   // 소스 분석 변경 감지 — 재분석(잡)이 끝나 analyzed_at가 바뀌면 stale 배너. 창 포커스 + 25s 주기.
@@ -377,7 +405,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     setRunning({ id: n.id, msg: 'running…', t0 })
     try {
       const body = (ep === 'prompt' || ep === 'motion' || ep === 'votext' || ep === 'script') ? { guidance: n.data.guidance || '' } : ep === 'image' ? { frameRole: n.data.frameRole || 'start' } : {}   // 이미지 노드는 frameRole(start/end)을 보내 표정 순간을 결정
-      await postJSON(`/api/contents/${cid}/scene/${k}/${ep}`, body)   // 씬 스크립트 + input prompt(guidance) 기반 생성
+      const resp = await postJSON(`/api/contents/${cid}/scene/${k}/${ep}`, body)   // 미디어(image/clip/vo)=잡(jobId), 텍스트(script/prompt/…)=동기
+      if (resp && resp.jobId) { reattachedJobs.current.add(resp.jobId); await pollJob(resp.jobId, (jb) => setRunning({ id: n.id, msg: jb.message || 'running…', t0 })) }   // 잡이면 완료까지 폴링 (재부착 중복 방지 위해 표시)
       const r = await api(`/api/contents/${cid}`)                   // 새 씬 데이터 가져와 (buildGraph와 동일 필드로) 노드 갱신
       const s = (parse(r.content?.scenes) || [])[k] || {}
       commitRun(n.id, (x) => {
@@ -423,7 +452,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         const n = nodes[idx], sc = effScene(n), k = sc - 1, frameRole = n.data?.frameRole === 'end' ? 'end' : 'start'
         setRunning({ id: n.id, msg: `images ${idx + 1}/${nodes.length} — scene ${sc} ${frameRole}`, t0 })
         try {
-          await postJSON(`/api/contents/${cid}/scene/${k}/image`, { frameRole })
+          const resp = await postJSON(`/api/contents/${cid}/scene/${k}/image`, { frameRole })   // 이제 잡(jobId) → 완료까지 폴링해야 최신 데이터가 나옴
+          if (resp && resp.jobId) { reattachedJobs.current.add(resp.jobId); await pollJob(resp.jobId, (jb) => setRunning({ id: n.id, msg: `images ${idx + 1}/${nodes.length} — scene ${sc} ${frameRole} · ${jb.message || ''}`, t0 })) }
           const r = await api(`/api/contents/${cid}`), s = (parse(r.content?.scenes) || [])[k] || {}
           commitRun(n.id, (x) => { const img = x.data?.frameRole === 'end' ? s.imageEnd : s.image; return { ...x, dirty: false, thumb: bust(media(img), Date.now()), data: { ...x.data, image: img || '', imagePrompt: s.imagePrompt || '' } } })
         } catch (e) { fails.push(`scene ${sc} ${frameRole}: ${e.message || e}`) }
