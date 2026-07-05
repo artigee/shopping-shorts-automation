@@ -133,11 +133,12 @@ Do EXACTLY these steps and then print ONLY the final media id — never print th
 
 // 씬 이미지 1장 생성. 레퍼런스 = 공개 URL(import) + 업로드 media_id(hfmedia:, 직접) 혼합.
 //  총 2장+: nano_banana_pro(다중) / 1장: marketing_studio_image / 0장: text-to-image.
-export async function genImageViaCLI({ prompt, productImageUrls = [], productImageUrl, characterRef, envRef, productName, dimensions }) {
+export async function genImageViaCLI({ prompt, productImageUrls = [], productImageUrl, characterRef, envRef, sceneRef, productName, dimensions }) {
   const prod = (productImageUrls && productImageUrls.length ? productImageUrls : (productImageUrl ? [productImageUrl] : [])).filter(Boolean).slice(0, 4)
-  // 역할 라벨된 레퍼런스 (제품·캐릭터·환경) — 순서대로 media로 전달, 프롬프트에 역할 명시
-  // 캐릭터를 최우선(먼저)으로 → 모델이 인물 정체성을 제품보다 우선 반영. 얼굴 락 강화.
+  // 역할 라벨된 레퍼런스 (씬앵커·캐릭터·제품·환경) — 순서대로 media로 전달, 프롬프트에 역할 명시
+  // sceneRef(= 같은 클립의 start 프레임)가 있으면 최우선: 배경·의상·프레이밍·드는 손을 그대로 두고 포즈/표정만 바꾼다 (start↔end 일관성).
   const labeled = [
+    ...(sceneRef ? [{ r: sceneRef, role: 'SCENE ANCHOR (HIGHEST PRIORITY — this is the START frame of the SAME clip). Reproduce the SAME background/setting, the SAME wardrobe, the SAME framing/distance/angle, the SAME lighting, and the SAME hand holding the product as this image. Change ONLY the pose and facial expression as the prompt describes (this is the END frame — she has moved through the motion). Everything else must stay identical to this image so the clip morphs cleanly.' }] : []),
     ...(characterRef ? [{ r: characterRef, role: 'CHARACTER (HIGHEST PRIORITY) — match this reference for IDENTITY ONLY: same face structure, skin tone, age, build, and the EXACT SAME HAIRSTYLE (same length, cut, parting, color, texture — do NOT restyle, cut, tie up or change the hair). This hair + face lock OVERRIDES any appearance/hair wording in the prompt. Take only her FACIAL EXPRESSION and pose from the PROMPT — do NOT copy the reference photo\'s neutral/resting expression; she reacts as the scene describes. Her WARDROBE and HAIRSTYLE come ENTIRELY from this reference — reproduce exactly what it shows, identical in every shot; do NOT add or invent anything not in the reference (no added head-wrap/turban, towel, hat, or top).' }] : []),
     ...prod.map((r) => ({ r, role: 'PRODUCT — reproduce this EXACT product (design, color, parts, proportions) faithfully' })),
     ...(envRef ? [{ r: envRef, role: 'ENVIRONMENT — match this setting / space / mood / lighting' }] : []),

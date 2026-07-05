@@ -1054,12 +1054,14 @@ async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
   let refs = (gProduct && gProduct.length) ? gProduct : (Array.isArray(scenes[i].refs) && scenes[i].refs.length) ? scenes[i].refs : [product?.image || (product?.images || [])[0]].filter(Boolean)
   let characterRef = gChar || c.character_ref || null
   let envRef = gEnv || scenes[i].envRef || null
+  // end 프레임은 이미 생성된 start 프레임을 '씬 앵커'로 넘겨 배경·의상·프레이밍·드는 손을 일치시킨다 (포즈/표정만 변함). start가 있어야 함.
+  let sceneRef = (frameRole === 'end') ? (scenes[i].imageSrc || null) : null
   let url
   if (hfReady()) { url = await genImage({ prompt, aspect: '9:16' }) }
   else {
-    const up = await upgradeRefsToHf(c, refLib, { refs, characterRef, envRef })   // 로컬 전용 ref → 첫 사용 시 HF 업로드(once)
-    refs = up.refs; characterRef = up.characterRef; envRef = up.envRef
-    url = await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, productName: product?.title, dimensions: product?.dimensions })
+    const up = await upgradeRefsToHf(c, refLib, { refs, characterRef, envRef, sceneRef })   // 로컬 전용 ref → 첫 사용 시 HF 업로드(once)
+    refs = up.refs; characterRef = up.characterRef; envRef = up.envRef; sceneRef = up.sceneRef
+    url = await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, sceneRef, productName: product?.title, dimensions: product?.dimensions })
   }
   const rel = await saveAsset(c.id, i, url, false, frameRole === 'end' ? 'end' : '')   // start/end 별도 파일
   // end 프레임은 별도 슬롯(imageEnd)에 저장 → start(image)를 덮어쓰지 않음. 클립이 둘 다 키프레임으로 사용.
