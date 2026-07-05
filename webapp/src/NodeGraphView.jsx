@@ -304,9 +304,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
       return
     }
-    // 씬 번호: 노드 자체 → 없으면 연결(들어오는 엣지)에서 상속 (수동 추가한 노드도 연결만으로 동작)
-    const sceneFromConn = (nd, depth = 0) => { if (nd?.scene) return nd.scene; if (depth > 3) return null; for (const e of graph.edges) if (e.to === nd.id) { const up = nodeById[e.from]; const s = up && sceneFromConn(up, depth + 1); if (s) return s } return null }
-    const sc = n.scene || sceneFromConn(n)
+    const sc = effScene(n)                                        // 노드 자체 또는 연결에서 상속한 씬
     const k = sc ? sc - 1 : null                                  // 0-based 씬 index
     const id = typeof n.id === 'string' ? n.id : ''
     const ep = id.startsWith('script-') ? 'script' : id.startsWith('prompt-') ? 'prompt' : id.startsWith('promptV-') ? 'votext' : id.startsWith('promptM-') ? 'motion'
@@ -449,6 +447,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
 
   const graph = ng
   const nodeById = useMemo(() => { const m = {}; graph.nodes.forEach((n) => (m[n.id] = n)); return m }, [graph])
+  // 노드의 효과적인 씬 번호: 자기 scene → 없으면 연결(들어오는 엣지)에서 상속
+  const effScene = (nd, depth = 0) => { if (nd?.scene) return nd.scene; if (depth > 4 || !nd) return null; for (const e of graph.edges) if (e.to === nd.id) { const s = effScene(nodeById[e.from], depth + 1); if (s) return s } return null }
   const ctx = useMemo(() => ({ persona: data?.persona || '—', hook: data?.hook || '—', angle: data?.overall?.angle || '—', product: data?.product?.title || '—' }), [data])
   const selNode = nodeById[selId]
   const lastSel = useRef(null)
@@ -663,7 +663,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 {n.kind === 'clip' && (n.video ? <video className="ng-thumb" src={n.video} muted loop playsInline preload="metadata" onMouseOver={(e) => e.target.play()} onMouseOut={(e) => e.target.pause()} /> : n.image ? <img className="ng-thumb" style={{ opacity: .4 }} src={n.image} /> : null)}
                 {n.kind === 'movie' && n.video && <video className="ng-thumb" src={n.video} controls playsInline preload="metadata" />}
                 {n.kind === 'analysis' && n.data?.reel?.thumb && <img className="ng-thumb" src={n.data.reel.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} />}
-                <div className="ng-hd" style={{ color: c }}><span className="ng-dot" style={{ background: c }} />{n.hd}</div>
+                <div className="ng-hd" style={{ color: c }}><span className="ng-dot" style={{ background: c }} />{(!n.scene && ['image', 'clip', 'vo'].includes(n.kind) && effScene(n)) ? 'scene ' + effScene(n) : n.hd}</div>
                 {n.t && n.kind !== 'prompt' && <div className="ng-t">{n.t}</div>}
                 {n.kind === 'overall' && (() => { const tgt = Number(n.data?.durationSec) || 0, drift = tgt ? Math.abs(scenesDur - tgt) / tgt : 0; return <div className={'ng-dur-readout' + (tgt && drift > 0.2 ? ' off' : '')}>Σ shots {scenesDur}s{tgt ? ` / ${tgt}s target` : ''}</div> })()}
                 {n.kind === 'overall' && n.data?.shotCount && <div className="ng-dur-readout" title={n.data?.recShotWhy ? 'why: ' + n.data.recShotWhy + ' — editable; re-run reinitiates' : 'editable in the drawer; re-run reinitiates'} style={{ marginTop: 3 }}>{n.data.shotCount} shots <span style={{ opacity: .6 }}>· editable</span></div>}
