@@ -257,6 +257,26 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(iv) }
   }, [cid])
   function refreshSource() { if (cid == null) return; api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setSourceStale(false); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }
+  // 노드 자동 정렬 — 종류(열) × 씬(행)으로 깔끔하게 배치. 수동 노드(end 프레임 등)도 연결된 씬 기준으로 정리. undo 가능.
+  function reorgLayout() {
+    const g = ngRef.current
+    const sceneCount = Math.max(1, ...g.nodes.map((n) => effScene(n) || 0))
+    const my = 100 + Math.max(0, sceneCount - 1) * PITCH / 2
+    const colOf = (n) => n.kind === 'overall' ? COL.overall : n.kind === 'movie' ? COL.movie
+      : (n.role === 'input' || n.kind === 'analysis' || n.role === 'analysis' || n.role === 'animref') ? COL.input
+      : n.kind === 'script' ? COL.script : n.kind === 'prompt' ? COL.prompt : n.kind === 'image' ? COL.image : n.kind === 'clip' ? COL.clip : n.kind === 'vo' ? COL.vo : COL.input
+    const subY = (n) => { const id = String(n.id); if (id.startsWith('promptM-')) return 90; if (id.startsWith('promptV-')) return 180; if (n.kind === 'image' && n.data?.frameRole === 'end') return 150; return 0 }
+    commit((gg) => ({ ...gg, nodes: gg.nodes.map((n) => {
+      let y
+      if (n.id === 'in-0') y = 100
+      else if (n.id === 'in-1') y = 240
+      else if (n.kind === 'analysis' || n.role === 'analysis') y = 400
+      else if (n.kind === 'overall' || n.kind === 'movie') y = my
+      else { const sc = effScene(n) || 1; y = 100 + (sc - 1) * PITCH + subY(n) }
+      return { ...n, x: colOf(n), y }
+    }) }))
+    setSel(null)
+  }
   // 노드 업데이트 + 하류(edge로 도달 가능한 모든 노드) dirty 전파
   function commitRun(nodeId, patchNode) {
     setNg((g) => {
@@ -661,6 +681,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         <button className="ng-libtoggle" onClick={redo} disabled={!histN.r} title="redo (⇧⌘Z)">↷</button>
         <button className={'ng-libtoggle' + (sourceStale ? ' stale' : '')} onClick={refreshSource} title="reload graph from the latest source analysis (discards local graph edits)">↻ source{sourceStale ? ' •' : ''}</button>
         <button className="ng-libtoggle" onClick={refreshSceneMedia} disabled={cid == null || !!running} title="refresh image/clip/VO thumbnails to the latest generated files (keeps your layout)">↻ media</button>
+        <button className="ng-libtoggle" onClick={reorgLayout} disabled={cid == null} title="tidy — auto-arrange all nodes into clean columns (by type) and rows (by scene). Undoable.">⤢ tidy</button>
         <select value={cid ?? ''} onChange={(e) => setCid(Number(e.target.value))}>{list.map((c) => <option key={c.id} value={c.id}>#{c.id} {(c.title || 'untitled').slice(0, 30)}</option>)}</select>
         <span className="ng-barsep" />
         <select value={contentMode} onChange={(e) => saveContentMode(e.target.value)} title={(() => { const m = modes.find((x) => x.key === contentMode); return m ? `${m.use_when} · allow: ${(m.allow || []).join(', ')} · never: ${(m.ban || []).join(', ')}` : 'safe default (Curated Find) — result claims softened to observations' })()}>
