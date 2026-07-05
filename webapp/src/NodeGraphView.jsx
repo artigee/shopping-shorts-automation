@@ -401,7 +401,27 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     if (cid == null) { setErr('No content is open.'); return }
     if (running) { setErr(`Busy: "${running.msg || 'a task'}" is running. If it's stuck, reload (Cmd+Shift+R).`); return }
     setErr(null); await pushUndo()   // 배치 생성 전 스냅샷
-    const prefix = kind === 'clips' ? 'clip-' : kind === 'vo' ? 'vo-' : 'image-', t0 = Date.now()
+    const t0 = Date.now()
+    // 이미지는 그래프의 '이미지 노드' 단위로 생성한다 — 각 씬의 start + 수동 end 노드를 모두 (6샷이면 start·end 12장). 씬 배치(6장)가 아님.
+    if (kind === 'images') {
+      const nodes = ngRef.current.nodes.filter((n) => n.kind === 'image' && effScene(n))
+        .sort((a, b) => (effScene(a) - effScene(b)) || (((a.data?.frameRole === 'end') ? 1 : 0) - ((b.data?.frameRole === 'end') ? 1 : 0)))
+      if (!nodes.length) { setErr('No image nodes connected to a scene.'); return }
+      const fails = []
+      for (let idx = 0; idx < nodes.length; idx++) {
+        const n = nodes[idx], sc = effScene(n), k = sc - 1, frameRole = n.data?.frameRole === 'end' ? 'end' : 'start'
+        setRunning({ id: n.id, msg: `images ${idx + 1}/${nodes.length} — scene ${sc} ${frameRole}`, t0 })
+        try {
+          await postJSON(`/api/contents/${cid}/scene/${k}/image`, { frameRole })
+          const r = await api(`/api/contents/${cid}`), s = (parse(r.content?.scenes) || [])[k] || {}
+          commitRun(n.id, (x) => { const img = x.data?.frameRole === 'end' ? s.imageEnd : s.image; return { ...x, dirty: false, thumb: bust(media(img), Date.now()), data: { ...x.data, image: img || '', imagePrompt: s.imagePrompt || '' } } })
+        } catch (e) { fails.push(`scene ${sc} ${frameRole}: ${e.message || e}`) }
+      }
+      setRunning(null)
+      if (fails.length) setErr(`images: ${fails.length} failed — ${fails[fails.length - 1]}`)
+      return
+    }
+    const prefix = kind === 'clips' ? 'clip-' : kind === 'vo' ? 'vo-' : 'image-'
     try {
       const resp = await postJSON(`/api/contents/${cid}/batch`, { kind })
       let job = resp && resp.job
