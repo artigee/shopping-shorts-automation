@@ -491,7 +491,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   useLayoutEffect(() => { const h = {}; graph.nodes.forEach((n) => { const el = nodeRefs.current[n.id]; if (el) h[n.id] = el.offsetHeight }); setHeights(h) }, [graph])
 
   const anchor = (n, side) => ({ x: n.x + (side === 'out' ? nodeW(n) : 0), y: n.y + (heights[n.id] || 90) / 2 })
-  const paths = graph.edges.map((e, i) => { const a = nodeById[e.from], b = nodeById[e.to]; if (!a || !b) return null; const p1 = anchor(a, 'out'), p2 = anchor(b, 'in'), dx = Math.max(40, (p2.x - p1.x) * 0.5); return { key: i, i, d: `M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`, color: EDGE_COLOR[e.cls] || '#7d8590', dashed: e.cls === 'global', editable: ['ref', 'product', 'character', 'environment'].includes(e.cls), label: (e.from === 'overall' && e.to.indexOf('script-') === 0 && b.scene != null) ? { x: p2.x - 34, y: p2.y - 5, t: b.scene } : null, from: e.from, to: e.to } }).filter(Boolean)
+  const paths = graph.edges.map((e, i) => { const a = nodeById[e.from], b = nodeById[e.to]; if (!a || !b) return null; const p1 = anchor(a, 'out'), p2 = anchor(b, 'in'), dx = Math.max(40, (p2.x - p1.x) * 0.5); return { key: i, i, d: `M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`, color: EDGE_COLOR[e.cls] || '#7d8590', dashed: e.cls === 'global', editable: true, label: (e.from === 'overall' && e.to.indexOf('script-') === 0 && b.scene != null) ? { x: p2.x - 34, y: p2.y - 5, t: b.scene } : null, from: e.from, to: e.to } }).filter(Boolean)
   // spotlight: selecting a node keeps it + its direct neighbors bright, dims the rest
   const near = selId ? (() => { const s = new Set([selId]); graph.edges.forEach((e) => { if (e.from === selId || e.to === selId) { s.add(e.from); s.add(e.to) } }); return s })() : null
   const selFromArray = drawerNode ? graph.edges.some((e) => e.to === drawerNode.id && KIND[nodeById[e.from]?.kind]?.out?.array) : false
@@ -687,7 +687,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         <div className="ng-world" style={{ transform: `translate(${view.x}px,${view.y}px) scale(${view.k})`, transition: framing ? 'transform .46s cubic-bezier(.22,.61,.36,1)' : 'none' }}>
           <svg className="ng-edges">
             {paths.map((p) => (<g key={p.key}>
-              {p.editable && <path className="ng-edge-hit" d={p.d} onClick={() => cutEdge(p.i)} />}
+              {p.editable && <path className="ng-edge-hit" d={p.d} onClick={() => cutEdge(p.i)}><title>click to disconnect</title></path>}
               {(() => { const hot = selId && (p.from === selId || p.to === selId); const op = selId ? (hot ? 0.98 : 0.06) : (p.dashed ? 0.5 : 0.9); return <path d={p.d} stroke={p.color} strokeWidth={hot ? 2.6 : 1.6} fill="none" strokeDasharray={p.dashed ? '5 4' : 'none'} opacity={op} style={{ transition: 'opacity .16s, stroke-width .12s' }} /> })()}
               {p.label && <text x={p.label.x} y={p.label.y} fill="#c9b3ea" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontSize="11" fontWeight="600">{p.label.t}</text>}
             </g>))}
