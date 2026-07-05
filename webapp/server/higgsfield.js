@@ -83,14 +83,16 @@ export async function genAudioViaCLI({ text, voiceId = DEFAULT_VOICE }) {
 }
 
 // 씬 이미지 → 영상 클립 (claude가 Higgsfield image→video 호출 → 최종 mp4 URL)
-export async function genVideoViaCLI({ imageUrl, endImageUrl, prompt, duration = 5 }) {
+export async function genVideoViaCLI({ imageUrl, endImageUrl, prompt, duration = 5, model }) {
   if (!imageUrl) throw new Error('NO_IMAGE') // 클립은 씬 이미지가 먼저 있어야 함
   // 점프/급격한 줌 방지 — 부드럽고 미세한 모션으로 보정
   const safe = `${String(prompt || 'subtle camera motion, premium product reveal').replace(/"/g, "'").slice(0, 500)}. Keep motion SMOOTH and SUBTLE — slow, steady, cinematic; absolutely no abrupt zoom, no jump cuts, no fast push; the product stays stable and fully in frame. Do NOT add or render any text, letters, words, captions, or watermarks anywhere in the video.`
   const twoFrame = !!endImageUrl
+  // end 프레임이 있으면 반드시 start+end 둘 다 지원하는 모델. kling3_0_turbo는 start_image만 → end 무시됨.
+  const mdl = twoFrame ? (model && model !== 'kling3_0_turbo' ? model : 'kling3_0') : (model || 'kling3_0_turbo')
   const instr = `You have Higgsfield MCP tools. Make ONE short image-to-video clip and return only its URL.
 1) Call media_import_url {"url":"${imageUrl}","type":"image"} and keep its media_id as START.${twoFrame ? `\n1b) Call media_import_url {"url":"${endImageUrl}","type":"image"} and keep its media_id as END.` : ''}
-2) Call generate_video {"model":"kling3_0_turbo","prompt":"${safe}","aspect_ratio":"9:16","duration":${duration},"medias":[{"value":"<START media_id>","role":"start_image"}${twoFrame ? ',{"value":"<END media_id>","role":"end_image"}' : ''}]}.${twoFrame ? ' The clip must MORPH smoothly from the START frame to the END frame over the duration.' : ''}
+2) Call generate_video {"model":"${mdl}","prompt":"${safe}","aspect_ratio":"9:16","duration":${duration},"medias":[{"value":"<START media_id>","role":"start_image"}${twoFrame ? ',{"value":"<END media_id>","role":"end_image"}' : ''}]}.${twoFrame ? ` The FIRST frame of the video MUST be the START image and the LAST frame MUST be the END image — the clip morphs smoothly between them (model ${mdl} supports both keyframes).` : ''}
    IMPORTANT: if the response is a preset_recommendation (not a job), call generate_video AGAIN with the SAME params plus "declined_preset_id":"<the recommended preset id>" to generate literally.
 3) Call job_status {"jobId":"<id>","sync":true} repeatedly until status is "completed" (video takes ~1-3 min; keep polling; do NOT give up early).
 4) On success print ONLY the final result rawUrl (https URL ending in .mp4). If it failed, print exactly: ERROR: <reason> (e.g. ERROR: not enough credits / ERROR: nsfw / ERROR: failed). No other text.`

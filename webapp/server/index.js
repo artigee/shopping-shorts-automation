@@ -1074,7 +1074,7 @@ async function genClipForScene(c, scenes, i, promptOverride) {
   const motion = `${sceneDesc ? sceneDesc + '. ' : ''}${camera}.${extra ? ' ' + extra + '.' : ''} Apply exactly ONE slow, smooth camera move — never stack multiple moves. The object stays as placed; do NOT fold, unfold, assemble or transform the product.`
   const dur = Math.max(3, Math.min(10, Math.round(Number(scenes[i].durationSec) || 5)))   // 씬 durationSec 반영 (3-10s)
   const endImageUrl = scenes[i].imageSrcEnd || null                                        // end 프레임(있으면) → start→end 모핑
-  const url = await genVideoViaCLI({ imageUrl, endImageUrl, prompt: motion, duration: dur })
+  const url = await genVideoViaCLI({ imageUrl, endImageUrl, prompt: motion, duration: dur, model: scenes[i].model })
   const rel = await saveAsset(c.id, i, url, true)
   scenes[i] = { ...scenes[i], ...(promptOverride ? { motionPrompt: promptOverride } : {}), video: rel, videoSrc: url }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
