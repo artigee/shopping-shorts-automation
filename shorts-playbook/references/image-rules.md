@@ -2,7 +2,11 @@
 
 These govern the visuals (image prompt → image → clip), not the VO. They are **injected into every image prompt as the source of truth** — edit this file to change the output.
 
-## 1. Product — real & recognizable, but TEASED (never a readable hero)
+## 0. A reference IS the description — use only the reference (no invented details)
+When a reference image is provided (character, product, or environment), **the reference itself is the full description of how that thing looks.** Reproduce it faithfully and add **NO extra, invented, or "unrecognized" description** on top of it — nothing that isn't actually in the reference.
+- The prompt describes **only** what the reference does NOT fix: the **action, expression, framing, camera, and light** for this scene.
+- It must **never** add appearance/design details for a referenced subject: for the **character**, no hair/face/skin/age/body/clothing words; for the **product**, no invented colors, parts, text, or features not visible in the reference.
+- If a detail is defined by the reference, it comes 100% from the reference — describing it in words only makes the model drift away from the reference.
 Reproduce the product's REAL design, shape, color and proportions faithfully from the reference so it looks like the actual product — NOT a generic unbranded blob. Its identity must be recognizable.
 
 BUT it is **never** a clean, readable hero shot — that's what kills the DM:
