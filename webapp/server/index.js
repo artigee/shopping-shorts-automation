@@ -849,6 +849,13 @@ app.post('/api/hf/elements', async (req, res) => {
     res.json({ element: el })
   } catch (e) { res.status(500).json({ error: String(e.message || e) }) }
 })
+// 이 콘텐츠의 캐릭터로 element 지정 (또는 해제) — 생성 시 <<<id>>>로 주입되어 전 씬 동일 인물
+app.post('/api/contents/:id/character-element', (req, res) => {
+  const el = req.body && req.body.element
+  const val = el && el.id ? JSON.stringify({ id: el.id, name: el.name || '' }) : null
+  db.prepare(`UPDATE contents SET character_element = ?, updated_at = datetime('now') WHERE id = ?`).run(val, req.params.id)
+  res.json({ character_element: val ? JSON.parse(val) : null })
+})
 app.get('/api/content-modes', (req, res) => res.json({ modes: getContentModes() }))
 app.post('/api/contents/:id/content-mode', (req, res) => {
   const mode = (req.body && req.body.mode) || null
@@ -1075,14 +1082,16 @@ async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
     }
   }
   let refs = (gProduct && gProduct.length) ? gProduct : (Array.isArray(scenes[i].refs) && scenes[i].refs.length) ? scenes[i].refs : [product?.image || (product?.images || [])[0]].filter(Boolean)
-  let characterRef = gChar || c.character_ref || null
+  // 지정된 캐릭터 element가 있으면 그걸로 정체성 고정 (<<<id>>> 프롬프트 주입) → 로컬 캐릭터 ref는 생략(element가 대체).
+  let charEl = null; try { charEl = c.character_element ? JSON.parse(c.character_element) : null } catch { charEl = null }
+  let characterRef = charEl && charEl.id ? null : (gChar || c.character_ref || null)
   let envRef = gEnv || scenes[i].envRef || null
   let url
   if (hfReady()) { url = await genImage({ prompt, aspect: '9:16' }) }
   else {
     const up = await upgradeRefsToHf(c, refLib, { refs, characterRef, envRef })   // 로컬 전용 ref → 첫 사용 시 HF 업로드(once)
     refs = up.refs; characterRef = up.characterRef; envRef = up.envRef
-    url = await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, productName: product?.title, dimensions: product?.dimensions })
+    url = await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, charElementId: charEl && charEl.id ? charEl.id : null, productName: product?.title, dimensions: product?.dimensions })
   }
   const rel = await saveAsset(c.id, i, url, false, frameRole === 'end' ? 'end' : '')   // start/end 별도 파일
   // end 프레임은 별도 슬롯(imageEnd)에 저장 → start(image)를 덮어쓰지 않음. 클립이 둘 다 키프레임으로 사용.

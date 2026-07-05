@@ -132,6 +132,9 @@
 .ng-elitem .nm { color: #7fb8a0; }
 .ng-elitem img, .ng-elitem .ng-upimg { outline: 1px solid rgba(93,202,165,.4); outline-offset: -1px; }
 .ng-elitem .ng-upimg { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 9/16; border-radius: 7px; background: #20262e; color: #5DCAA5; font-size: 16px; }
+.ng-elitem.on img, .ng-elitem.on .ng-upimg { outline: 2px solid #5DCAA5; }
+.ng-elitem.on .nm { color: #b6f0dd; font-weight: 600; }
+.ng-elon { position: absolute; top: 3px; left: 3px; font-family: ui-monospace, monospace; font-size: 8px; background: #5DCAA5; color: #0c130f; border-radius: 4px; padding: 1px 4px; font-weight: 700; }
 .ng-upimg { width: 100%; aspect-ratio: 9/16; border-radius: 7px; background: #20262e; border: 1px dashed #5DCAA5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-family: ui-monospace, monospace; font-size: 8.5px; color: #7fd8bb; text-align: center; }
 .ng-upspin { width: 14px; height: 14px; border: 2px solid #2f4a42; border-top-color: #5DCAA5; border-radius: 50%; animation: ng-spin .8s linear infinite; }
 @keyframes ng-spin { to { transform: rotate(360deg); } }

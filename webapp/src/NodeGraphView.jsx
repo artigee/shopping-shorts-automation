@@ -208,6 +208,12 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const [upBusy, setUpBusy] = useState({})   // role별 업로드 진행 개수 (HF CLI 업로드가 ~50s 걸려 즉시 피드백 필요)
   const [hfEls, setHfEls] = useState(null)   // 히긱스필드 등록 element 목록 (available)
   const [hfElsBusy, setHfElsBusy] = useState(false)
+  const [charEl, setCharEl] = useState(null)   // 이 콘텐츠 캐릭터로 지정된 element { id, name } — 생성 시 <<<id>>> 주입
+  async function assignCharEl(el) {   // 캐릭터 element 지정/해제 (같은 걸 다시 누르면 해제)
+    const next = (charEl && charEl.id === el.id) ? null : { id: el.id, name: el.name }
+    setCharEl(next)
+    try { await postJSON(`/api/contents/${cid}/character-element`, { element: next }) } catch (e) { setErr('캐릭터 지정 실패: ' + (e.message || e)) }
+  }
   const [refInput, setRefInput] = useState(null)   // 인라인 입력 폼 {role, mode:'ref'|'element', url, name} — window.prompt이 VSCode 웹뷰에서 안 떠서 대체
   const roleCat = { product: 'prop', character: 'character', environment: 'environment' }   // 패널 role → HF element category
   const loadHfEls = (refresh) => { setHfElsBusy(true); return api('/api/hf/elements' + (refresh ? '?refresh=1' : '')).then((r) => setHfEls(r.elements || [])).catch(() => setHfEls([])).finally(() => setHfElsBusy(false)) }
@@ -273,7 +279,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     tick(); const iv = setInterval(tick, 4000)
     return () => { alive = false; clearInterval(iv) }
   }, [cid])
-  useEffect(() => { if (cid == null) return; undoStack.current = []; redoStack.current = []; setData(null); setErr(null); setSel(null); setSourceStale(false); api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setContentMode(r.content?.content_mode || ''); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }, [cid])
+  useEffect(() => { if (cid == null) return; undoStack.current = []; redoStack.current = []; setData(null); setErr(null); setSel(null); setSourceStale(false); api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setContentMode(r.content?.content_mode || ''); setCharEl(parse(r.content?.character_element) || null); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }, [cid])
   // 재부착: 이 콘텐츠에서 도는 미디어 생성 잡(img#/clip#/vo#)을 찾아 해당 노드에 다시 붙는다 — 클립 생성 중 보드로 나갔다 와도 running 표시 + 완료 시 자동 갱신. (프로토타입: 실행 상태는 노드에 귀속되어 이동에도 유지)
   useEffect(() => {
     if (cid == null) return
@@ -882,11 +888,12 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 {(() => { const els = (hfEls || []).filter((e) => (e.category || '').replace('auto:', '') === roleCat[role]); return els.length ? (
                   <div className="ng-elstrip">
                     <div className="ng-elhdr">⬡ Higgsfield elements{hfElsBusy ? ' · …' : ''}</div>
-                    <div className="ng-libgrid">{els.map((e) => (
-                      <div key={e.id} className="ng-libitem ng-elitem" title={'@' + e.name + ' (registered element)'}>
+                    <div className="ng-libgrid">{els.map((e) => { const active = role === 'character' && charEl && charEl.id === e.id; return (
+                      <div key={e.id} className={'ng-libitem ng-elitem' + (active ? ' on' : '')} title={role === 'character' ? ('click to ' + (active ? 'unassign' : 'use') + ' @' + e.name + ' as this content\'s character') : ('@' + e.name)} onClick={role === 'character' ? () => assignCharEl(e) : undefined} style={role === 'character' ? { cursor: 'pointer' } : undefined}>
                         {e.thumb ? <img src={e.thumb} onError={(ev) => { ev.target.style.opacity = .2 }} {...hoverPreview} /> : <div className="ng-upimg">⬡</div>}
+                        {active && <span className="ng-elon">✓ character</span>}
                         <div className="nm">@{e.name}</div>
-                      </div>))}</div>
+                      </div>) })}</div>
                   </div>
                 ) : (hfElsBusy && hfEls == null ? <div className="ng-elhdr">⬡ loading elements…</div> : null) })()}
                 {items.length || upBusy[role]
