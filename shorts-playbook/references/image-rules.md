@@ -34,10 +34,10 @@ Sweet spot: instantly recognizable as the real product, yet the viewer still has
 - The finger-point-down + "welcoming, happy, satisfied" smile is **EXCLUSIVELY the final CTA scene** (the last shot). Only there: hold the product in one hand and **point a single finger DOWN** toward the lower frame (the on-screen link/comment area).
 - **In every OTHER scene: do NOT point down and do NOT do any CTA / call-to-action gesture.** Use a natural gesture that fits THAT beat (applying, examining, reacting) — the pointing-down pose must never appear in a hook, problem, or middle scene.
 
-## 3c. Wardrobe (follow the reference, keep it consistent)
-- Her outfit comes from the **character reference** — whatever she wears there (e.g. a **spa / skincare towel wrap**) is correct. Do NOT invent or swap in a different garment (no t-shirt if the reference is a towel).
-- Keep the **SAME outfit in every scene and in both the start and end frame** — identical throughout for continuity. Do not change it scene to scene or between a scene's two frames.
-- Only floor: she stays decently covered — **no explicit nudity** (no exposed chest/breasts, topless). A towel or spa wrap that covers the chest is perfectly fine and on-brand for a skincare beat.
+## 3c. Wardrobe (stick with the reference)
+- Her outfit is **whatever the character reference wears** (e.g. a **spa / skincare towel wrap** — that's correct). Do NOT invent, swap, or change it to a t-shirt or any other garment. Only use a different outfit if the creator has **explicitly asked** for a specific wardrobe — until then, stick with the reference.
+- Keep the **SAME outfit in every scene and in both the start and end frame** — identical for continuity.
+- Only floor: no **explicit nudity** (no exposed chest/breasts, topless). A towel or spa wrap that covers the chest is perfectly fine.
 
 ## 4. Emotion & beat — ONE frozen expression, not a sequence
 - Render **this scene's** emotion / expression (provided per scene), in the creator's **persona register** — do NOT default every shot to the same expression (e.g. the same skeptical squint on every frame).
