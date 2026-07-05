@@ -214,6 +214,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const loadedRefKey = useRef('')           // 로드 당시 refLib 시그니처 (변경 감지용)
   const loadedNameKey = useRef('')          // 로드 당시 노드 이름 시그니처
   const loadedGraphKey = useRef('')         // 로드 당시 그래프 레이아웃 시그니처
+  const prevCidRef = useRef(null)           // 이전 빌드의 콘텐츠 id (같은 콘텐츠 재빌드면 수동 노드 유지)
   const hist = useRef({ past: [], future: [], key: null })
   const dragSnap = useRef(null)
   const [histN, setHistN] = useState({ u: 0, r: 0 })
@@ -482,7 +483,15 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       commitRun(n.id, (x) => ({ ...x, dirty: false }))
     } catch (e) { setErr(String(e.message || e)) }
   }
-  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }; if (staleAllOnLoad.current) { const gen = new Set(['overall', 'script', 'prompt', 'image', 'clip', 'vo', 'movie']); g.nodes.forEach((n) => { if (gen.has(n.kind)) n.dirty = true }); staleAllOnLoad.current = false } loadedRefKey.current = JSON.stringify(g.refLib); loadedNameKey.current = g.nodes.map((n) => n.id + '=' + n.hd).join('|'); loadedGraphKey.current = graphKeyOf(g); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: undoStack.current.length, r: redoStack.current.length }); setNg(g) }, [data])
+  useEffect(() => { const g = data ? buildGraph(data) : { nodes: [], edges: [], refLib: { product: [], character: [], environment: [] } }
+    // 같은 콘텐츠 재빌드 시, 저장 레이스로 유실될 수 있는 화면상의 수동 노드/연결을 병합 (서버 graph_state가 아직 안 저장됐어도 안 사라지게)
+    if (prevCidRef.current === cid && cid != null && ngRef.current && ngRef.current.nodes.length) {
+      const byId = {}; g.nodes.forEach((n) => (byId[n.id] = n))
+      ngRef.current.nodes.forEach((n) => { if (String(n.id).includes('-u') && !byId[n.id]) { g.nodes.push({ ...n }); byId[n.id] = n } })
+      const has = new Set(g.edges.map((e) => e.from + '>' + e.to)); ngRef.current.edges.forEach((e) => { const kk = e.from + '>' + e.to; if (!has.has(kk) && byId[e.from] && byId[e.to]) { g.edges.push(e); has.add(kk) } })
+    }
+    prevCidRef.current = cid
+    if (staleAllOnLoad.current) { const gen = new Set(['overall', 'script', 'prompt', 'image', 'clip', 'vo', 'movie']); g.nodes.forEach((n) => { if (gen.has(n.kind)) n.dirty = true }); staleAllOnLoad.current = false } loadedRefKey.current = JSON.stringify(g.refLib); loadedNameKey.current = g.nodes.map((n) => n.id + '=' + n.hd).join('|'); loadedGraphKey.current = graphKeyOf(g); ngRef.current = g; hist.current = { past: [], future: [], key: null }; setHistN({ u: undoStack.current.length, r: redoStack.current.length }); setNg(g) }, [data])
   // 레퍼런스 라이브러리 정리(추가/이동/삭제)를 자동 저장 — 로드값과 다를 때만
   const refLibKey = JSON.stringify(ng.refLib)
   useEffect(() => {
