@@ -505,10 +505,14 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       const tag = document.activeElement?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return                  // let text fields keep native editing
       if (!(e.metaKey || e.ctrlKey)) return
-      const z = e.key === 'z' || e.key === 'Z'
-      if (z && e.shiftKey) { e.preventDefault(); redo() }
-      else if (z) { e.preventDefault(); undo() }
-      else if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redo() }
+      const key = (e.key || '').toLowerCase()
+      const sel = selRef.current ? ngRef.current.nodes.find((n) => n.id === selRef.current) : null
+      if (key === 'z' && e.shiftKey) { e.preventDefault(); redo() }
+      else if (key === 'z') { e.preventDefault(); undo() }
+      else if (key === 'y') { e.preventDefault(); redo() }
+      else if (key === 'c' && sel) { e.preventDefault(); clipboard.current = sel }                    // 복사
+      else if (key === 'v' && clipboard.current) { e.preventDefault(); dupRef.current(clipboard.current) }  // 붙여넣기
+      else if (key === 'd' && sel) { e.preventDefault(); dupRef.current(sel) }                         // 복제
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -553,6 +557,18 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     else node = { id, role: kind, kind: KIND[kind] ? kind : undefined, hd: kind, x, y, data: {} }
     commit((g) => ({ ...g, nodes: [...g.nodes, { ...node, dirty: true }] })); setMenu(null)
   }
+  // 노드 복제 — 같은 설정(data)으로 새 노드 (새 id, 위치 오프셋). 생성물(썸네일/영상)은 복사값 유지하되 dirty로 재생성 유도.
+  const clipboard = useRef(null)
+  function duplicateNode(n) {
+    if (!n || n.role === 'overall' || n.role === 'movie') return null   // Script Engine·movie는 복제 대상 아님(단일)
+    const id = (n.kind || 'node') + '-u' + (uidN.current++)
+    const copy = { ...n, id, x: (n.x || 0) + 48, y: (n.y || 0) + 48, dirty: true, data: { ...(n.data || {}) } }
+    commit((g) => ({ ...g, nodes: [...g.nodes, copy] }))
+    setSel(id)
+    return id
+  }
+  const selRef = useRef(null); selRef.current = selId
+  const dupRef = useRef(null); dupRef.current = duplicateNode
   function onCanvasMenu(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setMenu({ sx: ev.clientX, sy: ev.clientY, wx: (ev.clientX - r.left - view.x) / view.k, wy: (ev.clientY - r.top - view.y) / view.k }) }
   function addEdge(fromId, toId) { commit((g) => { if (g.edges.some((e) => e.from === fromId && e.to === toId)) return g; const from = g.nodes.find((n) => n.id === fromId); return { ...g, edges: [...g.edges, { from: fromId, to: toId, cls: edgeClassFor(outTypeOf(from), from), key: from?.refKey }] } }) }
   function cutEdge(idx) { commit((g) => ({ ...g, edges: g.edges.filter((_, i) => i !== idx) })) }
@@ -736,7 +752,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
             postJSON(`/api/contents/${cid}/vo-style`, merged).catch(() => {})
           } else setNodeData(drawerNode.id, { [f]: v })
         }}
-        onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} onDelete={() => deleteNode(drawerNode.id)} hoverPreview={hoverPreview}
+        onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} onDelete={() => deleteNode(drawerNode.id)} onDuplicate={(drawerNode.role !== 'overall' && drawerNode.role !== 'movie') ? () => duplicateNode(drawerNode) : null} hoverPreview={hoverPreview}
         incoming={graph.edges.filter((e) => e.to === drawerNode.id).map((e) => nodeById[e.from]).filter(Boolean)}
         outgoing={graph.edges.filter((e) => e.from === drawerNode.id).map((e) => nodeById[e.to]).filter(Boolean)} />}
       </>}
@@ -842,7 +858,7 @@ function Field({ c, d, onField, onCommit }) {
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} onBlur={onCommit} />
 }
 
-function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, onRecommend, incoming, outgoing, analyses, onSwapAnalysis }) {
+function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, onDuplicate, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, onRecommend, incoming, outgoing, analyses, onSwapAnalysis }) {
   const [swapOpen, setSwapOpen] = useState(true)   // 분석 드로어 열면 스왑 갤러리 기본 펼침(발견성)
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
   // re-run = 씬 스크립트 기반으로 생성하는 노드: overall · image-prompt · motion-prompt · VO-text · image · clip · vo.
@@ -857,6 +873,7 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
       {k && <span className="ng-out">→ {k.out.n} ({k.out.t})</span>}
       {canRun && <button className={'ng-run' + (runMsg ? ' running' : '')} onClick={onRun} disabled={runBusy} title={runMsg || 'run this node'}>▶ re-run</button>}
       <span className="ng-wctrl">
+        {onDuplicate && <button className="ng-icn" onClick={onDuplicate} title="duplicate this node (⌘D)">⧉</button>}
         <button className={'ng-icn' + (locked ? ' on' : '')} onClick={onLock} title={locked ? 'locked — stays open' : 'lock — keep open when clicking elsewhere'}>{locked ? '📌' : '📍'}</button>
         <button className="ng-icn" onClick={onClose} title="close">✕</button>
       </span>
