@@ -257,22 +257,32 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(iv) }
   }, [cid])
   function refreshSource() { if (cid == null) return; api(`/api/contents/${cid}`).then((r) => { srcSig.current = r.analysis?.analyzed_at || null; setSel(null); setSourceStale(false); setData(adapt(r)) }).catch((e) => setErr(String(e.message || e))) }
-  // 노드 자동 정렬 — 종류(열) × 씬(행)으로 깔끔하게 배치. 수동 노드(end 프레임 등)도 연결된 씬 기준으로 정리. undo 가능.
+  // 노드 자동 정렬 — 종류(열) × 씬(행). 이미지 노드가 높아 겹치지 않게 씬마다 동적 높이(누적 Y). 수동 노드는 연결 씬 기준. undo 가능.
   function reorgLayout() {
     const g = ngRef.current
     const sceneCount = Math.max(1, ...g.nodes.map((n) => effScene(n) || 0))
-    const my = 100 + Math.max(0, sceneCount - 1) * PITCH / 2
+    const IMG_H = 230, GAP = 60                                      // 이미지 노드 높이(썸네일 150 + 헤더/라벨) + 씬 간 여백
+    const hasEnd = {}; g.nodes.forEach((n) => { if (n.kind === 'image' && n.data?.frameRole === 'end') { const s = effScene(n); if (s) hasEnd[s] = true } })
+    const rowTop = {}; let yy = 100
+    for (let s = 1; s <= sceneCount; s++) { rowTop[s] = yy; yy += (hasEnd[s] ? IMG_H * 2 + 30 : IMG_H) + GAP }  // end 있으면 2배 높이
+    const my = 100 + Math.max(0, (yy - 100 - GAP) / 2 - 64)          // Script Engine·movie는 세로 중앙
     const colOf = (n) => n.kind === 'overall' ? COL.overall : n.kind === 'movie' ? COL.movie
       : (n.role === 'input' || n.kind === 'analysis' || n.role === 'analysis' || n.role === 'animref') ? COL.input
       : n.kind === 'script' ? COL.script : n.kind === 'prompt' ? COL.prompt : n.kind === 'image' ? COL.image : n.kind === 'clip' ? COL.clip : n.kind === 'vo' ? COL.vo : COL.input
-    const subY = (n) => { const id = String(n.id); if (id.startsWith('promptM-')) return 90; if (id.startsWith('promptV-')) return 180; if (n.kind === 'image' && n.data?.frameRole === 'end') return 150; return 0 }
+    const yFor = (n) => {
+      const top = rowTop[effScene(n) || 1] ?? 100, id = String(n.id)
+      if (n.kind === 'image') return top + (n.data?.frameRole === 'end' ? IMG_H + 30 : 0)   // end 이미지는 start 아래로 (겹침 없이)
+      if (id.startsWith('promptM-')) return top + 78
+      if (id.startsWith('promptV-')) return top + 156
+      return top                                                     // script·image-prompt·clip·vo는 행 상단
+    }
     commit((gg) => ({ ...gg, nodes: gg.nodes.map((n) => {
       let y
       if (n.id === 'in-0') y = 100
       else if (n.id === 'in-1') y = 240
       else if (n.kind === 'analysis' || n.role === 'analysis') y = 400
       else if (n.kind === 'overall' || n.kind === 'movie') y = my
-      else { const sc = effScene(n) || 1; y = 100 + (sc - 1) * PITCH + subY(n) }
+      else y = yFor(n)
       return { ...n, x: colOf(n), y }
     }) }))
     setSel(null)
