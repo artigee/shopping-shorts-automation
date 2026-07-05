@@ -72,7 +72,9 @@ export async function listHfElements() {
   const m = out.match(/\[[\s\S]*\]/)   // 출력에서 JSON 배열만 추출
   if (!m) throw new Error('element 목록 파싱 실패 (CLI 출력에 JSON 배열 없음)')
   const arr = JSON.parse(m[0])
-  return Array.isArray(arr) ? arr.filter((e) => e && e.id && e.name).map((e) => ({ id: e.id, name: e.name, category: e.category || 'character', thumb: e.thumb || null })) : []
+  // 오디오/비디오 element(예: 음성 샘플)는 이미지 카탈로그에서 제외 — 이미지 첨부용 element만.
+  const isAv = (u) => /\.(mp3|wav|m4a|ogg|aac|flac|mp4|webm|mov)(\?|$)/i.test(u || '')
+  return Array.isArray(arr) ? arr.filter((e) => e && e.id && e.name && !isAv(e.thumb)).map((e) => ({ id: e.id, name: e.name, category: e.category || 'character', thumb: e.thumb || null })) : []
 }
 
 // element 하나의 전체 이미지(medias) 조회 — 뷰어용. list는 대표 1장만 주므로 get으로 전부 가져온다.

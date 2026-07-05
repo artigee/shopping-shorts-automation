@@ -221,7 +221,12 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   }
   const [refInput, setRefInput] = useState(null)   // 인라인 입력 폼 {role, mode:'ref'|'element', url, name} — window.prompt이 VSCode 웹뷰에서 안 떠서 대체
   const roleCat = { product: 'prop', character: 'character', environment: 'environment' }   // 패널 role → HF element category
-  const loadHfEls = (refresh) => { setHfElsBusy(true); return api('/api/hf/elements' + (refresh ? '?refresh=1' : '')).then((r) => setHfEls(r.elements || [])).catch(() => setHfEls([])).finally(() => setHfElsBusy(false)) }
+  const [brokeThumb, setBrokeThumb] = useState({})   // 로딩 실패(403 등)한 element 썸네일 id → 플레이스홀더
+  const loadHfEls = (refresh) => {   // localStorage 캐시 → 즉시 표시 후 백그라운드 새로고침 (목록 CLI 조회가 ~25s라)
+    if (!refresh) { try { const c = JSON.parse(localStorage.getItem('hfEls') || 'null'); if (c && Array.isArray(c.els)) setHfEls(c.els) } catch { /* noop */ } }
+    setHfElsBusy(true)
+    return api('/api/hf/elements' + (refresh ? '?refresh=1' : '')).then((r) => { const els = r.elements || []; setHfEls(els); try { localStorage.setItem('hfEls', JSON.stringify({ at: Date.now(), els })) } catch { /* noop */ } }).catch(() => setHfEls((cur) => cur || [])).finally(() => setHfElsBusy(false))
+  }
   useEffect(() => { if (libOpen && hfEls == null) loadHfEls(false) }, [libOpen])   // 패널 열 때 1회 로드
   async function submitRefInput() {
     const f = refInput; if (!f) return
@@ -920,7 +925,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 {els.length
                   ? <div className="ng-libgrid">{els.map((e) => (
                       <div key={e.id} className="ng-libitem ng-elitem" title={'@' + e.name + ' — click to view images'} onClick={() => openElView(e)} style={{ cursor: 'pointer' }}>
-                        {e.thumb ? <img src={e.thumb} onError={(ev) => { ev.target.style.opacity = .2 }} /> : <div className="ng-upimg">⬡</div>}
+                        {e.thumb && !brokeThumb[e.id] ? <img src={e.thumb} onError={() => setBrokeThumb((b) => ({ ...b, [e.id]: 1 }))} /> : <div className="ng-upimg" title="thumbnail not accessible (Higgsfield-generated image)">⬡</div>}
                         <div className="nm">@{e.name}</div>
                       </div>))}</div>
                   : <div className="ng-empty">{hfElsBusy && hfEls == null ? 'loading elements…' : 'no ' + role + ' elements · ⬡ to register'}</div>}
