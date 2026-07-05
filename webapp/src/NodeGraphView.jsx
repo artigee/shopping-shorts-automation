@@ -601,13 +601,21 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   function onCanvasMenu(ev) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setMenu({ sx: ev.clientX, sy: ev.clientY, wx: (ev.clientX - r.left - view.x) / view.k, wy: (ev.clientY - r.top - view.y) / view.k }) }
   function addEdge(fromId, toId) { commit((g) => { if (g.edges.some((e) => e.from === fromId && e.to === toId)) return g; const from = g.nodes.find((n) => n.id === fromId); return { ...g, edges: [...g.edges, { from: fromId, to: toId, cls: edgeClassFor(outTypeOf(from), from), key: from?.refKey }] } }) }
   function cutEdge(idx) { commit((g) => ({ ...g, edges: g.edges.filter((_, i) => i !== idx) })) }
-  function startWire(ev, n) {
-    ev.stopPropagation(); ev.preventDefault()
+  // 노드 n의 out에서 마우스로 와이어 드래그 → 드롭한 노드에 연결. (포트 드래그 + 엣지 그랩 공용)
+  function beginWire(ev, n) {
     const world = (e) => { const r = canvasRef.current.getBoundingClientRect(); return { x: (e.clientX - r.left - view.x) / view.k, y: (e.clientY - r.top - view.y) / view.k } }
     const mv = (e) => { const p = world(e); const nd = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ng-node'); const tid = nd?.dataset.id; const valid = tid && tid !== n.id && canConnect(n, nodeById[tid]); setWireEnd({ ...p, fromId: n.id, targetId: tid && tid !== n.id ? tid : null, valid }) }
     const up = (e) => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); const tid = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ng-node')?.dataset.id; if (tid && tid !== n.id && canConnect(n, nodeById[tid])) addEdge(n.id, tid); setWireEnd(null) }
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up)
-    setWireEnd({ ...anchor(n, 'out'), fromId: n.id, targetId: null, valid: false })
+    setWireEnd({ ...world(ev), fromId: n.id, targetId: null, valid: false })
+  }
+  function startWire(ev, n) { ev.stopPropagation(); ev.preventDefault(); beginWire(ev, n) }
+  // 엣지를 잡으면 즉시 끊고, from 노드에서 loose end가 마우스를 따라감 → 다른 노드에 드롭하면 재연결 (드롭 안 하면 끊긴 채 유지)
+  function grabEdge(ev, e) {
+    ev.stopPropagation(); ev.preventDefault()
+    const from = nodeById[e.from]; if (!from) return
+    commit((g) => ({ ...g, edges: g.edges.filter((x) => !(x.from === e.from && x.to === e.to)) }))
+    beginWire(ev, from)
   }
   function startDrawerResize(ev) { ev.preventDefault(); const sy = ev.clientY, h0 = drawerH, maxH = Math.round(window.innerHeight * 0.85); const mv = (e) => setDrawerH(Math.min(maxH, Math.max(140, h0 - (e.clientY - sy)))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
   function addRefAsset(role, thumb, name) { if (!thumb) return; commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: [...(g.refLib[role] || []), { id: 'lib-' + (libUid.current++), thumb, role, name: name || role }] } })) }
@@ -687,7 +695,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         <div className="ng-world" style={{ transform: `translate(${view.x}px,${view.y}px) scale(${view.k})`, transition: framing ? 'transform .46s cubic-bezier(.22,.61,.36,1)' : 'none' }}>
           <svg className="ng-edges">
             {paths.map((p) => (<g key={p.key}>
-              {p.editable && <path className="ng-edge-hit" d={p.d} onClick={() => cutEdge(p.i)}><title>click to disconnect</title></path>}
+              {p.editable && <path className="ng-edge-hit" d={p.d} onPointerDown={(ev) => grabEdge(ev, p)}><title>drag to re-route · click to disconnect</title></path>}
               {(() => { const hot = selId && (p.from === selId || p.to === selId); const op = selId ? (hot ? 0.98 : 0.06) : (p.dashed ? 0.5 : 0.9); return <path d={p.d} stroke={p.color} strokeWidth={hot ? 2.6 : 1.6} fill="none" strokeDasharray={p.dashed ? '5 4' : 'none'} opacity={op} style={{ transition: 'opacity .16s, stroke-width .12s' }} /> })()}
               {p.label && <text x={p.label.x} y={p.label.y} fill="#c9b3ea" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontSize="11" fontWeight="600">{p.label.t}</text>}
             </g>))}
