@@ -160,7 +160,7 @@ function buildGraph(data) {
     const byId = {}; nodes.forEach((n) => (byId[n.id] = n))
     if (gs.pos) nodes.forEach((n) => { const p = gs.pos[n.id]; if (Array.isArray(p)) { n.x = p[0]; n.y = p[1] } })       // 위치 복원
     if (gs.data) nodes.forEach((n) => { const d = gs.data[n.id]; if (d) n.data = { ...n.data, ...d } })                  // 노드 설정(frameRole 등) 복원
-    if (Array.isArray(gs.extraNodes)) gs.extraNodes.forEach((en) => { if (en && en.id && !byId[en.id]) { const nn = { ...en }; nodes.push(nn); byId[en.id] = nn } })  // 수동 노드 복원
+    if (Array.isArray(gs.extraNodes)) gs.extraNodes.forEach((en) => { if (en && en.id && !byId[en.id]) { const nn = { ...en, dirty: false }; nodes.push(nn); byId[en.id] = nn } })  // 수동 노드 복원 (dirty는 초기화 — 복원=변경 아님)
     if (Array.isArray(gs.edges)) { const has = new Set(edges.map((e) => e.from + '>' + e.to)); gs.edges.forEach((e) => { const kk = e.from + '>' + e.to; if (!has.has(kk) && byId[e.from] && byId[e.to]) { edges.push(e); has.add(kk) } }) }  // 수동 연결 복원(중복 제외)
   }
   return { nodes, edges, refLib }
@@ -174,7 +174,7 @@ function graphStateOf(g) {
     pos[n.id] = [Math.round(n.x || 0), Math.round(n.y || 0)]
     const d = {}; GSAVE_KEYS.forEach((k) => { if (n.data && n.data[k] != null && n.data[k] !== '') d[k] = n.data[k] }); if (Object.keys(d).length) data[n.id] = d
   })
-  return { pos, data, extraNodes: g.nodes.filter((n) => String(n.id).includes('-u')), edges: g.edges }
+  return { pos, data, extraNodes: g.nodes.filter((n) => String(n.id).includes('-u')).map(({ dirty, ...n }) => n), edges: g.edges }
 }
 const graphKeyOf = (g) => JSON.stringify({ n: g.nodes.map((n) => [n.id, Math.round(n.x || 0), Math.round(n.y || 0), n.data?.frameRole, n.data?.makeVideo, n.data?.model, n.data?.cameraMove]), e: g.edges.map((e) => e.from + '>' + e.to) })
 
