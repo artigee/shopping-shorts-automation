@@ -34,10 +34,10 @@ Sweet spot: instantly recognizable as the real product, yet the viewer still has
 - The finger-point-down + "welcoming, happy, satisfied" smile is **EXCLUSIVELY the final CTA scene** (the last shot). Only there: hold the product in one hand and **point a single finger DOWN** toward the lower frame (the on-screen link/comment area).
 - **In every OTHER scene: do NOT point down and do NOT do any CTA / call-to-action gesture.** Use a natural gesture that fits THAT beat (applying, examining, reacting) — the pointing-down pose must never appear in a hook, problem, or middle scene.
 
-## 3c. Wardrobe / modesty (ALWAYS clothed)
-- She **always wears a simple, casual top** (plain tee, tank, sweater, or similar) in **every** shot.
+## 3c. Wardrobe / modesty (ALWAYS clothed, SAME top every shot)
+- She wears the **SAME plain, light-colored crew-neck t-shirt in every scene and in both the start and end frame** — identical top throughout, for continuity. Do NOT change the garment scene to scene or between a scene's two frames (no off-shoulder in one and a tee in another).
 - **NEVER** bare shoulders, bare chest, cleavage, topless, nude, underwear, or a towel-only look — even for a "bare skin" / skincare beat, the skincare content is her **face**, not her body.
-- This **overrides the character reference:** if the reference photo is cropped at the shoulders or appears bare, still put her in a normal top. Modesty wins over reference-fidelity here.
+- This **overrides the character reference:** if the reference photo is cropped at the shoulders or appears bare, still put her in the same plain crew-neck tee. Modesty + continuity win over reference-fidelity here.
 
 ## 4. Emotion & beat — ONE frozen expression, not a sequence
 - Render **this scene's** emotion / expression (provided per scene), in the creator's **persona register** — do NOT default every shot to the same expression (e.g. the same skeptical squint on every frame).

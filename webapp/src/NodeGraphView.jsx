@@ -538,7 +538,13 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const graph = ng
   const nodeById = useMemo(() => { const m = {}; graph.nodes.forEach((n) => (m[n.id] = n)); return m }, [graph])
   // 노드의 효과적인 씬 번호: 자기 scene → 없으면 연결(들어오는 엣지)에서 상속
-  const effScene = (nd, depth = 0) => { if (nd?.scene) return nd.scene; if (depth > 4 || !nd) return null; for (const e of graph.edges) if (e.to === nd.id) { const s = effScene(nodeById[e.from], depth + 1); if (s) return s } return null }
+  // 씬 해석은 항상 '연결(들어오는 edge)'을 우선한다 — period. 낡게 복사된 scene이 아니라 실제로 연결된 체인을 따라 씬을 찾는다.
+  // 자기 scene은 오직 폴백(연결에서 씬을 못 찾을 때 — 예: 체인의 출발점인 script 노드는 overall에서 씬을 못 받으므로 자기 scene 사용).
+  const effScene = (nd, depth = 0) => {
+    if (!nd || depth > 6) return null
+    for (const e of graph.edges) if (e.to === nd.id) { const s = effScene(nodeById[e.from], depth + 1); if (s) return s }
+    return nd.scene || null
+  }
   const ctx = useMemo(() => ({ persona: data?.persona || '—', hook: data?.hook || '—', angle: data?.overall?.angle || '—', product: data?.product?.title || '—' }), [data])
   const selNode = nodeById[selId]
   const lastSel = useRef(null)
@@ -652,7 +658,9 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   function duplicateNode(n) {
     if (!n || n.role === 'overall' || n.role === 'movie') return null   // Script Engine·movie는 복제 대상 아님(단일)
     const id = (n.kind || 'node') + '-u' + (uidN.current++)
-    const copy = { ...n, id, x: (n.x || 0) + 48, y: (n.y || 0) + 48, dirty: true, data: { ...(n.data || {}) } }
+    // scene 파생 노드(image/clip/vo)는 복제 시 낡은 scene을 떼어내 '연결된 씬'을 따르게 한다 (scene3에서 복제→scene6에 연결하면 scene6).
+    const drop = ['image', 'clip', 'vo'].includes(n.kind)
+    const copy = { ...n, id, x: (n.x || 0) + 48, y: (n.y || 0) + 48, dirty: true, data: { ...(n.data || {}) }, ...(drop ? { scene: undefined } : {}) }
     commit((g) => ({ ...g, nodes: [...g.nodes, copy] }))
     setSel(id)
     return id
@@ -778,7 +786,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 {n.kind === 'clip' && (n.video ? <video className="ng-thumb" src={n.video} muted loop playsInline preload="metadata" onMouseOver={(e) => e.target.play()} onMouseOut={(e) => e.target.pause()} /> : n.image ? <img className="ng-thumb" style={{ opacity: .4 }} src={n.image} /> : null)}
                 {n.kind === 'movie' && n.video && <video className="ng-thumb" src={n.video} controls playsInline preload="metadata" />}
                 {n.kind === 'analysis' && n.data?.reel?.thumb && <img className="ng-thumb" src={n.data.reel.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.display = 'none' }} />}
-                <div className="ng-hd" style={{ color: c }}><span className="ng-dot" style={{ background: c }} />{(!n.scene && ['image', 'clip', 'vo'].includes(n.kind) && effScene(n)) ? 'scene ' + effScene(n) : n.hd}</div>
+                <div className="ng-hd" style={{ color: c }}><span className="ng-dot" style={{ background: c }} />{(['image', 'clip', 'vo'].includes(n.kind) ? (effScene(n) ? 'scene ' + effScene(n) : (n.hd + ' · unlinked')) : n.hd)}</div>
                 {n.t && n.kind !== 'prompt' && <div className="ng-t">{n.t}</div>}
                 {n.kind === 'overall' && (() => { const tgt = Number(n.data?.durationSec) || 0, drift = tgt ? Math.abs(scenesDur - tgt) / tgt : 0; return <div className={'ng-dur-readout' + (tgt && drift > 0.2 ? ' off' : '')}>Σ shots {scenesDur}s{tgt ? ` / ${tgt}s target` : ''}</div> })()}
                 {n.kind === 'overall' && n.data?.shotCount && <div className="ng-dur-readout" title={n.data?.recShotWhy ? 'why: ' + n.data.recShotWhy + ' — editable; re-run reinitiates' : 'editable in the drawer; re-run reinitiates'} style={{ marginTop: 3 }}>{n.data.shotCount} shots <span style={{ opacity: .6 }}>· editable</span></div>}
