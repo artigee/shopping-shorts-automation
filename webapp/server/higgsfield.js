@@ -64,6 +64,31 @@ function runClaude(prompt, extraArgs = [], timeout = 240000) {
   })
 }
 
+// 히긱스필드에 등록된 재사용 element(캐릭터/환경/제품) 목록 — claude CLI로 MCP 조회 후 JSON만 파싱해서 반환.
+const HF_ELEMENTS_TOOLS = ['mcp__higgsfield__show_reference_elements']
+export async function listHfElements() {
+  const prompt = 'Call the tool mcp__higgsfield__show_reference_elements with exactly {"action":"list","size":60}. From the result, output ONLY a single compact JSON array (no prose, no explanation, no markdown code fences). Each array item must be {"id":<id>,"name":<name>,"category":<category>,"thumb":<url of the first media, or null>}. Output nothing except that JSON array.'
+  const out = await runClaude(prompt, ['--allowedTools', ...HF_ELEMENTS_TOOLS, '--model', 'haiku'], 120000)
+  const m = out.match(/\[[\s\S]*\]/)   // 출력에서 JSON 배열만 추출
+  if (!m) throw new Error('element 목록 파싱 실패 (CLI 출력에 JSON 배열 없음)')
+  const arr = JSON.parse(m[0])
+  return Array.isArray(arr) ? arr.filter((e) => e && e.id && e.name).map((e) => ({ id: e.id, name: e.name, category: e.category || 'character', thumb: e.thumb || null })) : []
+}
+
+// 이미지 URL로 새 명명 element(캐릭터/환경/제품)를 히긱스필드에 등록. import → create 순서로 claude가 오케스트레이션.
+export async function createHfElement({ name, category = 'character', imageUrl }) {
+  const safeName = String(name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 32)
+  if (!safeName) throw new Error('이름이 비어있습니다')
+  if (!/^https?:\/\//i.test(imageUrl || '')) throw new Error('https 이미지 URL이 필요합니다')
+  const cat = ['character', 'environment', 'prop'].includes(category) ? category : 'character'
+  const prompt = `Step 1: call mcp__higgsfield__media_import_url with {"url":"${imageUrl}"} and take the returned media_id. Step 2: call mcp__higgsfield__show_reference_elements with {"action":"create","name":"${safeName}","category":"${cat}","medias":[{"id":"<media_id from step 1>","url":"${imageUrl}","type":"media_input"}]}. Then output ONLY the created element as JSON {"id":..,"name":..,"category":..} and nothing else.`
+  const out = await runClaude(prompt, ['--allowedTools', 'mcp__higgsfield__media_import_url', 'mcp__higgsfield__show_reference_elements', '--model', 'sonnet'], 180000)
+  const m = out.match(/\{[\s\S]*\}/)
+  if (!m) throw new Error('element 생성 결과 파싱 실패')
+  const el = JSON.parse(m[0])
+  return { id: el.id, name: el.name || safeName, category: el.category || cat }
+}
+
 const HF_VID_TOOLS = ['mcp__higgsfield__media_import_url', 'mcp__higgsfield__generate_video', 'mcp__higgsfield__job_status']
 const HF_AUDIO_TOOLS = ['mcp__higgsfield__generate_audio', 'mcp__higgsfield__job_status']
 const DEFAULT_VOICE = process.env.HF_VOICE_ID || '80914268-dfae-4f76-8306-36f2d55f58f8' // Quinn (female, EN)

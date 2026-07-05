@@ -206,6 +206,18 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const [menu, setMenu] = useState(null)
   const [libOpen, setLibOpen] = useState(false)
   const [upBusy, setUpBusy] = useState({})   // role별 업로드 진행 개수 (HF CLI 업로드가 ~50s 걸려 즉시 피드백 필요)
+  const [hfEls, setHfEls] = useState(null)   // 히긱스필드 등록 element 목록 (available)
+  const [hfElsBusy, setHfElsBusy] = useState(false)
+  const roleCat = { product: 'prop', character: 'character', environment: 'environment' }   // 패널 role → HF element category
+  const loadHfEls = (refresh) => { setHfElsBusy(true); return api('/api/hf/elements' + (refresh ? '?refresh=1' : '')).then((r) => setHfEls(r.elements || [])).catch(() => setHfEls([])).finally(() => setHfElsBusy(false)) }
+  useEffect(() => { if (libOpen && hfEls == null) loadHfEls(false) }, [libOpen])   // 패널 열 때 1회 로드
+  async function registerHfElement(role) {
+    const url = window.prompt(role + ' — element로 등록할 이미지 URL (https):'); if (!url) return
+    const name = window.prompt('element 이름 (영문/숫자/-):', ''); if (!name) return
+    setHfElsBusy(true)
+    try { await postJSON('/api/hf/elements', { name, category: roleCat[role], imageUrl: url }); await loadHfEls(true) }
+    catch (e) { setErr('element 등록 실패: ' + (e.message || e)) } finally { setHfElsBusy(false) }
+  }
   const [preview, setPreview] = useState(null)
   const [wireEnd, setWireEnd] = useState(null)
   const [locked, setLocked] = useState(false)
@@ -852,7 +864,17 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); try { e.dataTransfer.dropEffect = 'copy' } catch { /* noop */ } e.currentTarget.classList.add('drag') }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag') }}
                 onDrop={(e) => dropRefs(e, role)}>
-                <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="add by URL" onClick={() => { const url = window.prompt(role + ' reference — image URL:'); if (url) addRefAsset(role, url, role + ' ' + (items.length + 1)) }}>＋</span></h4>
+                <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="add local reference by URL" onClick={() => { const url = window.prompt(role + ' reference — image URL:'); if (url) addRefAsset(role, url, role + ' ' + (items.length + 1)) }}>＋</span><span className="add" title="register a NAMED Higgsfield element (callable by @name)" onClick={() => registerHfElement(role)}>⬡</span></h4>
+                {(() => { const els = (hfEls || []).filter((e) => (e.category || '').replace('auto:', '') === roleCat[role]); return els.length ? (
+                  <div className="ng-elstrip">
+                    <div className="ng-elhdr">⬡ Higgsfield elements{hfElsBusy ? ' · …' : ''}</div>
+                    <div className="ng-libgrid">{els.map((e) => (
+                      <div key={e.id} className="ng-libitem ng-elitem" title={'@' + e.name + ' (registered element)'}>
+                        {e.thumb ? <img src={e.thumb} onError={(ev) => { ev.target.style.opacity = .2 }} {...hoverPreview} /> : <div className="ng-upimg">⬡</div>}
+                        <div className="nm">@{e.name}</div>
+                      </div>))}</div>
+                  </div>
+                ) : (hfElsBusy && hfEls == null ? <div className="ng-elhdr">⬡ loading elements…</div> : null) })()}
                 {items.length || upBusy[role]
                   ? <div className="ng-libgrid">
                     {Array.from({ length: upBusy[role] || 0 }, (_, i) => (

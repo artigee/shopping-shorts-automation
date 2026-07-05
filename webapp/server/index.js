@@ -12,7 +12,7 @@ import { analyzeReel } from './analyze.js'
 import { matchProductByVision, simplerQuery } from './match.js'
 import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
 import { getPersonas, getPersona, getHooks, getVoStyles, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
-import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady } from './higgsfield.js'
+import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady, listHfElements, createHfElement } from './higgsfield.js'
 import { buildPreview } from './preview.js'
 import { renderShort, probeDuration, FPS } from './remotion-render.js'
 
@@ -826,6 +826,29 @@ app.put('/api/contents/:id/overall', (req, res) => {
 })
 
 // 콘텐츠 모드 (claim-safety 게이트) — 목록 + 콘텐츠별 저장
+// ── 히긱스필드 재사용 element(캐릭터/환경/제품) — UI에서 available 목록 조회 + 이름 붙여 새로 등록 ──
+let hfElementsCache = { at: 0, data: null }
+app.get('/api/hf/elements', async (req, res) => {
+  const now = Date.now(), fresh = req.query.refresh === '1'
+  if (!fresh && hfElementsCache.data && now - hfElementsCache.at < 10 * 60 * 1000) return res.json({ elements: hfElementsCache.data, cached: true })
+  try {
+    const elements = await listHfElements()
+    hfElementsCache = { at: now, data: elements }
+    res.json({ elements })
+  } catch (e) {
+    if (hfElementsCache.data) return res.json({ elements: hfElementsCache.data, stale: true, error: String(e.message || e) })   // 실패 시 캐시 폴백
+    res.status(500).json({ error: String(e.message || e) })
+  }
+})
+app.post('/api/hf/elements', async (req, res) => {
+  const { name, category, imageUrl } = req.body || {}
+  if (!name || !imageUrl) return res.status(400).json({ error: 'name과 imageUrl이 필요합니다' })
+  try {
+    const el = await createHfElement({ name, category, imageUrl })
+    hfElementsCache = { at: 0, data: null }   // 캐시 무효화 → 다음 목록 조회 시 새로고침
+    res.json({ element: el })
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }) }
+})
 app.get('/api/content-modes', (req, res) => res.json({ modes: getContentModes() }))
 app.post('/api/contents/:id/content-mode', (req, res) => {
   const mode = (req.body && req.body.mode) || null
