@@ -912,14 +912,14 @@ app.post('/api/contents/:id/final-form', (req, res) => {
 })
 
 // 생성 결과 URL을 output 폴더로 다운로드해 저장 → 상대 경로(/output/...) 반환
-async function saveAsset(contentId, index, url, isClip) {
+async function saveAsset(contentId, index, url, isClip, suffix = '') {
   const dir = path.join(OUTPUT_DIR, `content-${contentId}`)
   fs.mkdirSync(dir, { recursive: true })
   const kind = isClip ? 'clip' : 'scene'
   const ext = (url.split('?')[0].match(/\.(png|jpg|jpeg|webp|mp4|webm)$/i) || [, isClip ? 'mp4' : 'png'])[1].toLowerCase()
   const r = await fetch(url)
   if (!r.ok) throw new Error('다운로드 실패 ' + r.status)
-  const fname = `${kind}-${index + 1}.${ext}`
+  const fname = `${kind}-${index + 1}${suffix ? '-' + suffix : ''}.${ext}`   // suffix로 start/end 프레임 파일 분리 (덮어쓰기 방지)
   fs.writeFileSync(path.join(dir, fname), Buffer.from(await r.arrayBuffer()))
   return `/output/content-${contentId}/${fname}`
 }
@@ -1060,7 +1060,7 @@ async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
     refs = up.refs; characterRef = up.characterRef; envRef = up.envRef
     url = await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, productName: product?.title, dimensions: product?.dimensions })
   }
-  const rel = await saveAsset(c.id, i, url, false)
+  const rel = await saveAsset(c.id, i, url, false, frameRole === 'end' ? 'end' : '')   // start/end 별도 파일
   // end 프레임은 별도 슬롯(imageEnd)에 저장 → start(image)를 덮어쓰지 않음. 클립이 둘 다 키프레임으로 사용.
   const imgFields = frameRole === 'end' ? { imageEnd: rel, imageSrcEnd: url } : { image: rel, imageSrc: url }
   scenes[i] = { ...scenes[i], ...(promptOverride ? { imagePrompt: promptOverride } : {}), ...imgFields }
