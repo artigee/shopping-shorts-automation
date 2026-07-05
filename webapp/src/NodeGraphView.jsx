@@ -209,6 +209,11 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const [hfEls, setHfEls] = useState(null)   // 히긱스필드 등록 element 목록 (available)
   const [hfElsBusy, setHfElsBusy] = useState(false)
   const [charEl, setCharEl] = useState(null)   // 이 콘텐츠 캐릭터로 지정된 element { id, name } — 생성 시 <<<id>>> 주입
+  const [elView, setElView] = useState(null)   // element 이미지 뷰어 { id, name, medias, loading }
+  function openElView(e) {   // element 클릭 → 전체 이미지 조회해서 뷰어에 표시
+    setElView({ id: e.id, name: e.name, medias: e.thumb ? [e.thumb] : [], loading: true })
+    api(`/api/hf/elements/${e.id}`).then((r) => setElView((cur) => (cur && cur.id === e.id) ? { ...cur, medias: (r.element && r.element.medias && r.element.medias.length) ? r.element.medias : cur.medias, loading: false } : cur)).catch(() => setElView((cur) => (cur && cur.id === e.id) ? { ...cur, loading: false } : cur))
+  }
   async function assignCharEl(el) {   // 캐릭터 element 지정/해제 (같은 걸 다시 누르면 해제)
     const next = (charEl && charEl.id === el.id) ? null : { id: el.id, name: el.name }
     setCharEl(next)
@@ -866,6 +871,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
 
       {libOpen && (
         <div className="ng-libpanel" style={{ bottom: drawerNode ? drawerH : 0 }}>
+          {/* ── 섹션 1: 로컬 ref (이 콘텐츠, drop 업로드) ── */}
+          <div className="ng-libsec">◆ local refs · this content</div>
           {['product', 'character', 'environment'].map((role) => {
             const items = graph.refLib[role] || []
             return (
@@ -874,28 +881,13 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); try { e.dataTransfer.dropEffect = 'copy' } catch { /* noop */ } e.currentTarget.classList.add('drag') }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag') }}
                 onDrop={(e) => dropRefs(e, role)}>
-                <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="add local reference by URL" onClick={() => setRefInput({ role, mode: 'ref', url: '', name: '' })}>＋</span><span className="add" title="register a NAMED Higgsfield element (callable by @name)" onClick={() => setRefInput({ role, mode: 'element', url: '', name: '' })}>⬡</span></h4>
-                {refInput && refInput.role === role && (
+                <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="add local reference by URL" onClick={() => setRefInput({ role, mode: 'ref', url: '', name: '' })}>＋</span></h4>
+                {refInput && refInput.role === role && refInput.mode === 'ref' && (
                   <div className="ng-refform">
-                    {refInput.mode === 'element' && <input className="ng-refin" placeholder="element name (a-z 0-9 -)" value={refInput.name} autoFocus onChange={(e) => setRefInput({ ...refInput, name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') submitRefInput(); if (e.key === 'Escape') setRefInput(null) }} />}
-                    <input className="ng-refin" placeholder="image URL (https://…)" value={refInput.url} autoFocus={refInput.mode === 'ref'} onChange={(e) => setRefInput({ ...refInput, url: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') submitRefInput(); if (e.key === 'Escape') setRefInput(null) }} />
-                    <div className="ng-refbtns">
-                      <button onClick={submitRefInput} disabled={hfElsBusy}>{refInput.mode === 'element' ? (hfElsBusy ? 'registering…' : '⬡ register') : '＋ add'}</button>
-                      <button className="ghost" onClick={() => setRefInput(null)}>cancel</button>
-                    </div>
+                    <input className="ng-refin" placeholder="image URL (https://…)" value={refInput.url} autoFocus onChange={(e) => setRefInput({ ...refInput, url: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') submitRefInput(); if (e.key === 'Escape') setRefInput(null) }} />
+                    <div className="ng-refbtns"><button onClick={submitRefInput}>＋ add</button><button className="ghost" onClick={() => setRefInput(null)}>cancel</button></div>
                   </div>
                 )}
-                {(() => { const els = (hfEls || []).filter((e) => (e.category || '').replace('auto:', '') === roleCat[role]); return els.length ? (
-                  <div className="ng-elstrip">
-                    <div className="ng-elhdr">⬡ Higgsfield elements{hfElsBusy ? ' · …' : ''}</div>
-                    <div className="ng-libgrid">{els.map((e) => { const active = role === 'character' && charEl && charEl.id === e.id; return (
-                      <div key={e.id} className={'ng-libitem ng-elitem' + (active ? ' on' : '')} title={role === 'character' ? ('click to ' + (active ? 'unassign' : 'use') + ' @' + e.name + ' as this content\'s character') : ('@' + e.name)} onClick={role === 'character' ? () => assignCharEl(e) : undefined} style={role === 'character' ? { cursor: 'pointer' } : undefined}>
-                        {e.thumb ? <img src={e.thumb} onError={(ev) => { ev.target.style.opacity = .2 }} {...hoverPreview} /> : <div className="ng-upimg">⬡</div>}
-                        {active && <span className="ng-elon">✓ character</span>}
-                        <div className="nm">@{e.name}</div>
-                      </div>) })}</div>
-                  </div>
-                ) : (hfElsBusy && hfEls == null ? <div className="ng-elhdr">⬡ loading elements…</div> : null) })()}
                 {items.length || upBusy[role]
                   ? <div className="ng-libgrid">
                     {Array.from({ length: upBusy[role] || 0 }, (_, i) => (
@@ -911,9 +903,40 @@ function NodeGraphInner({ openId, onOpenHandled }) {
               </div>
             )
           })}
+          {/* ── 섹션 2: 온라인 element (Higgsfield · 재사용 @name) ── */}
+          <div className="ng-libsec ng-libsec-el">⬡ online elements · Higgsfield<span className="add" title="reload element list" onClick={() => loadHfEls(true)}>↻</span></div>
+          {['character', 'environment', 'product'].map((role) => {
+            const els = (hfEls || []).filter((e) => (e.category || '').replace('auto:', '') === roleCat[role])
+            return (
+              <div key={'el-' + role} className="ng-elzone">
+                <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="register a NAMED element from URL" onClick={() => setRefInput({ role, mode: 'element', url: '', name: '' })}>⬡</span></h4>
+                {refInput && refInput.role === role && refInput.mode === 'element' && (
+                  <div className="ng-refform">
+                    <input className="ng-refin" placeholder="element name (a-z 0-9 -)" value={refInput.name} autoFocus onChange={(e) => setRefInput({ ...refInput, name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') submitRefInput(); if (e.key === 'Escape') setRefInput(null) }} />
+                    <input className="ng-refin" placeholder="image URL (https://…)" value={refInput.url} onChange={(e) => setRefInput({ ...refInput, url: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') submitRefInput(); if (e.key === 'Escape') setRefInput(null) }} />
+                    <div className="ng-refbtns"><button onClick={submitRefInput} disabled={hfElsBusy}>{hfElsBusy ? 'registering…' : '⬡ register'}</button><button className="ghost" onClick={() => setRefInput(null)}>cancel</button></div>
+                  </div>
+                )}
+                {els.length
+                  ? <div className="ng-libgrid">{els.map((e) => (
+                      <div key={e.id} className="ng-libitem ng-elitem" title={'@' + e.name + ' — click to view images'} onClick={() => openElView(e)} style={{ cursor: 'pointer' }}>
+                        {e.thumb ? <img src={e.thumb} onError={(ev) => { ev.target.style.opacity = .2 }} /> : <div className="ng-upimg">⬡</div>}
+                        <div className="nm">@{e.name}</div>
+                      </div>))}</div>
+                  : <div className="ng-empty">{hfElsBusy && hfEls == null ? 'loading elements…' : 'no ' + role + ' elements · ⬡ to register'}</div>}
+              </div>
+            )
+          })}
         </div>
       )}
       {preview && <div className="ng-refpreview" style={{ left: Math.min(preview.x + 18, window.innerWidth - 280), top: Math.min(preview.y + 18, window.innerHeight - 280) }}><img src={preview.url} /></div>}
+      {elView && (<>
+        <div className="ng-elview-bd" onClick={() => setElView(null)} />
+        <div className="ng-elview">
+          <div className="ng-elview-h">@{elView.name} · {elView.medias.length} image{elView.medias.length === 1 ? '' : 's'}{elView.loading ? ' · loading…' : ''}<span className="x" onClick={() => setElView(null)}>×</span></div>
+          <div className="ng-elview-grid">{elView.medias.map((u, i) => (<img key={i} src={u} onError={(ev) => { ev.target.style.opacity = .2 }} />))}</div>
+        </div>
+      </>)}
 
       {menu && (<>
         <div className="ng-menu-bd" onPointerDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null) }} />

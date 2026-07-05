@@ -75,6 +75,16 @@ export async function listHfElements() {
   return Array.isArray(arr) ? arr.filter((e) => e && e.id && e.name).map((e) => ({ id: e.id, name: e.name, category: e.category || 'character', thumb: e.thumb || null })) : []
 }
 
+// element 하나의 전체 이미지(medias) 조회 — 뷰어용. list는 대표 1장만 주므로 get으로 전부 가져온다.
+export async function getHfElement(id) {
+  const prompt = `Call the tool mcp__higgsfield__show_reference_elements with exactly {"action":"get","element_id":"${id}"}. From the result output ONLY a compact JSON object {"id":..,"name":..,"category":..,"medias":[<EVERY media url in the element>]} — no prose, no code fences.`
+  const out = await runClaude(prompt, ['--allowedTools', ...HF_ELEMENTS_TOOLS, '--model', 'haiku'], 120000)
+  const m = out.match(/\{[\s\S]*\}/)
+  if (!m) throw new Error('element 상세 파싱 실패')
+  const e = JSON.parse(m[0])
+  return { id: e.id, name: e.name, category: e.category || 'character', medias: Array.isArray(e.medias) ? e.medias.filter(Boolean) : [] }
+}
+
 // 이미지 URL로 새 명명 element(캐릭터/환경/제품)를 히긱스필드에 등록. import → create 순서로 claude가 오케스트레이션.
 export async function createHfElement({ name, category = 'character', imageUrl }) {
   const safeName = String(name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 32)

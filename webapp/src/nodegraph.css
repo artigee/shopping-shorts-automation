@@ -120,6 +120,18 @@
 .ng-libdel:hover { background: #e0655e; }
 .ng-libitem .nm { font-family: ui-monospace, monospace; font-size: 9px; color: #9c9a92; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ng-empty { font-family: ui-monospace, monospace; font-size: 10px; color: #6b6a64; border: 1px dashed #2f2f36; border-radius: 8px; padding: 14px 8px; text-align: center; white-space: pre-line; line-height: 1.5; }
+.ng-libsec { font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: .06em; color: #8a8880; text-transform: uppercase; margin: 6px 2px 6px; padding-bottom: 4px; border-bottom: 1px solid #2f2f36; display: flex; align-items: center; }
+.ng-libsec .add { margin-left: auto; cursor: pointer; color: #6b6a64; font-size: 12px; }
+.ng-libsec .add:hover { color: #5DCAA5; }
+.ng-libsec-el { color: #7fb8a0; border-color: rgba(93,202,165,.25); }
+.ng-elzone { border-radius: 10px; padding: 2px 4px 6px; }
+.ng-elview-bd { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 60; }
+.ng-elview { position: fixed; z-index: 61; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, 86vw); max-height: 82vh; overflow: auto; background: #17171b; border: 1px solid #34343c; border-radius: 12px; padding: 12px; }
+.ng-elview-h { font-family: ui-monospace, monospace; font-size: 12px; color: #cfeee2; margin-bottom: 10px; display: flex; align-items: center; }
+.ng-elview-h .x { margin-left: auto; cursor: pointer; color: #8a8880; font-size: 16px; }
+.ng-elview-h .x:hover { color: #fff; }
+.ng-elview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ng-elview-grid img { width: 100%; border-radius: 8px; background: #20262e; display: block; }
 .ng-refform { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 8px; padding: 7px; border: 1px solid #2f2f36; border-radius: 8px; background: #1b1b1f; }
 .ng-refin { font-family: ui-monospace, monospace; font-size: 11px; color: #d8d6cc; background: #131316; border: 1px solid #34343c; border-radius: 6px; padding: 5px 7px; outline: none; }
 .ng-refin:focus { border-color: #5DCAA5; }

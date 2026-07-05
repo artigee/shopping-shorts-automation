@@ -12,7 +12,7 @@ import { analyzeReel } from './analyze.js'
 import { matchProductByVision, simplerQuery } from './match.js'
 import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
 import { getPersonas, getPersona, getHooks, getVoStyles, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
-import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady, listHfElements, createHfElement } from './higgsfield.js'
+import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady, listHfElements, getHfElement, createHfElement } from './higgsfield.js'
 import { buildPreview } from './preview.js'
 import { renderShort, probeDuration, FPS } from './remotion-render.js'
 
@@ -839,6 +839,13 @@ app.get('/api/hf/elements', async (req, res) => {
     if (hfElementsCache.data) return res.json({ elements: hfElementsCache.data, stale: true, error: String(e.message || e) })   // 실패 시 캐시 폴백
     res.status(500).json({ error: String(e.message || e) })
   }
+})
+const hfElDetailCache = new Map()   // id → { at, data } (element 전체 이미지 뷰어용)
+app.get('/api/hf/elements/:id', async (req, res) => {
+  const id = req.params.id, now = Date.now(), c = hfElDetailCache.get(id)
+  if (c && now - c.at < 10 * 60 * 1000) return res.json({ element: c.data, cached: true })
+  try { const el = await getHfElement(id); hfElDetailCache.set(id, { at: now, data: el }); res.json({ element: el }) }
+  catch (e) { res.status(500).json({ error: String(e.message || e) }) }
 })
 app.post('/api/hf/elements', async (req, res) => {
   const { name, category, imageUrl } = req.body || {}
