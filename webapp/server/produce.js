@@ -266,8 +266,8 @@ export async function generateImagePrompt({ scene = {}, productName, product, st
   const roleNote = isLast
     ? 'This is the CTA scene: the creator holds the PRODUCT in ONE hand while her OTHER (free) hand points a single finger DOWNWARD toward the BOTTOM of the frame — at the on-screen comment/link area the VIEWER sees on their own screen. Her expression is WELCOMING, happy and satisfied (a warm, genuine smile — she loves it and is inviting you in). NOT a phone or device in the scene; just the inviting downward finger-point at the empty lower-frame space.'
     : isFirst
-      ? 'This is the HOOK scene (scene 1): a striking, scroll-stopping image that conveys the hook in the Title/VO — its disbelief, doubt, problem or curiosity. Do NOT show the resolved/triumphant end state; create the tension that makes the viewer want to keep watching.'
-      : `Choose a framing that fits THIS beat (and differs from a plain repeat): close-up detail, wide, top-down, low angle, over-the-shoulder, hands-only, or push-in. This is scene ${sceneIndex + 1} of ${sceneTotal}.`
+      ? 'This is the HOOK scene (scene 1): a striking, scroll-stopping image that conveys the hook in the Title/VO — its disbelief, doubt, problem or curiosity. Do NOT show the resolved/triumphant end state; create the tension that makes the viewer want to keep watching. This is NOT the CTA — do NOT point a finger down or do any call-to-action gesture.'
+      : `Choose a framing that fits THIS beat (and differs from a plain repeat): close-up detail, wide, top-down, low angle, over-the-shoulder, hands-only, or push-in. This is scene ${sceneIndex + 1} of ${sceneTotal}. This is NOT the CTA scene — do NOT point a finger down or do any call-to-action gesture; use a natural gesture that fits this beat.`
   const prompt = `Write ONE English image-generation prompt (a single photorealistic still frame, vertical 9:16) for ONE specific scene of a shopping short. The scene gives a Title and a voiceover — the image MUST clearly depict THIS scene's exact beat and moment, driven by that Title and VO.
 
 [Scene Title] ${scene.onScreenText || ''}

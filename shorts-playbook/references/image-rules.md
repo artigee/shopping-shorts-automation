@@ -31,7 +31,8 @@ Sweet spot: instantly recognizable as the real product, yet the viewer still has
 
 ## 3b. Hands & gesture
 - The product is held in **ONE hand**; the **OTHER hand stays free** to gesture naturally — do not use both hands to clutch/present the product.
-- On the **CTA** beat: hold the product in one hand and **point a single finger DOWN** toward the lower frame (the on-screen link/comment area). Expression is **welcoming, happy, satisfied** — a warm genuine smile.
+- The finger-point-down + "welcoming, happy, satisfied" smile is **EXCLUSIVELY the final CTA scene** (the last shot). Only there: hold the product in one hand and **point a single finger DOWN** toward the lower frame (the on-screen link/comment area).
+- **In every OTHER scene: do NOT point down and do NOT do any CTA / call-to-action gesture.** Use a natural gesture that fits THAT beat (applying, examining, reacting) — the pointing-down pose must never appear in a hook, problem, or middle scene.
 
 ## 3c. Wardrobe / modesty (ALWAYS clothed)
 - She **always wears a simple, casual top** (plain tee, tank, sweater, or similar) in **every** shot.
