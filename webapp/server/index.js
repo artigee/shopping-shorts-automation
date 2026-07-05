@@ -1055,7 +1055,9 @@ async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
     url = await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, productName: product?.title, dimensions: product?.dimensions })
   }
   const rel = await saveAsset(c.id, i, url, false)
-  scenes[i] = { ...scenes[i], ...(promptOverride ? { imagePrompt: promptOverride } : {}), image: rel, imageSrc: url }
+  // end 프레임은 별도 슬롯(imageEnd)에 저장 → start(image)를 덮어쓰지 않음. 클립이 둘 다 키프레임으로 사용.
+  const imgFields = frameRole === 'end' ? { imageEnd: rel, imageSrcEnd: url } : { image: rel, imageSrc: url }
+  scenes[i] = { ...scenes[i], ...(promptOverride ? { imagePrompt: promptOverride } : {}), ...imgFields }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
   return scenes[i]
 }
@@ -1071,7 +1073,8 @@ async function genClipForScene(c, scenes, i, promptOverride) {
   const extra = (promptOverride || scenes[i].motionPrompt || '').trim()      // 추가 연기/액션 (선택)
   const motion = `${sceneDesc ? sceneDesc + '. ' : ''}${camera}.${extra ? ' ' + extra + '.' : ''} Apply exactly ONE slow, smooth camera move — never stack multiple moves. The object stays as placed; do NOT fold, unfold, assemble or transform the product.`
   const dur = Math.max(3, Math.min(10, Math.round(Number(scenes[i].durationSec) || 5)))   // 씬 durationSec 반영 (3-10s)
-  const url = await genVideoViaCLI({ imageUrl, prompt: motion, duration: dur })
+  const endImageUrl = scenes[i].imageSrcEnd || null                                        // end 프레임(있으면) → start→end 모핑
+  const url = await genVideoViaCLI({ imageUrl, endImageUrl, prompt: motion, duration: dur })
   const rel = await saveAsset(c.id, i, url, true)
   scenes[i] = { ...scenes[i], ...(promptOverride ? { motionPrompt: promptOverride } : {}), video: rel, videoSrc: url }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)

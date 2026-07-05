@@ -304,11 +304,14 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
       return
     }
-    const k = n.scene ? n.scene - 1 : null                        // 0-based 씬 index
+    // 씬 번호: 노드 자체 → 없으면 연결(들어오는 엣지)에서 상속 (수동 추가한 노드도 연결만으로 동작)
+    const sceneFromConn = (nd, depth = 0) => { if (nd?.scene) return nd.scene; if (depth > 3) return null; for (const e of graph.edges) if (e.to === nd.id) { const up = nodeById[e.from]; const s = up && sceneFromConn(up, depth + 1); if (s) return s } return null }
+    const sc = n.scene || sceneFromConn(n)
+    const k = sc ? sc - 1 : null                                  // 0-based 씬 index
     const id = typeof n.id === 'string' ? n.id : ''
     const ep = id.startsWith('script-') ? 'script' : id.startsWith('prompt-') ? 'prompt' : id.startsWith('promptV-') ? 'votext' : id.startsWith('promptM-') ? 'motion'
       : n.kind === 'image' ? 'image' : n.kind === 'clip' ? 'clip' : n.kind === 'vo' ? 'vo' : null
-    if (!ep || k == null) { setErr(`'${n.hd}' re-run isn't wired (supported: overall · scene-script · image-prompt · motion · VO-text · image · clip · vo).`); return }
+    if (!ep || k == null) { setErr(`'${n.hd}' can't run: connect it into a scene's chain (e.g. from the scene's image-prompt) so it knows which scene it belongs to.`); return }
     setRunning({ id: n.id, msg: 'running…', t0 })
     try {
       const body = (ep === 'prompt' || ep === 'motion' || ep === 'votext' || ep === 'script') ? { guidance: n.data.guidance || '' } : ep === 'image' ? { frameRole: n.data.frameRole || 'start' } : {}   // 이미지 노드는 frameRole(start/end)을 보내 표정 순간을 결정
@@ -320,7 +323,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         if (id.startsWith('prompt-')) return { ...x, dirty: false, t: (s.imagePrompt || '').slice(0, 90), data: { ...x.data, prompt: s.imagePrompt || '' } }
         if (id.startsWith('promptV-')) return { ...x, dirty: false, t: (s.voEn || '').slice(0, 90), data: { ...x.data, prompt: s.voEn || '' } }
         if (id.startsWith('promptM-')) return { ...x, dirty: false, t: (s.motionPrompt || '').slice(0, 90), data: { ...x.data, prompt: s.motionPrompt || '' } }
-        if (x.kind === 'image') return { ...x, dirty: false, thumb: bust(media(s.image), Date.now()), data: { ...x.data, image: s.image || '', imagePrompt: s.imagePrompt || '' } }
+        if (x.kind === 'image') { const isEnd = x.data?.frameRole === 'end'; const img = isEnd ? s.imageEnd : s.image; return { ...x, dirty: false, thumb: bust(media(img), Date.now()), data: { ...x.data, image: img || '', imagePrompt: s.imagePrompt || '' } } }
         if (x.kind === 'clip') return { ...x, dirty: false, video: bust(media(s.video), Date.now()), image: bust(media(s.image), Date.now()) }
         if (x.kind === 'vo') return { ...x, dirty: false, audio: bust(media(s.audio), Date.now()) }
         return { ...x, dirty: false }
@@ -655,6 +658,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 {n.kind === 'analysis' && <span className="ng-swaphint" title="swap this reel for another analyzed reel" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setSel(n.id) }}>⇄ swap reel</span>}
                 {running && running.id === n.id && <span className="ng-node-timer">⏳ {fmtDur(runSecs)}{running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ''}</span>}
                 <button className="ng-del" title="delete" onClick={(e) => { e.stopPropagation(); deleteNode(n.id) }}>×</button>
+                {n.kind === 'image' && <span className="ng-frametag" title="keyframe role — start or end (drives the clip morph)">◧ {n.data?.frameRole === 'end' ? 'end' : 'start'} frame</span>}
                 {n.kind === 'image' && (n.thumb ? <img className="ng-thumb" style={{ aspectRatio: aspectCSS(n.data?.aspect) }} src={n.thumb} loading="lazy" {...hoverPreview} onError={(e) => { e.target.style.opacity = .2 }} /> : <div className="ng-thumb ph" style={{ aspectRatio: aspectCSS(n.data?.aspect) }}>{n.data?.aspect || '9:16'}</div>)}
                 {n.kind === 'clip' && (n.video ? <video className="ng-thumb" src={n.video} muted loop playsInline preload="metadata" onMouseOver={(e) => e.target.play()} onMouseOut={(e) => e.target.pause()} /> : n.image ? <img className="ng-thumb" style={{ opacity: .4 }} src={n.image} /> : null)}
                 {n.kind === 'movie' && n.video && <video className="ng-thumb" src={n.video} controls playsInline preload="metadata" />}
