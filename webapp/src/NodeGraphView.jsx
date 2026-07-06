@@ -205,6 +205,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const [drawerH, setDrawerH] = useState(300)
   const [menu, setMenu] = useState(null)
   const [libOpen, setLibOpen] = useState(false)
+  const [libW, setLibW] = useState(() => { const v = Number(localStorage.getItem('ngLibW')); return v >= 200 && v <= 640 ? v : 270 })
   const [upBusy, setUpBusy] = useState({})   // role별 업로드 진행 개수 (HF CLI 업로드가 ~50s 걸려 즉시 피드백 필요)
   const [hfEls, setHfEls] = useState(null)   // 히긱스필드 등록 element 목록 (available)
   const [hfElsBusy, setHfElsBusy] = useState(false)
@@ -760,6 +761,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     beginWire(ev, from)
   }
   function startDrawerResize(ev) { ev.preventDefault(); const sy = ev.clientY, h0 = drawerH, maxH = Math.round(window.innerHeight * 0.85); const mv = (e) => setDrawerH(Math.min(maxH, Math.max(140, h0 - (e.clientY - sy)))); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
+  function startLibResize(ev) { ev.preventDefault(); const sx = ev.clientX, w0 = libW; let cur = w0; const mv = (e) => { cur = Math.min(640, Math.max(200, w0 + (e.clientX - sx))); setLibW(cur) }; const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); try { localStorage.setItem('ngLibW', String(cur)) } catch { /* noop */ } }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
   function addRefAsset(role, thumb, name) { if (!thumb) return; commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: [...(g.refLib[role] || []), { id: 'lib-' + (libUid.current++), thumb, role, name: name || role }] } })) }
   function deleteRefAsset(role, id) { commit((g) => ({ ...g, refLib: { ...g.refLib, [role]: (g.refLib[role] || []).filter((a) => a.id !== id) }, nodes: g.nodes.map((n) => (n.data && n.data.refs && n.data.refs[role]) ? { ...n, data: { ...n.data, refs: { ...n.data.refs, [role]: n.data.refs[role].filter((x) => x !== id) } } } : n) })) }
   const bumpUp = (role, d) => setUpBusy((u) => ({ ...u, [role]: Math.max(0, (u[role] || 0) + d) }))
@@ -874,8 +876,9 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         </div>
       </div>
 
-      {libOpen && (
-        <div className="ng-libpanel" style={{ bottom: drawerNode ? drawerH : 0 }}>
+      {libOpen && (<>
+        <div className="ng-lib-grip" onPointerDown={startLibResize} title="drag to resize" style={{ left: libW - 3, bottom: drawerNode ? drawerH : 0 }} />
+        <div className="ng-libpanel" style={{ bottom: drawerNode ? drawerH : 0, width: libW }}>
           {/* ── 섹션 1: 로컬 ref (이 콘텐츠, drop 업로드) ── */}
           <div className="ng-libsec">◆ local refs · this content</div>
           {['product', 'character', 'environment'].map((role) => {
@@ -933,7 +936,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
             )
           })}
         </div>
-      )}
+      </>)}
       {preview && <div className="ng-refpreview" style={{ left: Math.min(preview.x + 18, window.innerWidth - 280), top: Math.min(preview.y + 18, window.innerHeight - 280) }}><img src={preview.url} /></div>}
       {elView && (<>
         <div className="ng-elview-bd" onClick={() => setElView(null)} />

@@ -106,15 +106,18 @@
 .ng-stale button { background: #e0a341; color: #17171a; border: 0; border-radius: 6px; padding: 4px 11px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .ng-stale button.dismiss { background: transparent; color: #b7ac93; border: 1px solid #4a4636; font-weight: 400; }
 .ng-libpanel { position: absolute; top: 42px; left: 0; bottom: 0; width: 270px; z-index: 9; background: rgba(24,24,28,.98); border-right: 1px solid #2f2f36; overflow: auto; padding: 4px 12px 20px; transition: bottom .22s cubic-bezier(.22,.61,.36,1); }
+.ng-lib-grip { position: absolute; top: 42px; width: 9px; cursor: ew-resize; z-index: 10; }
+.ng-lib-grip::before { content: ''; position: absolute; left: 3px; top: 50%; transform: translateY(-50%); width: 3px; height: 46px; border-radius: 3px; background: #43434c; }
+.ng-lib-grip:hover::before { background: #5DCAA5; }
 .ng-libzone { border: 1px solid transparent; border-radius: 10px; padding: 2px 4px 6px; }
 .ng-libzone.drag { border-color: #5DCAA5; background: rgba(93,202,165,.06); }
 .ng-libpanel h4 { font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; margin: 16px 0 8px; display: flex; align-items: center; gap: 7px; color: #e8e6dd; }
 .ng-libpanel h4 .d { width: 8px; height: 8px; border-radius: 50%; }
 .ng-libpanel h4 .add { margin-left: auto; cursor: pointer; color: #6b6a64; font-size: 14px; }
 .ng-libpanel h4 .add:hover { color: #5DCAA5; }
-.ng-libgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-.ng-libitem { position: relative; transition: transform .14s ease; transform-origin: center; }
-.ng-libitem:hover { transform: scale(1.18); z-index: 6; }
+.ng-libgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 6px; align-items: start; }
+.ng-libitem { position: relative; transition: transform .12s ease; transform-origin: center; }
+.ng-libitem:hover { transform: scale(1.06); z-index: 6; }
 .ng-libitem img { width: 100%; aspect-ratio: 9/16; object-fit: cover; border-radius: 7px; background: #20262e; display: block; }
 .ng-libdel { position: absolute; top: 4px; right: 4px; width: 17px; height: 17px; border-radius: 50%; background: rgba(0,0,0,.6); color: #e8e6dd; font-size: 12px; line-height: 17px; text-align: center; cursor: pointer; }
 .ng-libdel:hover { background: #e0655e; }
