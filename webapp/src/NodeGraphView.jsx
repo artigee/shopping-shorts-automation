@@ -967,7 +967,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         <div className="ng-elview-bd" onClick={() => setElView(null)} />
         <div className="ng-elview">
           <div className="ng-elview-h">@{elView.name} · {elView.medias.length} image{elView.medias.length === 1 ? '' : 's'}{elView.loading ? ' · loading…' : ''}<span className="x" onClick={() => setElView(null)}>×</span></div>
-          <div className="ng-elview-grid">{elView.medias.map((u, i) => (<img key={i} src={u} onError={(ev) => { ev.target.style.opacity = .2 }} />))}</div>
+          <div className="ng-elview-grid">{elView.medias.map((u, i) => (<div key={i} className="ng-elmedia"><img src={u} onError={(ev) => { ev.target.style.display = 'none' }} /></div>))}</div>
         </div>
       </>)}
 
