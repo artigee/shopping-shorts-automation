@@ -999,7 +999,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       {drawerNode && <Drawer n={drawerNode} closing={closing && !selId} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
         analyses={analyses} onSwapAnalysis={swapAnalysis}
         fromArray={selFromArray} onScene={(v) => setNodeScene(drawerNode.id, v)} locked={locked} onLock={() => setLocked((l) => !l)} onFrame={frameNode}
-        onRun={() => runNode(drawerNode)} runMsg={running && running.id === drawerNode.id ? (fmtDur(runSecs) + (running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ' · running…')) : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)} onRecommend={applyRecommend}
+        onRun={() => runNode(drawerNode)} onCancelRun={() => setRunning(null)} runMsg={running && running.id === drawerNode.id ? (fmtDur(runSecs) + (running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ' · running…')) : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)} onRecommend={applyRecommend}
         onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })}
         onField={async (f, v) => {
           if (f === '__nodeval') {   // persona/hook 선택 → 노드 값 + 하류 stale + 콘텐츠에 저장(생성에 반영)
@@ -1121,7 +1121,7 @@ function Field({ c, d, onField, onCommit }) {
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} onBlur={onCommit} />
 }
 
-function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, hfEls, onToggleCast, onDelete, onDuplicate, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, onRecommend, incoming, outgoing, analyses, onSwapAnalysis }) {
+function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, hfEls, onToggleCast, onDelete, onDuplicate, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, onCancelRun, runMsg, runBusy, onCommit, onRecommend, incoming, outgoing, analyses, onSwapAnalysis }) {
   const [swapOpen, setSwapOpen] = useState(true)   // 분석 드로어 열면 스왑 갤러리 기본 펼침(발견성)
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
   // re-run = 씬 스크립트 기반으로 생성하는 노드: overall · image-prompt · motion-prompt · VO-text · image · clip · vo.
@@ -1134,7 +1134,9 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
       <input className="ng-title-edit" value={n.hd} spellCheck={false} onChange={(e) => onRename(e.target.value)} />
       <span className="ng-kind">#{n.id}</span>
       {k && <span className="ng-out">→ {k.out.n} ({k.out.t})</span>}
-      {canRun && <button className={'ng-run' + (runMsg ? ' running' : '')} onClick={onRun} disabled={runBusy} title={runMsg || 'run this node'}>▶ re-run</button>}
+      {canRun && (runMsg
+        ? <button className="ng-run running" onClick={onCancelRun} title={runMsg + ' — click to stop'}>✕ stop</button>
+        : <button className="ng-run" onClick={onRun} disabled={runBusy} title={runBusy ? 'another node is running' : 'run this node'}>▶ re-run</button>)}
       <span className="ng-wctrl">
         {onDuplicate && <button className="ng-icn" onClick={onDuplicate} title="duplicate this node (⌘D)">⧉</button>}
         <button className={'ng-icn' + (locked ? ' on' : '')} onClick={onLock} title={locked ? 'locked — stays open' : 'lock — keep open when clicking elsewhere'}>{locked ? '📌' : '📍'}</button>
