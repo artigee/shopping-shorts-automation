@@ -139,7 +139,7 @@ function buildGraph(data) {
     mk({ id: 'script-' + k, role: 'script', kind: 'script', hd: 'scene ' + k, x: COL.script, y, scene: k, t: s.onScreenText || '', data: { title: s.onScreenText || '', vo: s.vo || '', durationSec: s.durationSec || '', guidance: '' } })
     mk({ id: 'prompt-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y, scene: k, t: (s.imagePrompt || '').slice(0, 90), data: { prompt: s.imagePrompt || '', guidance: '' } })
     mk({ id: 'promptV-' + k, role: 'prompt', kind: 'prompt', hd: 'scene ' + k, x: COL.prompt, y: y + 160, scene: k, t: (s.voEn || s.vo || '').slice(0, 90), data: { prompt: s.voEn || s.vo || '', guidance: '' } })
-    mk({ id: 'image-' + k, role: 'image', kind: 'image', hd: 'scene ' + k, x: COL.image, y, scene: k, thumb: bust(media(s.image), lv), data: { imagePrompt: s.imagePrompt || '', image: s.image || '', aspect: '9:16', model: 'auto', seed: '', style: data.style || '', frameRole: 'start', guidance: '', refs: (s.graphRefs && typeof s.graphRefs === 'object') ? { product: [], character: [], environment: [], ...s.graphRefs } : defRefs() } })
+    mk({ id: 'image-' + k, role: 'image', kind: 'image', hd: 'scene ' + k, x: COL.image, y, scene: k, thumb: bust(media(s.image), lv), data: { imagePrompt: s.imagePrompt || '', image: s.image || '', aspect: '9:16', model: 'auto', seed: '', style: data.style || '', frameRole: 'start', guidance: '', elements: Array.isArray(s.elements) ? s.elements : [], refs: (s.graphRefs && typeof s.graphRefs === 'object') ? { product: [], character: [], environment: [], ...s.graphRefs } : defRefs() } })
     mk({ id: 'vo-' + k, role: 'vo', kind: 'vo', hd: 'scene ' + k, x: COL.vo, y, scene: k, audio: bust(media(s.audio), lv), data: { voiceId: data.persona || 'default', lang: 'US EN', audio: s.audio || '' } })
     const clip = true   // clip + motion 노드는 항상 존재(파이프라인 고정). makeVideo는 노드 안 animate/still 토글일 뿐 — 노드 유무를 좌우하지 않음.
     if (clip) {
@@ -728,6 +728,12 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     if (cid == null) return
     try { const r = await api(`/api/contents/${cid}`), cur = parse(r.content?.scenes) || []; const scenes = cur.map((s, i) => i === idx ? { ...s, graphRefs: refs } : s); await postJSON(`/api/contents/${cid}/scenes`, { scenes }, 'PUT') } catch { /* ignore */ }
   }
+  // 씬 캐스트(캐릭터 element) 토글 — 이미지 노드에 여러 명(Yuna+Sofia) 배정
+  function toggleCast(id, el) {
+    commit((g) => ({ ...g, nodes: g.nodes.map((n) => { if (n.id !== id) return n; const cur = Array.isArray(n.data.elements) ? n.data.elements : []; const has = cur.some((x) => x.id === el.id); const next = has ? cur.filter((x) => x.id !== el.id) : [...cur, { id: el.id, name: el.name }]; return { ...n, dirty: true, data: { ...n.data, elements: next } } }) }))
+    const node = ngRef.current.nodes.find((n) => n.id === id)
+    if (node && node.scene && cid != null) postJSON(`/api/contents/${cid}/scene/${node.scene - 1}/elements`, { elements: node.data.elements || [] }).catch(() => {})
+  }
   let uidN = useRef(0)
   function createNode(kind, wx, wy) {
     const id = kind + '-u' + (uidN.current++), x = Math.round(wx / 20) * 20, y = Math.round(wy / 20) * 20
@@ -1002,7 +1008,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
             postJSON(`/api/contents/${cid}/vo-style`, merged).catch(() => {})
           } else setNodeData(drawerNode.id, { [f]: v })
         }}
-        onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} onDelete={() => deleteNode(drawerNode.id)} onDuplicate={(drawerNode.role !== 'overall' && drawerNode.role !== 'movie') ? () => duplicateNode(drawerNode) : null} hoverPreview={hoverPreview}
+        onToggleRef={(role, id) => toggleRef(drawerNode.id, role, id)} hfEls={hfEls} onToggleCast={(el) => toggleCast(drawerNode.id, el)} onDelete={() => deleteNode(drawerNode.id)} onDuplicate={(drawerNode.role !== 'overall' && drawerNode.role !== 'movie') ? () => duplicateNode(drawerNode) : null} hoverPreview={hoverPreview}
         incoming={graph.edges.filter((e) => e.to === drawerNode.id).map((e) => nodeById[e.from]).filter(Boolean)}
         outgoing={graph.edges.filter((e) => e.from === drawerNode.id).map((e) => nodeById[e.to]).filter(Boolean)} />}
       </>}
@@ -1108,7 +1114,7 @@ function Field({ c, d, onField, onCommit }) {
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} onBlur={onCommit} />
 }
 
-function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, onDelete, onDuplicate, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, onRecommend, incoming, outgoing, analyses, onSwapAnalysis }) {
+function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, hfEls, onToggleCast, onDelete, onDuplicate, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, runMsg, runBusy, onCommit, onRecommend, incoming, outgoing, analyses, onSwapAnalysis }) {
   const [swapOpen, setSwapOpen] = useState(true)   // 분석 드로어 열면 스왑 갤러리 기본 펼침(발견성)
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
   // re-run = 씬 스크립트 기반으로 생성하는 노드: overall · image-prompt · motion-prompt · VO-text · image · clip · vo.
@@ -1338,6 +1344,15 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
               return <div key={role} className="ng-refblk"><div className="ng-slot-h"><span style={{ color: COLOR[role] }}>{role}</span><em>{on.length} applied</em></div>
                 <div className="ng-refchips">{items.length ? items.map((a) => <span key={a.id} className={'ng-refchip' + (on.includes(a.id) ? ' on' : '')} style={on.includes(a.id) ? { borderColor: COLOR[role], color: COLOR[role] } : null} onClick={() => onToggleRef(role, a.id)}><img src={media(a.thumb)} {...hoverPreview} />{a.name}</span>) : <span className="ng-none">— none —</span>}</div></div>
             })}
+            {(() => {
+              const cast = Array.isArray(d.elements) ? d.elements : []
+              const chars = (hfEls || []).filter((e) => (e.category || '').replace('auto:', '') === 'character')
+              return <>
+                <div className="ng-sh top">cast · character elements <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· this scene ({cast.length})</em></div>
+                <div className="ng-refchips">{chars.length ? chars.map((e) => { const on = cast.some((x) => x.id === e.id); return <span key={e.id} className={'ng-refchip' + (on ? ' on' : '')} style={on ? { borderColor: '#5DCAA5', color: '#b6f0dd' } : null} onClick={() => onToggleCast && onToggleCast({ id: e.id, name: e.name })}>{e.thumb ? <img src={e.thumb} {...hoverPreview} /> : null}@{e.name}</span> }) : <span className="ng-none">— no character elements · make one in the ⬡ panel —</span>}</div>
+                {cast.length > 1 && <div className="ng-refhint" style={{ marginTop: 4 }}>{cast.map((x) => '@' + x.name).join(' + ')} together in this shot</div>}
+              </>
+            })()}
           </>}
         </div>
         <div className="ng-col right">
