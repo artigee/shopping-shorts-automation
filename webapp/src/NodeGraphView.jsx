@@ -952,8 +952,9 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 )}
                 {els.length
                   ? <div className="ng-libgrid">{els.map((e) => (
-                      <div key={e.id} className="ng-libitem ng-elitem" title={'@' + e.name + ' — click to view images'} onClick={() => openElView(e)} style={{ cursor: 'pointer' }}>
+                      <div key={e.id} className={'ng-libitem ng-elitem' + (charEl && charEl.id === e.id ? ' on' : '')} title={'@' + e.name + ' — click to view / use'} onClick={() => openElView(e)} style={{ cursor: 'pointer' }}>
                         {e.thumb && !brokeThumb[e.id] ? <img src={e.thumb} onError={() => setBrokeThumb((b) => ({ ...b, [e.id]: 1 }))} /> : <div className="ng-upimg" title="thumbnail not accessible (Higgsfield-generated image)">⬡</div>}
+                        {role === 'character' && charEl && charEl.id === e.id && <span className="ng-elcheck" title="this content's character">✓</span>}
                         <div className="nm">@{e.name}</div>
                       </div>))}</div>
                   : <div className="ng-empty">{hfElsBusy && hfEls == null ? 'loading elements…' : 'no ' + role + ' elements · ⬡ to register'}</div>}
@@ -966,7 +967,9 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       {elView && (<>
         <div className="ng-elview-bd" onClick={() => setElView(null)} />
         <div className="ng-elview">
-          <div className="ng-elview-h">@{elView.name} · {elView.medias.length} image{elView.medias.length === 1 ? '' : 's'}{elView.loading ? ' · loading…' : ''}<span className="x" onClick={() => setElView(null)}>×</span></div>
+          <div className="ng-elview-h">@{elView.name} · {elView.medias.length} image{elView.medias.length === 1 ? '' : 's'}{elView.loading ? ' · loading…' : ''}
+            <button className={'ng-elview-use' + (charEl && charEl.id === elView.id ? ' on' : '')} onClick={() => assignCharEl({ id: elView.id, name: elView.name })}>{charEl && charEl.id === elView.id ? '✓ character (click to unset)' : '★ use as character'}</button>
+            <span className="x" onClick={() => setElView(null)}>×</span></div>
           <div className="ng-elview-grid">{elView.medias.map((u, i) => (<div key={i} className="ng-elmedia"><img src={u} onError={(ev) => { ev.target.style.display = 'none' }} /></div>))}</div>
         </div>
       </>)}
