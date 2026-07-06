@@ -127,7 +127,7 @@ function buildGraph(data) {
   mk({ id: 'in-0', role: 'input', hd: 'persona', t: ctx.persona, sub: 'VO voice', x: COL.input, y: 100, data: { guidance: '', voStyle: data.voStyle || '', voStyleNote: data.voStyleNote || '' } })
   mk({ id: 'in-1', role: 'input', hd: 'hook', t: ctx.hook, sub: 'story shape', x: COL.input, y: 240, data: { guidance: '' } })
   mk({ id: 'analysis', role: 'analysis', kind: 'analysis', hd: 'reel', x: COL.input, y: 400, data: { analysisId: ar.id, angle: ctx.angle, hook: aj.hook || null, audience: aj.audience || null, voice: aj.voice || null, struct: aj.structure || null, visualStyle: aj.visualStyle || null, sceneScript: aj.sceneScript || null, assets: aj.assets || null, viralFactors: aj.viralFactors || null, reel: { url: ar.reel_url, thumb: ar.reel_thumbnail, user: ar.reel_username, caption: ar.reel_caption, comments: ar.reel_comments, play: ar.reel_play, category: ar.category, title: ar.title }, product: { title: p.title, price: p.price, rating: p.rating, reviews: p.reviewCount, dimensions: p.dimensions, asin: p.asin, url: p.amazon_url, image: p.image } } })
-  mk({ id: 'overall', role: 'overall', kind: 'overall', hd: 'Script Engine', x: COL.overall, y: midY, data: { shotCount: data.shot_count ? String(data.shot_count) : '', recShotCount: o.shotCount || '', recShotWhy: o.shotCountWhy || '', durationSec: o.durationSec ? String(o.durationSec) : '', direction: data.direction || '', angle: ctx.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || ''), guidance: '' } })
+  mk({ id: 'overall', role: 'overall', kind: 'overall', hd: 'Script Engine', x: COL.overall, y: midY, data: { shotCount: data.shot_count ? String(data.shot_count) : '', recShotCount: o.shotCount || '', recShotWhy: o.shotCountWhy || '', durationSec: o.durationSec ? String(o.durationSec) : '', direction: data.direction || '', angle: ctx.angle, hookLine: o.hookLine || '', hookAlts: Array.isArray(o.hookAlts) ? o.hookAlts : [], critic: o._critic || null, scenesCritic: o._scenesCritic || null, vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || ''), guidance: '' } })
   const slug = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24)
   mk({ id: 'movie', role: 'movie', kind: 'movie', hd: 'final movie', x: COL.movie, y: midY, video: media(data.export_mp4 || data.preview), data: { sceneCount: scenes.length, final_form: data.final_form || 'card', output: data.export_mp4 || data.preview || '', exportMode: 'preview', outputDir: 'output/content-' + (data.id || 'x') + '/', outputName: (slug(ctx.product) || 'short') + '_' + (slug(data.hook) || 'hook') + '_v1' } })
   edges.push({ from: 'analysis', to: 'in-0', cls: 'global' }, { from: 'analysis', to: 'in-1', cls: 'global' })   // Analysis가 persona/hook 초기값을 제안
@@ -443,7 +443,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       try {
         const resp = await postJSON(`/api/contents/${cid}/overall`, {})
         const o = resp && resp.jobId ? await pollJob(resp.jobId, (jb) => setRunning({ id: n.id, msg: jb.message || '', t0 })) : resp
-        if (o) commitRun(n.id, (x) => ({ ...x, dirty: false, data: { ...x.data, angle: o.angle ?? x.data.angle, hookLine: o.hookLine || '', vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || ''), shotCount: (Number(o.shotCount) >= 3 && Number(o.shotCount) <= 12) ? String(o.shotCount) : x.data.shotCount, recShotWhy: o.shotCountWhy || '' } }))
+        if (o) commitRun(n.id, (x) => ({ ...x, dirty: false, data: { ...x.data, angle: o.angle ?? x.data.angle, hookLine: o.hookLine || '', hookAlts: Array.isArray(o.hookAlts) ? o.hookAlts : [], critic: o._critic || null, scenesCritic: o._scenesCritic || x.data.scenesCritic || null, vo: o.vo || '', cta: o.cta || '', beats: Array.isArray(o.beats) ? o.beats.join(' / ') : (o.beats || ''), shotCount: (Number(o.shotCount) >= 3 && Number(o.shotCount) <= 12) ? String(o.shotCount) : x.data.shotCount, recShotWhy: o.shotCountWhy || '' } }))
       } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
       return
     }
@@ -601,12 +601,21 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   }
   // 편집 저장 — 노드의 텍스트를 백엔드에 반영(자산은 보존)하고, 편집 노드 dirty 해제 + 하류 dirty 전파.
   // scene-script / VO text / motion prompt / image prompt는 재생성이 아니라 "편집"이 소스가 된다.
+  // B2: 훅 대안 스왑 — 현재 hookLine과 자리 교대 후 즉시 저장
+  function swapHook(alt) {
+    const node = ngRef.current.nodes.find((x) => x.id === 'overall'); if (!node || !alt) return
+    const cur = node.data.hookLine || ''
+    const alts = (node.data.hookAlts || []).filter((x) => x !== alt); if (cur) alts.push(cur)
+    commit((g) => ({ ...g, nodes: g.nodes.map((x) => x.id === 'overall' ? { ...x, dirty: true, data: { ...x.data, hookLine: alt, hookAlts: alts } } : x) }))
+    const nn = ngRef.current.nodes.find((x) => x.id === 'overall')
+    if (nn) persistNode(nn)
+  }
   async function persistNode(n) {
     if (cid == null || !n) return
     try {
       if (n.kind === 'overall') {
         const d = n.data || {}, r = await api(`/api/contents/${cid}`), cur = parse(r.content?.overall) || {}
-        const overall = { ...cur, angle: d.angle || '', hookLine: d.hookLine || '', vo: d.vo || '', cta: d.cta || '', beats: (d.beats || '').split('/').map((s) => s.trim()).filter(Boolean), ...(Number(d.durationSec) > 0 ? { durationSec: Number(d.durationSec) } : {}) }
+        const overall = { ...cur, angle: d.angle || '', hookLine: d.hookLine || '', ...(Array.isArray(d.hookAlts) ? { hookAlts: d.hookAlts } : {}), vo: d.vo || '', cta: d.cta || '', beats: (d.beats || '').split('/').map((s) => s.trim()).filter(Boolean), ...(Number(d.durationSec) > 0 ? { durationSec: Number(d.durationSec) } : {}) }
         await postJSON(`/api/contents/${cid}/overall`, { overall }, 'PUT')
         postJSON(`/api/contents/${cid}/direction`, { direction: d.direction || '' }).catch(() => {})   // 생성 파라미터도 저장
         postJSON(`/api/contents/${cid}/shot-count`, { shotCount: d.shotCount || '' }).catch(() => {})
@@ -927,6 +936,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 {n.t && n.kind !== 'prompt' && <div className="ng-t">{n.t}</div>}
                 {n.kind === 'overall' && (() => { const tgt = Number(n.data?.durationSec) || 0, drift = tgt ? Math.abs(scenesDur - tgt) / tgt : 0; return <div className={'ng-dur-readout' + (tgt && drift > 0.2 ? ' off' : '')}>Σ shots {scenesDur}s{tgt ? ` / ${tgt}s target` : ''}</div> })()}
                 {n.kind === 'overall' && n.data?.shotCount && <div className="ng-dur-readout" title={n.data?.recShotWhy ? 'why: ' + n.data.recShotWhy + ' — editable; re-run reinitiates' : 'editable in the drawer; re-run reinitiates'} style={{ marginTop: 3 }}>{n.data.shotCount} shots <span style={{ opacity: .6 }}>· editable</span></div>}
+                {n.kind === 'overall' && (n.data?.critic || n.data?.scenesCritic) && <div className="ng-dur-readout" title={[...((n.data.critic || {}).notes || []), ...((n.data.scenesCritic || {}).notes || [])].join(' · ') || 'critic passed'} style={{ marginTop: 3 }}>critic {n.data.critic ? n.data.critic.score + '/10' : ''}{n.data.scenesCritic ? (n.data.critic ? ' · ' : '') + 'scenes ' + n.data.scenesCritic.score + '/10' : ''}</div>}
                 {n.sub && <div className="ng-sub">{n.sub}</div>}
                 {n.kind === 'vo' && (n.audio ? <VoPlayer src={n.audio} /> : <div className="ng-sub">no VO yet</div>)}
                 {n.kind === 'clip' && <div className="ng-pill">{n.data?.makeVideo === 'still' ? '🖼 still' : '🎥 ' + cameraMoveName(n.data?.cameraMove, lib.moves)}</div>}
@@ -1038,7 +1048,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       {drawerNode && <Drawer n={drawerNode} closing={closing && !selId} ctx={ctx} lib={lib} refLib={graph.refLib} h={drawerH} onResize={startDrawerResize}
         analyses={analyses} onSwapAnalysis={swapAnalysis}
         fromArray={selFromArray} onScene={(v) => setNodeScene(drawerNode.id, v)} locked={locked} onLock={() => setLocked((l) => !l)} onFrame={frameNode}
-        onRun={() => runNode(drawerNode)} onCancelRun={() => setRunning(null)} runMsg={running && running.id === drawerNode.id ? (fmtDur(runSecs) + (running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ' · running…')) : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)} onRecommend={applyRecommend}
+        onRun={() => runNode(drawerNode)} onCancelRun={() => setRunning(null)} onSwapHook={swapHook} runMsg={running && running.id === drawerNode.id ? (fmtDur(runSecs) + (running.msg && running.msg !== 'running…' ? ' · ' + running.msg : ' · running…')) : null} runBusy={!!running} onCommit={() => persistNode(drawerNode)} onRecommend={applyRecommend}
         onClose={() => { setLocked(false); setSel(null) }} onRename={(v) => setNodeField(drawerNode.id, { hd: v })}
         onField={async (f, v) => {
           if (f === '__nodeval') {   // persona/hook 선택 → 노드 값 + 하류 stale + 콘텐츠에 저장(생성에 반영)
@@ -1160,7 +1170,7 @@ function Field({ c, d, onField, onCommit }) {
   return <input value={cur} placeholder={c.ph || ''} onChange={(e) => onField(c.f, e.target.value)} onBlur={onCommit} />
 }
 
-function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, hfEls, onToggleCast, onDelete, onDuplicate, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, onCancelRun, runMsg, runBusy, onCommit, onRecommend, incoming, outgoing, analyses, onSwapAnalysis }) {
+function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, onField, onToggleRef, hfEls, onToggleCast, onDelete, onDuplicate, hoverPreview, fromArray, onScene, locked, onLock, onFrame, onRun, onCancelRun, runMsg, runBusy, onCommit, onRecommend, onSwapHook, incoming, outgoing, analyses, onSwapAnalysis }) {
   const [swapOpen, setSwapOpen] = useState(true)   // 분석 드로어 열면 스왑 갤러리 기본 펼침(발견성)
   const c = nodeColor(n), k = KIND[n.kind], d = n.data || {}
   // re-run = 씬 스크립트 기반으로 생성하는 노드: overall · image-prompt · motion-prompt · VO-text · image · clip · vo.
@@ -1382,6 +1392,16 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
           {n.kind === 'image' && n.thumb && <img className="ng-media-big" style={{ aspectRatio: aspectCSS(d.aspect), maxHeight: Math.max(130, h - 132) }} src={n.thumb} referrerPolicy="no-referrer" onError={(e) => { e.target.style.opacity = .25 }} />}
           {(n.kind === 'clip' || n.kind === 'movie') && n.video && <video className="ng-media-big" src={n.video} controls playsInline preload="metadata" style={{ maxHeight: Math.max(130, h - 132), width: 'auto', maxWidth: '100%', margin: '0 auto' }} />}
           {n.kind === 'vo' && n.audio && <div style={{ marginBottom: 8 }}><VoPlayer src={n.audio} /></div>}
+          {n.kind === 'overall' && (d.critic || d.scenesCritic || (d.hookAlts || []).length > 0) && (
+            <div className="ng-criticblk">
+              {(d.critic || d.scenesCritic) && <div className="ng-sh">critic {d.critic ? `· overall ${d.critic.score}/10` : ''}{d.scenesCritic ? ` · scenes ${d.scenesCritic.score}/10` : ''}</div>}
+              {[...((d.critic || {}).notes || []), ...((d.scenesCritic || {}).notes || [])].slice(0, 4).map((note, ni) => <div key={ni} className="ng-criticnote">▸ {note}</div>)}
+              {(d.hookAlts || []).length > 0 && <>
+                <div className="ng-sh top">hook alternates <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· click to swap in</em></div>
+                <div className="ng-refchips">{d.hookAlts.map((alt, ai) => <span key={ai} className="ng-refchip" title="use this hook line instead" onClick={() => onSwapHook && onSwapHook(alt)}>{alt}</span>)}</div>
+              </>}
+            </div>
+          )}
           {ed && <>
             <div className={'ng-sh' + (hasMedia ? ' top' : '')}>{ed.label}</div>
             <div className={'ng-fed' + (fedBy.length ? '' : ' manual')}>{fedBy.length ? '◦ from ' + fedBy.map((s) => s.hd).join(', ') : '✎ manual'}</div>

@@ -264,3 +264,6 @@
 .ng-kv .v { flex: 1; min-width: 0; color: #e8e6dd; word-break: break-word; }
 .ng-kv .v a { color: #5DCAA5; }
 .ng-kvtext { font-family: ui-monospace, monospace; font-size: 10.5px; line-height: 1.6; color: #9c9a92; margin: 2px 0 8px; }
+/* B2: 크리틱 블록 (Script Engine 드로어) */
+.ng-criticblk { border: 1px solid #34343c; border-radius: 9px; padding: 9px 12px; margin-bottom: 10px; background: rgba(224,163,65,.04); }
+.ng-criticnote { font-size: 12px; color: #cbb389; margin: 3px 0; line-height: 1.45; }

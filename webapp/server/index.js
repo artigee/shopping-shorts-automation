@@ -10,7 +10,7 @@ import { extractProducts, identifyReel } from './extract.js'
 import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon.js'
 import { analyzeReel } from './analyze.js'
 import { matchProductByVision, simplerQuery } from './match.js'
-import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateShotSpec, renderShotSpec, generateMotionPrompt, generateVoText } from './produce.js'
+import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateShotSpec, renderShotSpec, generateMotionPrompt, generateVoText, critiqueScript } from './produce.js'
 import { getPersonas, getPersona, getHooks, getVoStyles, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
 import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady, listHfElements, getHfElement, createHfElement, createHfElementMulti } from './higgsfield.js'
 import { buildPreview } from './preview.js'
@@ -802,8 +802,25 @@ app.post('/api/contents/:id/overall', (req, res) => {
   const guidance = (req.body && req.body.guidance || '').trim()
   const base = guidance ? jparse(c.overall) : null
   const job = startJob({ agent: 'overall', refType: 'contents', refId: c.id, message: 'writing overall…' }, async (progress) => {
-    progress('스토리 스크립트 작성 중… (~1분)', 30)
-    const overall = await generateOverall({ analysis: jparse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', lang: genLang() })
+    progress('스토리 스크립트 작성 중… (~1분)', 25)
+    const genArgs = { analysis: jparse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', lang: genLang() }
+    let overall = await generateOverall(genArgs)
+    // B2: 크리틱 게이트 — 훅 후보 랭킹 + 7점 미만이면 지적사항으로 1회 재작성 (실패는 비차단)
+    try {
+      progress('크리틱 검수 중…', 55)
+      let critic = await critiqueScript({ overall, hookOptions: overall.hookOptions })
+      if (Array.isArray(overall.hookOptions) && overall.hookOptions.length > 1 && Number.isInteger(critic.bestHook) && overall.hookOptions[critic.bestHook]) {
+        overall.hookLine = overall.hookOptions[critic.bestHook]
+        overall.hookAlts = overall.hookOptions.filter((_, ix) => ix !== critic.bestHook)
+      }
+      if (critic.score < 7 && critic.notes.length) {
+        progress(`크리틱 ${critic.score}/10 — 지적 반영 재작성 중…`, 70)
+        const fixed = await generateOverall({ ...genArgs, base: overall, guidance: 'CRITIC NOTES — fix these specifically, keep everything that works: ' + critic.notes.join(' · ') })
+        const critic2 = await critiqueScript({ overall: fixed }).catch(() => null)
+        if (critic2 && critic2.score >= critic.score) { overall = { ...fixed, hookAlts: overall.hookAlts }; critic = critic2 }
+      }
+      overall._critic = { score: critic.score, notes: critic.notes || [] }
+    } catch { /* 크리틱 실패 → 게이트 없이 진행 */ }
     progress('저장 중…', 90)
     // Script Engine 실행 = 샷 수 추천값을 편집 가능한 값으로 재시드(re-initiate). 이후 사용자가 편집 가능, 다시 실행하면 다시 시드.
     const rec = Number(overall.shotCount)
@@ -922,8 +939,22 @@ app.post('/api/contents/:id/script', async (req, res) => {
     let overall = jparse(c.overall)
     const hasFootage = c.content_mode === 'direct_review'
     if (!overall) { progress('writing the overall story… (~1min)', 20); overall = await generateOverall({ analysis, productName: p?.title || a.title, product: p, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() }); db.prepare(`UPDATE contents SET overall = ? WHERE id = ?`).run(JSON.stringify(overall), c.id) }
-    progress('writing scene scripts… (~1-2min)', 55)
-    const scenes = await generateScenes({ analysis, productName: p?.title || a.title, product: p, overall, base, guidance, direction: c.direction, shotCount, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() })
+    progress('writing scene scripts… (~1-2min)', 45)
+    const sceneArgs = { analysis, productName: p?.title || a.title, product: p, overall, base, guidance, direction: c.direction, shotCount, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() }
+    let scenes = await generateScenes(sceneArgs)
+    // B2: 씬 크리틱 게이트 — 7점 미만이면 지적사항 반영 1회 재분해 (실패는 비차단)
+    try {
+      progress('크리틱 검수 중…', 70)
+      let critic = await critiqueScript({ overall, scenes })
+      if (critic.score < 7 && critic.notes.length) {
+        progress(`크리틱 ${critic.score}/10 — 지적 반영 재작성 중…`, 80)
+        const fixed = await generateScenes({ ...sceneArgs, base: scenes, guidance: 'CRITIC NOTES — fix these specifically, keep every scene that works: ' + critic.notes.join(' · ') })
+        const critic2 = await critiqueScript({ overall, scenes: fixed }).catch(() => null)
+        if (critic2 && critic2.score >= critic.score) { scenes = fixed; critic = critic2 }
+      }
+      overall = { ...overall, _scenesCritic: { score: critic.score, notes: critic.notes || [] } }
+      db.prepare(`UPDATE contents SET overall = ? WHERE id = ?`).run(JSON.stringify(overall), c.id)
+    } catch { /* 크리틱 실패 → 게이트 없이 진행 */ }
     progress('saving…', 90)
     // 새 씬 구성 → 기존 이미지/클립/VO/프리뷰 초기화 (어긋남 방지). 새로 생성해야 함.
     flushContentAssets(c.id)

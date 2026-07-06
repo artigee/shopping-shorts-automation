@@ -23,14 +23,14 @@ function contentWords(t = '') { return (String(t).toLowerCase().match(/[a-z0-9']
 function noveltyRatio(caption, vo) { const cap = new Set(contentWords(caption)); const v = contentWords(vo); if (!v.length) return 1; return v.filter((w) => !cap.has(w)).length / v.length }
 // 페르소나 시그니처(관용구/예시 라인)를 그대로(4단어+ 연속) 베꼈는지 — 룰10을 하드 가드로 강제.
 const normTell = (s) => String(s).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
-function reusedPersonaTell(vo, tells) {
+function reusedPersonaTell(vo, tells, minN = 4, minLen = 10) {
   const v = normTell(vo)
   for (const tell of tells) {
     const tw = normTell(tell).split(' ')
-    for (let n = Math.min(7, tw.length); n >= 4; n--) {
+    for (let n = Math.min(7, tw.length); n >= minN; n--) {
       for (let i = 0; i + n <= tw.length; i++) {
         const gram = tw.slice(i, i + n).join(' ')
-        if (gram.length >= 10 && v.includes(gram)) return gram
+        if (gram.length >= minLen && v.includes(gram)) return gram
       }
     }
   }
@@ -46,7 +46,7 @@ function validateOverall(o, banlist, personaTells = []) {
   }
   if (!String(o.vo || '').trim()) fails.push('vo (the monologue) is empty — it is required')
   if (!String(o.hookLine || '').trim()) fails.push('hookLine is empty — it is required')
-  const tell = personaTells.length ? reusedPersonaTell(o.vo || '', personaTells) : null
+  const tell = personaTells.length ? reusedPersonaTell(o.vo || '', personaTells, 5, 20) : null   // 긴 모놀로그: 진짜 시그니처(5단어+·20자+)만
   if (tell) fails.push(`the vo reuses the persona's signature phrase ("${tell}") verbatim — express it fresh`)
   return fails.length ? fails.join(' · ') : null
 }
@@ -121,8 +121,10 @@ Rules (all text in English):
 - shotCount: the number of SHOTS this short should have, chosen for MAXIMUM impact — NOT a default. Decide it from THIS story: how many DISTINCT beats it truly needs, the reel's pacing (fast cuts → more shots; slow/lingering → fewer), and the durationSec above. Range 3-9: a simple/punchy story folds roles into as few as 3 (hook+product+CTA); a rich or fast-cut one expands up to 9. The last shot is always the CTA. Do NOT default to 5 — justify the number by the beats.
 - shotCountWhy: one short line — why that count fits this story.
 
+- hookOptions: THREE genuinely different hook lines (lean a different way each: bold claim / sharp contradiction / specific number / relatable pain). hookLine must be the strongest of the three.
+
 Output ONLY JSON (no explanation):
-{"angle":"...","title":"...","hookLine":"...","durationSec":25,"shotCount":5,"shotCountWhy":"...","beats":["...","..."],"vo":"...","cta":"..."}`
+{"angle":"...","title":"...","hookLine":"...","hookOptions":["...","...","..."],"durationSec":25,"shotCount":5,"shotCountWhy":"...","beats":["...","..."],"vo":"...","cta":"..."}`
   const banlistO = getBanlist().map((b) => b.toLowerCase())
   const pO = getPersona(persona), tellsO = pO ? [...(pO.idiom_markers || []), ...(pO.example_lines || [])] : []
   return await runJson(prompt, {
@@ -369,6 +371,36 @@ export function renderShotSpec(spec, { frameRole } = {}) {
     ` Camera: ${camLine || 'natural UGC framing'}. Setting: ${spec.setting || 'natural home setting'}${spec.lighting ? ', ' + spec.lighting : ''}.` +
     (spec.notes ? ` ${spec.notes}.` : '') + frameLine +
     ' The product is recognizable but NEVER a readable hero shot. No phone or camera prop in frame. No text of any kind in the image. Warm, bright, clean, aspirational mood. vertical 9:16, photorealistic, no overlay captions'
+}
+
+// ── B2: 크리틱 — storytelling 셀프체크로 스크립트를 채점하고 고칠 점을 지목 (+훅 후보 랭킹) ──
+// 게이트: 점수 < 7 이면 notes를 guidance로 1회 재생성 (비용 상한: 크리틱 1회 + 재생성 1회).
+export async function critiqueScript({ overall = null, scenes = null, hookOptions = null }) {
+  const target = scenes
+    ? `[SCENES — the shot-by-shot script]\n${JSON.stringify(scenes.map((x) => ({ title: x.onScreenText, vo: x.vo, sec: x.durationSec }))).slice(0, 3000)}\n[OVERALL it was distilled from]\n${JSON.stringify(overall || {}).slice(0, 1500)}`
+    : `[OVERALL SCRIPT]\n${JSON.stringify(overall || {}).slice(0, 3000)}`
+  const hookBlk = Array.isArray(hookOptions) && hookOptions.length > 1
+    ? `\n[HOOK OPTIONS — also rank these and pick the single best as "bestHook" (0-based index)]\n${hookOptions.map((h, i) => `  ${i}. ${h}`).join('\n')}`
+    : ''
+  const prompt = `You are a ruthless short-form (Reels/TikTok) script CRITIC. Judge this shopping-short script against the self-check below. Be strict — a 9+ means you would bet money it stops scrolls.
+
+${target}${hookBlk}
+
+Self-check (judge EACH):
+1. HOOK: does line 1 stop the scroll in 1.5s — concrete, pictureable, opens a loop that NEEDS closing? (vague "I didn't believe X" = fail)
+2. TURN: is there ONE clean turn (doubt→realization / problem→mechanism) — not a flat feature list?
+3. REACT: does the VO react and reveal (first-person, sensory, specific numbers) instead of narrating ad copy?
+4. RHYTHM: varied line lengths with at least TWO short 2-5 word punch fragments?
+5. BUDGET: can each line actually be SAID in its seconds (~2.3 words/sec)? flag any line that can't.
+6. PAYOFF: does the product earn its entrance (not dumped in the first beat), with the result as the reward?
+7. CTA: casual and specific (comment keyword), not salesy?
+
+Output ONLY JSON:
+{"score": <0-10 overall>, "notes": ["each note = ONE targeted, actionable fix naming the exact line/scene — max 4, empty array if 9+"]${hookBlk ? ',"bestHook": <0-based index of the strongest hook option>' : ''}}`
+  return await runJson(prompt, {
+    timeout: 90000,
+    validate: (j) => (j && typeof j.score === 'number' && Array.isArray(j.notes)) ? null : 'output must be {score:number, notes:[]}',
+  })
 }
 
 // 씬의 캐릭터·제품 "동작/행동" 모션 (image→video 클립용). 카메라 무빙 아님 — 카메라는 clip의 cameraMove가 담당.
