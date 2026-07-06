@@ -624,10 +624,14 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   // 노드의 효과적인 씬 번호: 자기 scene → 없으면 연결(들어오는 엣지)에서 상속
   // 씬 해석은 항상 '연결(들어오는 edge)'을 우선한다 — period. 낡게 복사된 scene이 아니라 실제로 연결된 체인을 따라 씬을 찾는다.
   // 자기 scene은 오직 폴백(연결에서 씬을 못 찾을 때 — 예: 체인의 출발점인 script 노드는 overall에서 씬을 못 받으므로 자기 scene 사용).
-  const effScene = (nd, depth = 0) => {
-    if (!nd || depth > 6) return null
-    for (const e of graph.edges) if (e.to === nd.id) { const s = effScene(nodeById[e.from], depth + 1); if (s) return s }
-    return nd.scene || null
+  const effScene = (nd, depth = 0, seen) => {
+    if (!nd || depth > 8) return null
+    if (nd.scene) return nd.scene
+    seen = seen || new Set(); if (seen.has(nd.id)) return null; seen.add(nd.id)
+    for (const e of graph.edges) if (e.to === nd.id) { const s = effScene(nodeById[e.from], depth + 1, seen); if (s) return s }   // upstream
+    // script/prompt without its own scene → inherit from the scene chain it FEEDS (downstream image-prompt/image)
+    if (nd.kind === 'script' || nd.kind === 'prompt') for (const e of graph.edges) if (e.from === nd.id) { const s = effScene(nodeById[e.to], depth + 1, seen); if (s) return s }
+    return null
   }
   const ctx = useMemo(() => ({ persona: data?.persona || '—', hook: data?.hook || '—', angle: data?.overall?.angle || '—', product: data?.product?.title || '—' }), [data])
   const selNode = nodeById[selId]
