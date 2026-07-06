@@ -205,6 +205,8 @@ Rules:
   purpose: this scene's role in the flow (hook / build / turn / proof / CTA)
   shot: the camera framing for this beat (angle · distance · movement), distinct from the other scenes (e.g. "tight UGC selfie, low angle", "over-the-shoulder at a desk", "hands-only macro on skin")
 
+- FTC disclosure (required, US affiliate): the LAST scene's onScreenText must carry a short clear disclosure — append " · #ad" (or "Commissions earned"). It is literal text, exempt from the persona voice and the ban-list.
+
 Output ONLY a JSON array (no explanation):
 [{"weight":1.0,"onScreenText":"...","vo":"...","emotion":"...","purpose":"...","shot":"..."}]`
   const runParse = (pr) => runJson(pr, { array: true, validate: (j) => (Array.isArray(j) && j.length) ? null : 'output must be a non-empty JSON array of scenes' }).catch(() => null)
@@ -219,6 +221,11 @@ Output ONLY a JSON array (no explanation):
     const fixed = await runParse(`${prompt}\n\n[GUARDRAIL FAILED on your previous output — FIX ONLY these lines, keep every other scene exactly as-is, and re-output the SAME full JSON array]:\n${fails.join('\n')}`)
     if (!fixed) break
     scenes = fixed
+  }
+  // FTC 보증 — 마지막 씬(CTA)에 disclosure가 없으면 기계적으로 부착 (미국 제휴 콘텐츠 필수)
+  if (scenes.length) {
+    const last = scenes[scenes.length - 1]
+    if (!/#ad\b|commission|amazon associate|\bsponsored\b/i.test(last.onScreenText || '')) last.onScreenText = ((last.onScreenText || '').trim() + ' · #ad').trim()
   }
   // 가중치 → 실제 초 분배 (총합 = totalSec) + 타임코드
   const durs = allocateDurations(scenes.map((s) => s.weight), totalSec, 2, 10)
