@@ -435,7 +435,12 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   }
   // 노드 실행 — 각 노드를 백엔드 엔드포인트로 재생성하고 결과를 노드에 반영. 지원: overall · image-prompt · image · clip · vo.
   async function runNode(n) {
-    if (cid == null || running) return
+    if (cid == null) return
+    if (running) {   // 조용한 무시 금지 — 왜 안 도는지 항상 알려준다 ("버튼이 안 먹는" 느낌의 원인)
+      const busy = ngRef.current.nodes.find((x) => x.id === running.id)
+      setErr(`'${busy ? busy.hd : running.id}' is still running — wait for it, or open that node and press ✕ stop.`)
+      return
+    }
     setErr(null); await pushUndo()   // 재생성 전 스냅샷 → ↶로 되돌리기
     const t0 = Date.now()
     if (n.kind === 'overall') {
