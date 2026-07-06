@@ -229,7 +229,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     setHfElsBusy(true)
     return api('/api/hf/elements' + (refresh ? '?refresh=1' : '')).then((r) => { const els = r.elements || []; setHfEls(els); try { localStorage.setItem('hfEls', JSON.stringify({ at: Date.now(), els })) } catch { /* noop */ } }).catch(() => setHfEls((cur) => cur || [])).finally(() => setHfElsBusy(false))
   }
-  useEffect(() => { if (libOpen && hfEls == null) loadHfEls(false) }, [libOpen])   // 패널 열 때 1회 로드
+  useEffect(() => { if (hfEls == null) loadHfEls(false) }, [])                     // 마운트 시 미리 로드 → 캐스트 피커가 refs 패널 안 열어도 뜬다
+  useEffect(() => { if (libOpen && hfEls == null) loadHfEls(false) }, [libOpen])   // 패널 열 때(캐시 없으면) 로드
   async function submitRefInput() {
     const f = refInput; if (!f) return
     const url = (f.url || '').trim(); if (!url) { setErr('이미지 URL을 입력하세요'); return }
