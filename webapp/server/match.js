@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { amazonSearch, amazonProduct, affiliateUrl } from './amazon.js'
-import { runClaude as cliRunClaude, stripFence } from './cli.js'
+import { runClaude as cliRunClaude, extractJson } from './cli.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA = path.resolve(__dirname, '../data')
@@ -59,7 +59,7 @@ Pick the candidate whose physical design genuinely matches the reel product (sam
 ALL text in English. Output ONLY JSON: {"asin":"<matching asin or null>","confidence":0.0,"reason":"one short line in English","betterQuery":"<improved English search query, or empty>"}`
 
   let m = null
-  for (let k = 0; k < 2 && !m; k++) { try { const out = await runClaudeVision(prompt); const j = JSON.parse(stripFence(out)); if (j && typeof j === 'object') m = j } catch {} }
+  for (let k = 0; k < 2 && !m; k++) { try { const out = await runClaudeVision(prompt); const j = extractJson(out); if (j && typeof j === 'object') m = j } catch {} }
   if (!m) m = { asin: null, confidence: 0, reason: 'vision compare failed', betterQuery: '' }
   return { m, cand, items }
 }

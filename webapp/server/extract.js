@@ -1,4 +1,4 @@
-import { runClaude as cliRunClaude } from './cli.js'
+import { runClaude as cliRunClaude, extractJson } from './cli.js'
 // 릴스 → 제품 후보 추출. LLM 보조(Claude Haiku) + 키 없을 때 키워드 휴리스틱 폴백.
 // 결정사항: "모음은 광산, 제작은 단일" → 모음 릴스는 여러 제품 후보로 분해.
 // 캡션은 펀널로 제품명을 숨기는 경우가 많아, 추출 목표는 정확한 SKU가 아니라
@@ -43,10 +43,6 @@ function heuristicExtract(reels) {
   })
 }
 
-function stripFence(t = '') {
-  const m = t.match(/```(?:json)?\s*([\s\S]*?)```/)
-  return (m ? m[1] : t).trim()
-}
 
 async function llmExtract(reels) {
   const items = reels.map((r) => ({ code: r.code, caption: r.caption || '', combo: isCombo(r.caption) }))
@@ -72,7 +68,7 @@ Return ONLY a JSON array, no prose:
   if (!r.ok) throw new Error(`anthropic ${r.status}: ${(await r.text()).slice(0, 300)}`)
   const data = await r.json()
   const text = (data.content || []).map((c) => c.text || '').join('')
-  const parsed = JSON.parse(stripFence(text))
+  const parsed = extractJson((text))
   if (!Array.isArray(parsed)) throw new Error('LLM 응답이 배열이 아님')
   return parsed
 }
@@ -121,7 +117,7 @@ const runClaude = (prompt, opts = {}) => cliRunClaude(prompt, { model: CLI_MODEL
 async function cliIdentify(reel) {
   const prompt = `${ID_SYSTEM}\n\nCaption (@${reel.username || ''}): ${(reel.caption || '').replace(/\s+/g, ' ')}`
   const out = await runClaude(prompt)
-  const obj = JSON.parse(stripFence(out))
+  const obj = extractJson((out))
   if (!obj || !obj.nameKo) throw new Error('CLI 응답 파싱 실패')
   return obj
 }
@@ -136,7 +132,7 @@ async function llmIdentify(reel) {
   if (!r.ok) throw new Error(`anthropic ${r.status}: ${(await r.text()).slice(0, 200)}`)
   const data = await r.json()
   const text = (data.content || []).map((c) => c.text || '').join('')
-  const obj = JSON.parse(stripFence(text))
+  const obj = extractJson((text))
   return obj
 }
 

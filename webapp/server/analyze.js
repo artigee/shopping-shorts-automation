@@ -1,7 +1,7 @@
 // 릴스 영상 분석 파이프라인:
 //   다운로드(CDP) → 키프레임(ffmpeg) → 비전 분석(claude CLI) → 훅/구조/씬스크립트/에셋
 import { spawn } from 'node:child_process'
-import { runClaude as cliRunClaude } from './cli.js'
+import { runClaude as cliRunClaude, extractJson } from './cli.js'
 import { mkdirSync, rmSync, existsSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -103,10 +103,6 @@ export async function extractFrames(mp4Path, outDir, n = 9) {
   return { duration: dur || frames.length, frames }
 }
 
-function stripFence(t = '') {
-  const m = t.match(/```(?:json)?\s*([\s\S]*?)```/)
-  return (m ? m[1] : t).trim()
-}
 
 // ── 3) Claude 비전 분석 → 구조화 JSON ──
 export async function analyzeFrames({ frames, caption, duration, productName, lang = 'English (US)' }) {
@@ -136,7 +132,7 @@ Output ONLY JSON (no explanation). Ground every field in the keyframes + caption
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const out = await cliRunClaude(prompt, { model: CLI_MODEL, timeout: 240000 })
-      obj = JSON.parse(stripFence(out))
+      obj = extractJson(out)
       if (obj && typeof obj === 'object') break
     } catch (e) { lastErr = e /* 타임아웃 또는 파싱 실패 → 재시도 */ }
   }

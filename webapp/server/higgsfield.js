@@ -53,7 +53,7 @@ const HF_TOOLS = ['mcp__higgsfield__media_import_url', 'mcp__higgsfield__generat
 export function cliReady() { return true } // claude CLI(Higgsfield MCP 연결) 경로는 항상 사용 가능
 
 // 공용 래퍼(cli.js) 사용 — 기존 (prompt, extraArgs, timeout) 포지셔널 시그니처를 옵션형으로 통일
-import { runClaude as cliRunClaude } from './cli.js'
+import { runClaude as cliRunClaude, extractJson } from './cli.js'
 const runClaude = (prompt, { tools = [], model = 'sonnet', timeout = 240000 } = {}) => cliRunClaude(prompt, { tools, model, timeout })
 
 // 히긱스필드에 등록된 재사용 element(캐릭터/환경/제품) 목록 — claude CLI로 MCP 조회 후 JSON만 파싱해서 반환.
@@ -61,9 +61,7 @@ const HF_ELEMENTS_TOOLS = ['mcp__higgsfield__show_reference_elements']
 export async function listHfElements() {
   const prompt = 'Call the tool mcp__higgsfield__show_reference_elements with exactly {"action":"list","size":60}. From the result, output ONLY a single compact JSON array (no prose, no explanation, no markdown code fences). Each array item must be {"id":<id>,"name":<name>,"category":<category>,"thumb":<url of the first media, or null>}. Output nothing except that JSON array.'
   const out = await runClaude(prompt, { tools: HF_ELEMENTS_TOOLS, model: 'haiku', timeout: 120000 })
-  const m = out.match(/\[[\s\S]*\]/)   // 출력에서 JSON 배열만 추출
-  if (!m) throw new Error('element 목록 파싱 실패 (CLI 출력에 JSON 배열 없음)')
-  const arr = JSON.parse(m[0])
+  const arr = extractJson(out, { array: true })   // 균형 스캔 — 프롬프트 누출/후행 텍스트에 안전
   // 오디오/비디오 element(예: 음성 샘플)는 이미지 카탈로그에서 제외 — 이미지 첨부용 element만.
   const isAv = (u) => /\.(mp3|wav|m4a|ogg|aac|flac|mp4|webm|mov)(\?|$)/i.test(u || '')
   return Array.isArray(arr) ? arr.filter((e) => e && e.id && e.name && !isAv(e.thumb)).map((e) => ({ id: e.id, name: e.name, category: e.category || 'character', thumb: e.thumb || null })) : []
@@ -74,8 +72,7 @@ export async function getHfElement(id) {
   const prompt = `Call the tool mcp__higgsfield__show_reference_elements with exactly {"action":"get","element_id":"${id}"}. The result's element has a "medias" array — it can hold MANY images. Output ONLY a compact JSON object {"id":..,"name":..,"category":..,"medias":[<the https url of EVERY SINGLE media in that array, ALL of them, in order — do NOT stop at one, do NOT truncate>]} — no prose, no code fences. If there are 10 medias, output 10 urls.`
   const run1 = async () => {
     const out = await runClaude(prompt, { tools: HF_ELEMENTS_TOOLS, timeout: 120000 })
-    const m = out.match(/\{[\s\S]*\}/); if (!m) throw new Error('element 상세 파싱 실패')
-    const e = JSON.parse(m[0])
+    const e = extractJson(out)
     return { id: e.id, name: e.name, category: e.category || 'character', medias: Array.isArray(e.medias) ? e.medias.filter(Boolean) : [] }
   }
   let el = await run1()
@@ -91,9 +88,7 @@ export async function createHfElement({ name, category = 'character', imageUrl }
   const cat = ['character', 'environment', 'prop'].includes(category) ? category : 'character'
   const prompt = `Step 1: call mcp__higgsfield__media_import_url with {"url":"${imageUrl}"} and take the returned media_id. Step 2: call mcp__higgsfield__show_reference_elements with {"action":"create","name":"${safeName}","category":"${cat}","medias":[{"id":"<media_id from step 1>","url":"${imageUrl}","type":"media_input"}]}. Then output ONLY the created element as JSON {"id":..,"name":..,"category":..} and nothing else.`
   const out = await runClaude(prompt, { tools: ['mcp__higgsfield__media_import_url', 'mcp__higgsfield__show_reference_elements'], timeout: 180000 })
-  const m = out.match(/\{[\s\S]*\}/)
-  if (!m) throw new Error('element 생성 결과 파싱 실패')
-  const el = JSON.parse(m[0])
+  const el = extractJson(out)
   return { id: el.id, name: el.name || safeName, category: el.category || cat }
 }
 
@@ -119,9 +114,7 @@ For EACH file above, in order, do:
 After ALL files are uploaded and confirmed, call mcp__higgsfield__show_reference_elements with {"action":"create","name":"${safeName}","category":"${cat}","medias":[ <every kept pair> ]}.
 Finally print ONLY the created element as compact JSON {"id":..,"name":..,"category":..} — nothing else.`
   const out = await runClaude(prompt, { tools: ['mcp__higgsfield__media_upload', 'mcp__higgsfield__media_confirm', 'mcp__higgsfield__show_reference_elements', 'Bash'], timeout: 420000 })
-  const m = out.match(/\{[\s\S]*\}/)
-  if (!m) throw new Error('element 생성 결과 파싱 실패: ' + out.slice(-160))
-  const el = JSON.parse(m[0])
+  let el; try { el = extractJson(out) } catch { throw new Error('element 생성 결과 파싱 실패: ' + out.slice(-160)) }
   return { id: el.id, name: el.name || safeName, category: el.category || cat }
 }
 
