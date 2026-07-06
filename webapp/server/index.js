@@ -3,7 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import fs from 'node:fs'
 import path from 'node:path'
-import { db, dbStats, getSetting, setSetting } from './db.js'
+import { db, dbStats, getSetting, setSetting, upsertHfElement, listHfElementsDb } from './db.js'
 import { startJob, getJob, activeJob, listJobs } from './jobs.js'
 import { collect } from './collect.js'
 import { extractProducts, identifyReel } from './extract.js'
@@ -828,17 +828,15 @@ app.put('/api/contents/:id/overall', (req, res) => {
 // 콘텐츠 모드 (claim-safety 게이트) — 목록 + 콘텐츠별 저장
 // ── 히긱스필드 재사용 element(캐릭터/환경/제품) — UI에서 available 목록 조회 + 이름 붙여 새로 등록 ──
 let hfElementsCache = { at: 0, data: null }
+// DB가 권위 소스. 항상 DB를 즉시 반환. refresh=1이면 HF list를 당겨 병합(upsert)하되,
+// HF가 실패/빈 응답이어도 DB는 절대 지우지 않는다 → 'element 사라짐' 불가능.
 app.get('/api/hf/elements', async (req, res) => {
-  const now = Date.now(), fresh = req.query.refresh === '1'
-  if (!fresh && hfElementsCache.data && now - hfElementsCache.at < 10 * 60 * 1000) return res.json({ elements: hfElementsCache.data, cached: true })
-  try {
-    const elements = await listHfElements()
-    hfElementsCache = { at: now, data: elements }
-    res.json({ elements })
-  } catch (e) {
-    if (hfElementsCache.data) return res.json({ elements: hfElementsCache.data, stale: true, error: String(e.message || e) })   // 실패 시 캐시 폴백
-    res.status(500).json({ error: String(e.message || e) })
+  const fresh = req.query.refresh === '1'
+  if (fresh || listHfElementsDb().length === 0) {   // refresh, 또는 DB 비었으면(최초) → HF에서 당겨 병합
+    try { const els = await listHfElements(); for (const e of els) upsertHfElement(e) }
+    catch (e) { return res.json({ elements: listHfElementsDb(), stale: true, error: String(e.message || e) }) }
   }
+  res.json({ elements: listHfElementsDb() })
 })
 const hfElDetailCache = new Map()   // id → { at, data } (element 전체 이미지 뷰어용)
 app.get('/api/hf/elements/:id', async (req, res) => {
@@ -852,7 +850,7 @@ app.post('/api/hf/elements', async (req, res) => {
   if (!name || !imageUrl) return res.status(400).json({ error: 'name과 imageUrl이 필요합니다' })
   try {
     const el = await createHfElement({ name, category, imageUrl })
-    hfElementsCache = { at: 0, data: null }   // 캐시 무효화 → 다음 목록 조회 시 새로고침
+    upsertHfElement(el)   // push → DB 영속화 (패널에 즉시·영구히 뜬다)
     res.json({ element: el })
   } catch (e) { res.status(500).json({ error: String(e.message || e) }) }
 })
@@ -871,7 +869,7 @@ app.post('/api/hf/elements/multi', async (req, res) => {
   if (!paths.length) return res.status(400).json({ error: '로컬 이미지 경로를 찾지 못했습니다' })
   try {
     const el = await createHfElementMulti({ name, category, filePaths: paths })
-    hfElementsCache = { at: 0, data: null }
+    upsertHfElement(el)   // push → DB 영속화
     res.json({ element: el })
   } catch (e) { res.status(500).json({ error: String(e.message || e) }) }
 })

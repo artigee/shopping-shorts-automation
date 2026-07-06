@@ -196,6 +196,20 @@ CREATE TABLE IF NOT EXISTS jobs (
 db.prepare(`UPDATE jobs SET status='failed', error='server restarted', updated_at=datetime('now') WHERE status IN ('queued','running')`).run()
 
 // 앱 전역 설정 (key-value) — 예: 생성 언어/지역
+// Higgsfield 등록 element를 DB에 영속화 — HF list는 느리고 플래키하므로 이걸 권위 소스로.
+// push: 생성 시 upsert. pull: refresh 때 HF list 병합. 패널은 항상 DB에서 즉시·안정적으로 읽는다.
+db.exec(`CREATE TABLE IF NOT EXISTS hf_elements (
+  id TEXT PRIMARY KEY, name TEXT, category TEXT, thumb TEXT, created_at TEXT DEFAULT (datetime('now'))
+)`)
+export function upsertHfElement(e) {
+  if (!e || !e.id) return
+  db.prepare(`INSERT INTO hf_elements (id, name, category, thumb) VALUES (?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET name=excluded.name, category=COALESCE(NULLIF(excluded.category,''), category), thumb=COALESCE(excluded.thumb, thumb)`)
+    .run(String(e.id), e.name || '', e.category || 'character', e.thumb || null)
+}
+export function listHfElementsDb() { return db.prepare('SELECT id, name, category, thumb FROM hf_elements ORDER BY created_at DESC').all() }
+export function deleteHfElementDb(id) { db.prepare('DELETE FROM hf_elements WHERE id = ?').run(String(id)) }
+
 db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`)
 export function getSetting(key, def = null) { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? r.value : def }
 export function setSetting(key, value) { db.prepare(`INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(key, value == null ? '' : String(value)) }
