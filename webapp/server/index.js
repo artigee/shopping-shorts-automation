@@ -1307,12 +1307,23 @@ app.post('/api/contents/:id/scene/:index/prompt', withScene(async (req, res, { c
 }))
 
 // 씬 스크립트(Title+VO) 재생성 — overall + guidance(instruction) 기반
-app.post('/api/contents/:id/scene/:index/script', withScene(async (req, res, { c, scenes, i }) => {
+// 씬 스크립트는 "지정한 index가 아직 없으면 그 크기로 씬 배열을 확장"한다 — 수동 노드가 씬 분해 없이
+// overall에서 바로 특정 씬(예: scene 6)을 생성할 수 있어야 한다 (노드 독립 실행).
+app.post('/api/contents/:id/scene/:index/script', async (req, res) => {
+  const c = getContent(req.params.id)
+  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
+  const scenes = getScenes(c)
+  const i = Number(req.params.index)
+  if (!Number.isInteger(i) || i < 0 || i >= 12) return res.status(400).json({ error: '잘못된 씬 index (1-12)' })
+  if (i >= scenes.length) {
+    while (scenes.length <= i) scenes.push({ id: scenes.length + 1, makeVideo: false })
+    saveScenes(c.id, scenes)
+  }
   startSceneGen(res, c, `script#${i}`, '씬 스크립트 생성 중…', async (progress) => {
     progress('씬 스크립트 작성 중… (~1분)', 40)
     return await genSceneScriptForScene(c, scenes, i, req.body && req.body.guidance)
   })
-}))
+})
 
 // 씬 모션 프롬프트 생성 (캐릭터·제품 동작 — 씬 스크립트 기반)
 app.post('/api/contents/:id/scene/:index/motion', withScene(async (req, res, { c, scenes, i }) => {

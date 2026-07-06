@@ -824,7 +824,16 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   function beginWire(ev, n) {
     const world = (e) => { const r = canvasRef.current.getBoundingClientRect(); return { x: (e.clientX - r.left - view.x) / view.k, y: (e.clientY - r.top - view.y) / view.k } }
     const mv = (e) => { const p = world(e); const nd = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ng-node'); const tid = nd?.dataset.id; const valid = tid && tid !== n.id && canConnect(n, nodeById[tid]); setWireEnd({ ...p, fromId: n.id, targetId: tid && tid !== n.id ? tid : null, valid }) }
-    const up = (e) => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); const tid = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ng-node')?.dataset.id; if (tid && tid !== n.id && canConnect(n, nodeById[tid])) addEdge(n.id, tid); setWireEnd(null) }
+    const up = (e) => {
+      window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up)
+      const tid = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ng-node')?.dataset.id
+      if (tid && tid !== n.id) {
+        const to = nodeById[tid]
+        if (canConnect(n, to)) { addEdge(n.id, tid); setErr(null) }
+        else setErr(`can't connect: '${n.hd}' outputs ${outTypeOf(n) || '?'} — '${to?.hd || tid}' accepts [${(acceptsOf(to) || []).join(', ') || 'no inputs'}].`)   // 조용한 드롭 거부 금지
+      }
+      setWireEnd(null)
+    }
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up)
     setWireEnd({ ...world(ev), fromId: n.id, targetId: null, valid: false })
   }
