@@ -1,6 +1,6 @@
 // IG 수집 — Playwright가 소유한 Chrome for Testing(공유 persistent context)의 페이지에서
 // IG 내부 web_info API를 로그인 쿠키로 호출. (connectOverCDP는 Chrome 149에서 불안정 → 폐기)
-import { scoreReel } from './score.js'
+import { scoreReel, scoreReelV2 } from './score.js'
 import { getContext } from './browser.js'
 
 const IG_APP_ID = '936619743392459'
@@ -98,8 +98,8 @@ export async function collect({ tags, minPlay = 1000, onProgress = () => {} }) {
     }
 
     let reels = Object.values(pool).filter((m) => m.type === 2 && m.play >= minPlay)
-    reels.forEach((m) => { m.score = scoreReel(m) })
-    reels.sort((a, b) => b.score - a.score)
+    reels.forEach((m) => { m.score = scoreReel(m); m.score2 = scoreReelV2(m) })
+    reels.sort((a, b) => b.score2 - a.score2)   // v2(계정 대비 성과) 기준 랭킹
     return { reels, perTag }
     // 공유 persistent context는 닫지 않음 (다음 호출 재사용).
   }

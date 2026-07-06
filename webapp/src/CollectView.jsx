@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FUNNEL, isCombo, isNoise, fmt, api, postJSON } from './util.js'
+import { FUNNEL, isCombo, isNoise, fmt, api, postJSON, pollJob } from './util.js'
 import { useT } from './i18n.jsx'
 import Dots from './Dots.jsx'
 
@@ -22,6 +22,13 @@ export default function CollectView({ onChange, goAnalyses }) {
   const [reels, setReels] = useState([])
   const [perTag, setPerTag] = useState(null)
   const [picking, setPicking] = useState(null) // 분석 생성 중인 릴스 id
+  const [classifying, setClassifying] = useState(false)
+  async function runClassify() {   // AI 제품 초점 분류 (single/roundup/non_shoppable) — 잡 폴링
+    if (!snapshot || classifying) return
+    setClassifying(true); setErr(null)
+    try { const r = await postJSON(`/api/snapshots/${snapshot.id}/classify`, {}); if (r.jobId) await pollJob(r.jobId, () => {}); loadLatest() }
+    catch (e) { setErr(String(e.message || e)) } finally { setClassifying(false) }
+  }
 
   async function toAnalysis(m) {
     setPicking(m.id)
@@ -56,12 +63,12 @@ export default function CollectView({ onChange, goAnalyses }) {
   const presetLabel = (k) => ({ amazon_finds: '아마존 파인즈', kbeauty: 'K-뷰티', home_daily: '홈·일상용품', fashion: '패션', gadgets: '가전·가젯' }[k] || k)
   const maxComments = useMemo(() => reels.reduce((mx, r) => Math.max(mx, r.comments || 0), 0), [reels])
   const filtered = useMemo(() => reels.filter((m) => {
-    const cap = m.caption || ''
+    const cap = m.caption || '', pf = m.product_focus || null
     if (funnelOnly && !FUNNEL.test(cap)) return false
-    if (kind === 'combo' && !isCombo(cap)) return false
-    if (kind === 'single' && isCombo(cap)) return false
+    if (kind === 'combo' && !(pf ? pf === 'roundup' : isCombo(cap))) return false
+    if (kind === 'single' && !(pf ? pf === 'single' : !isCombo(cap))) return false
     if ((m.comments || 0) < minComments) return false
-    if (hideNoise && isNoise(cap)) return false
+    if (hideNoise && (isNoise(cap) || pf === 'non_shoppable')) return false
     if (hidePaid && m.is_paid) return false
     return true
   }), [reels, funnelOnly, kind, minComments, hideNoise, hidePaid])
@@ -106,6 +113,7 @@ export default function CollectView({ onChange, goAnalyses }) {
       <div className="hrow" style={{ margin: '18px 2px 8px' }}>
         <b>{t('릴스 랭킹')} {filtered.length}<span className="muted" style={{ fontWeight: 400 }}>/{reels.length}</span></b>
         {snapshot && <span className="muted" style={{ fontSize: 12 }}>{t('스냅샷')} #{snapshot.id}</span>}
+        {snapshot && <button className="ghostbtn" onClick={runClassify} disabled={classifying} title={t('AI가 캡션으로 단일/모음/판매불가를 분류 — 필터가 정확해집니다')}>{classifying ? t('분류 중…') : '⊙ ' + t('AI 분류')}</button>}
         <span style={{ flex: 1 }} />
         {perTag && perTag.map((tg) => (
           <span key={tg.tag} className={'pill ' + (tg.ok ? '' : 'bad-pill')}>#{tg.tag} {tg.ok ? tg.count : '✘' + tg.status}</span>
@@ -138,10 +146,12 @@ export default function CollectView({ onChange, goAnalyses }) {
                   ? <img src={m.thumbnail} alt="" referrerPolicy="no-referrer" loading="lazy" onError={(e) => { e.target.style.display = 'none' }} />
                   : <div className="noimg">{t('썸네일')}<br /><span>(—)</span></div>}
                 <span className="rrank">#{i + 1}</span>
-                <span className="rscore">{fmt(Math.round(m.score))}</span>
+                <span className="rscore" title={'v2 ' + fmt(Math.round(m.score2 || 0)) + ' · v1 ' + fmt(Math.round(m.score))}>{fmt(Math.round(m.score2 || m.score))}</span>
                 <div className="rbadges">
                   {funnel && <span className="badge funnel">{t('펀널')}</span>}
-                  {combo ? <span className="badge combo">{t('모음')}</span> : <span className="badge single">{t('단일')}</span>}
+                  {m.product_focus
+                    ? <span className={'badge ' + (m.product_focus === 'single' ? 'single' : m.product_focus === 'roundup' ? 'combo' : 'paid')}>{m.product_focus === 'single' ? t('단일') + '✓' : m.product_focus === 'roundup' ? t('모음') + '✓' : t('판매불가')}</span>
+                    : (combo ? <span className="badge combo">{t('모음')}</span> : <span className="badge single">{t('단일')}</span>)}
                   {m.is_paid ? <span className="badge paid">{t('AD')}</span> : null}
                 </div>
               </div>

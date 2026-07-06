@@ -4,6 +4,7 @@ import cors from 'cors'
 import fs from 'node:fs'
 import path from 'node:path'
 import { db, dbStats, getSetting, setSetting, upsertHfElement, listHfElementsDb, jparse, getContent, saveScenes } from './db.js'
+import { runClaudeJson } from './cli.js'
 import { startJob, getJob, activeJob, listJobs } from './jobs.js'
 import { collect } from './collect.js'
 import { extractProducts, identifyReel } from './extract.js'
@@ -61,9 +62,9 @@ app.post('/api/collect', async (req, res) => {
 
     const insReel = db.prepare(
       `INSERT INTO reels
-        (snapshot_id, code, url, thumbnail, username, followers, play, likes, comments, taken_at, is_paid, caption, tag, score, raw)
+        (snapshot_id, code, url, thumbnail, username, followers, play, likes, comments, taken_at, is_paid, caption, tag, score, score2, raw)
        VALUES
-        (@snapshot_id, @code, @url, @thumbnail, @username, @followers, @play, @likes, @comments, @taken_at, @is_paid, @caption, @tag, @score, @raw)`
+        (@snapshot_id, @code, @url, @thumbnail, @username, @followers, @play, @likes, @comments, @taken_at, @is_paid, @caption, @tag, @score, @score2, @raw)`
     )
     const tx = db.transaction((rows) => rows.forEach((r) => insReel.run(r)))
     tx(
@@ -82,6 +83,7 @@ app.post('/api/collect', async (req, res) => {
         caption: m.caption || '',
         tag: m.tag || null,
         score: m.score || 0,
+        score2: m.score2 || 0,
         raw: JSON.stringify({ type: m.type, ptype: m.ptype }),
       }))
     )
@@ -198,10 +200,35 @@ app.get('/api/products/:id', (req, res) => {
 // ── 릴스우선 모델: 최신 스냅샷 릴스 브라우징 + 단일 릴스 제품 식별 ──
 
 // 최신 스냅샷의 릴스 (점수순) — ① 발굴 탭 기본 뷰
+// AI 제품 초점 분류 — 캡션 기반: single(단일 제품 데모) / roundup(모음) / non_shoppable(밈·라이프스타일). 잡으로 실행.
+app.post('/api/snapshots/:id/classify', (req, res) => {
+  const snap = db.prepare('SELECT * FROM snapshots WHERE id = ?').get(req.params.id)
+  if (!snap) return res.status(404).json({ error: '없는 스냅샷' })
+  const existing = activeJob('snapshots', snap.id, 'classify')
+  if (existing) return res.json({ jobId: existing.id, already: true })
+  const job = startJob({ agent: 'classify', refType: 'snapshots', refId: snap.id, message: '제품 초점 분류 중…' }, async (progress) => {
+    const rows = db.prepare('SELECT id, username, caption FROM reels WHERE snapshot_id = ? AND (product_focus IS NULL OR product_focus = \'\') ORDER BY COALESCE(NULLIF(score2, 0), score) DESC LIMIT 160').all(snap.id)
+    if (!rows.length) return { classified: 0 }
+    const upd = db.prepare('UPDATE reels SET product_focus = ? WHERE id = ?')
+    let done = 0
+    for (let i = 0; i < rows.length; i += 40) {
+      const chunk = rows.slice(i, i + 40)
+      progress(`분류 중… ${Math.min(i + 40, rows.length)}/${rows.length}`, Math.round(10 + 80 * i / rows.length))
+      const list = chunk.map((r, k) => `${k}. ${(r.caption || '(no caption)').replace(/\s+/g, ' ').slice(0, 220)}`).join('\n')
+      const prompt = `Classify each Instagram reel caption by PRODUCT FOCUS for affiliate-shorts remaking:\n- "single": demos/reviews ONE specific product\n- "roundup": lists MULTIPLE products (finds/haul/top-N)\n- "non_shoppable": no clear purchasable product (meme/lifestyle/story)\n\nCaptions:\n${list}\n\nOutput ONLY a JSON array: [{"i":0,"focus":"single"},...] — one entry per caption, focus is exactly one of single|roundup|non_shoppable.`
+      try {
+        const arr = await runClaudeJson(prompt, { model: 'haiku', timeout: 90000, retries: 1, array: true, validate: (a) => Array.isArray(a) && a.length ? null : 'must be a non-empty array' })
+        for (const e of arr) { const r = chunk[e.i]; if (r && ['single', 'roundup', 'non_shoppable'].includes(e.focus)) { upd.run(e.focus, r.id); done++ } }
+      } catch { /* 청크 실패는 스킵 */ }
+    }
+    return { classified: done }
+  })
+  res.json({ jobId: job.id })
+})
 app.get('/api/reels/latest', (req, res) => {
   const snap = db.prepare('SELECT * FROM snapshots ORDER BY id DESC LIMIT 1').get()
   if (!snap) return res.json({ snapshot: null, reels: [] })
-  const reels = db.prepare('SELECT * FROM reels WHERE snapshot_id = ? ORDER BY score DESC').all(snap.id)
+  const reels = db.prepare('SELECT * FROM reels WHERE snapshot_id = ? ORDER BY COALESCE(NULLIF(score2, 0), score) DESC').all(snap.id)
   res.json({ snapshot: snap, reels })
 })
 
