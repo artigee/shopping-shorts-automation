@@ -943,7 +943,7 @@ app.post('/api/contents/:id/script', async (req, res) => {
 
 // 씬 저장(편집) — 생성 산출물(이미지/클립/VO)은 절대 덮어쓰지 않고 보존한다.
 // 프론트 state가 stale(서버 배치 후 미반영)이어도 저장이 클립/이미지를 지우지 않게.
-const SCENE_GEN_FIELDS = ['image', 'imageSrc', 'video', 'videoSrc', 'audio', 'voEn']
+const SCENE_GEN_FIELDS = ['image', 'imageSrc', 'video', 'videoSrc', 'audio', 'voEn', 'elements']
 app.put('/api/contents/:id/scenes', (req, res) => {
   const incoming = (req.body && req.body.scenes) || []
   const c = db.prepare('SELECT scenes FROM contents WHERE id = ?').get(req.params.id)
@@ -1008,11 +1008,16 @@ async function genPromptForScene(c, scenes, i, guidance) {
   const product = c.product ? JSON.parse(c.product) : null
   const cosmetic = isCosmeticContent(c, product)
   const hasCharacterRef = sceneHasCharacterRef(c, scenes, i)
+  // 씬 캐릭터 element 이름(들) → 프롬프트에서 이름으로 부르고 외모 서술 금지. 씬 지정 없으면 콘텐츠 기본 캐릭터.
+  let charElC = null; try { charElC = c.character_element ? JSON.parse(c.character_element) : null } catch { charElC = null }
+  const sceneElsC = Array.isArray(scenes[i].elements) ? scenes[i].elements.filter((e) => e && e.name) : []
+  let elementNames = sceneElsC.map((e) => e.name)
+  if (!elementNames.length && charElC && charElC.name) elementNames = [charElC.name]
   const siblingTitles = scenes.map((s) => s.onScreenText || '')
   // 데메아너(표정 톤) = 페르소나 register, 없으면 릴스 분석의 voice.register
   let demeanor = (c.persona ? getPersona(c.persona)?.register : '') || ''
   if (!demeanor && c.analysis_id) { try { const a = db.prepare('SELECT analysis FROM analyses WHERE id = ?').get(c.analysis_id); demeanor = (a?.analysis ? (JSON.parse(a.analysis).voice || {}).register : '') || '' } catch { /* ignore */ } }
-  const p = await generateImagePrompt({ scene: scenes[i], productName: product?.title, product, style: c.style, sceneIndex: i, sceneTotal: scenes.length, guidance, cosmetic, hasCharacterRef, siblingTitles, demeanor, lang: genLang() })
+  const p = await generateImagePrompt({ scene: scenes[i], productName: product?.title, product, style: c.style, sceneIndex: i, sceneTotal: scenes.length, guidance, cosmetic, hasCharacterRef, elementNames, siblingTitles, demeanor, lang: genLang() })
   if (!p) throw new Error('이미지 프롬프트 생성 실패')
   scenes[i] = { ...scenes[i], imagePrompt: p }
   db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
@@ -1108,16 +1113,19 @@ async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
     }
   }
   let refs = (gProduct && gProduct.length) ? gProduct : (Array.isArray(scenes[i].refs) && scenes[i].refs.length) ? scenes[i].refs : [product?.image || (product?.images || [])[0]].filter(Boolean)
-  // 지정된 캐릭터 element가 있으면 그걸로 정체성 고정 (<<<id>>> 프롬프트 주입) → 로컬 캐릭터 ref는 생략(element가 대체).
+  // 씬별 캐릭터 element(들) → 정체성 고정 (<<<id>>> 프롬프트 주입). 씬 지정 없으면 콘텐츠 기본 캐릭터. 있으면 로컬 캐릭터 ref 생략.
   let charEl = null; try { charEl = c.character_element ? JSON.parse(c.character_element) : null } catch { charEl = null }
-  let characterRef = charEl && charEl.id ? null : (gChar || c.character_ref || null)
+  const sceneEls = Array.isArray(scenes[i].elements) ? scenes[i].elements.filter((e) => e && e.id) : []
+  let elIds = sceneEls.map((e) => e.id)
+  if (!elIds.length && charEl && charEl.id) elIds = [charEl.id]
+  let characterRef = elIds.length ? null : (gChar || c.character_ref || null)
   let envRef = gEnv || scenes[i].envRef || null
   let url
   if (hfReady()) { url = await genImage({ prompt, aspect: '9:16' }) }
   else {
     const up = await upgradeRefsToHf(c, refLib, { refs, characterRef, envRef })   // 로컬 전용 ref → 첫 사용 시 HF 업로드(once)
     refs = up.refs; characterRef = up.characterRef; envRef = up.envRef
-    url = await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, charElementId: charEl && charEl.id ? charEl.id : null, productName: product?.title, dimensions: product?.dimensions })
+    url = await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, charElementIds: elIds, productName: product?.title, dimensions: product?.dimensions })
   }
   const rel = await saveAsset(c.id, i, url, false, frameRole === 'end' ? 'end' : '')   // start/end 별도 파일
   // end 프레임은 별도 슬롯(imageEnd)에 저장 → start(image)를 덮어쓰지 않음. 클립이 둘 다 키프레임으로 사용.
@@ -1265,6 +1273,19 @@ app.post('/api/contents/:id/scene/:index/votext', async (req, res) => {
   if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
   try { const scene = await genVoTextForScene(c, scenes, i, req.body && req.body.guidance); res.json({ ok: true, scene }) }
   catch (e) { res.status(500).json({ error: e.message || String(e) }) }
+})
+
+// 씬별 캐릭터 element(들) 지정 — "Yuna meets Sofia" 같은 멀티 캐스트. body.elements = [{id,name}]
+app.post('/api/contents/:id/scene/:index/elements', (req, res) => {
+  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
+  const scenes = getScenes(c)
+  const i = Number(req.params.index)
+  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
+  const els = Array.isArray(req.body && req.body.elements) ? req.body.elements.filter((e) => e && e.id).map((e) => ({ id: String(e.id), name: e.name || '' })) : []
+  scenes[i] = { ...scenes[i], elements: els }
+  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  res.json({ ok: true, scene: scenes[i] })
 })
 
 // 씬 미디어 생성(이미지/클립/VO)을 '잡'으로 실행 — 페이지 이동/새로고침 후에도 서버에서 계속 돌고, 돌아오면 노드가 재접속(재부착)한다.

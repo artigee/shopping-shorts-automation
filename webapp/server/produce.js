@@ -239,9 +239,14 @@ Output ONLY JSON: {"onScreenText":"...","vo":"...","emotion":"...","purpose":"..
 }
 
 // 씬 1개의 이미지 프롬프트(영어) 생성 — 씬 스크립트는 Title+VO만 있으므로 여기서 비주얼을 정한다. 빠르게 haiku.
-export async function generateImagePrompt({ scene = {}, productName, product, style, sceneIndex = 0, sceneTotal = 1, guidance, cosmetic = false, hasCharacterRef = false, siblingTitles = null, demeanor = '', lang = 'English (US)' }) {
+export async function generateImagePrompt({ scene = {}, productName, product, style, sceneIndex = 0, sceneTotal = 1, guidance, cosmetic = false, hasCharacterRef = false, elementNames = [], siblingTitles = null, demeanor = '', lang = 'English (US)' }) {
+  const named = (Array.isArray(elementNames) ? elementNames : []).filter(Boolean)
+  // 명명 캐릭터 element(들) — 이름으로 부르고, 외모는 절대 서술 금지(레퍼런스 element가 정체성 정의). 2명 이상이면 상호작용 구성.
+  const castBlk = named.length
+    ? `\n[CHARACTERS — identity is 100% from reference element(s); you describe ONLY expression, action and composition] This scene features ${named.join(' and ')}. Refer to ${named.length > 1 ? 'them' : 'her'} BY NAME (${named.join(', ')}). NEVER describe ${named.length > 1 ? 'their' : 'her'} face, hair, skin, age, body or clothing — a reference element defines each identity, and any appearance wording breaks it.${named.length > 1 ? ` Compose ${named.join(' and ')} INTERACTING as the beat describes — make clear who does what to whom (e.g. "${named[0]} handing the cup to ${named[1]}").` : ''} Describe ONLY the scene, ${named.length > 1 ? "each person's" : 'her'} facial expression and action for this beat, plus framing and lighting.`
+    : ''
   // 인물: 캐릭터 레퍼런스가 있으면 레퍼런스에 100% 위임(외모 서술 금지). 없으면 인종/지역 특정 금지 + 전 씬 동일 룩.
-  const personBlk = hasCharacterRef
+  const personBlk = named.length ? castBlk : hasCharacterRef
     ? `\n[PERSON — IDENTITY 100% from the reference photo; you describe ONLY expression + action] A reference photo is the SOLE source of her look: face, HAIR, skin, age, build. NEVER write a single word about her hair, face, skin, age, body or clothing — not "casually unstyled hair", not "hair down", not "natural hair", nothing. Her HAIRSTYLE must stay EXACTLY as the reference (same length, cut, parting, color, texture) — describing hair at all makes the model restyle it and breaks the shot. Call her "the creator". You describe ONLY her FACIAL EXPRESSION and her ACTION/pose for THIS scene's beat below — never her appearance. Do NOT copy the reference's neutral/resting face; she is REACTING as the beat says. Her WARDROBE and HAIRSTYLE come ENTIRELY from the reference — reproduce exactly what the reference shows and keep it identical across every scene and both start/end frames. Do NOT add or invent anything that is not in the reference (no added head-wrap/turban, towel, hat, or top).`
     : `\n[PERSON — no character reference provided] Do NOT invent or specify her appearance (no age, ethnicity, nationality, body, hair or skin descriptions). Keep whatever look you render CONSISTENT across every scene (same person, same hair, same face — she must not change scene to scene). Her EXPRESSION comes from this scene's beat below — she is reacting, not posing.`
   // 이 씬의 감정·목적·샷 → 표정/프레이밍을 이 비트에 정확히 맞춘다. 페르소나 register는 목소리 톤일 뿐, 무표정 얼굴이 아님.
