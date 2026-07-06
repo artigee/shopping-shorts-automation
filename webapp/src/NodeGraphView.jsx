@@ -227,7 +227,11 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const loadHfEls = (refresh) => {   // localStorage 캐시 → 즉시 표시 후 백그라운드 새로고침 (목록 CLI 조회가 ~25s라)
     if (!refresh) { try { const c = JSON.parse(localStorage.getItem('hfEls') || 'null'); if (c && Array.isArray(c.els)) setHfEls(c.els) } catch { /* noop */ } }
     setHfElsBusy(true)
-    return api('/api/hf/elements' + (refresh ? '?refresh=1' : '')).then((r) => { const els = r.elements || []; setHfEls(els); try { localStorage.setItem('hfEls', JSON.stringify({ at: Date.now(), els })) } catch { /* noop */ } }).catch(() => setHfEls((cur) => cur || [])).finally(() => setHfElsBusy(false))
+    return api('/api/hf/elements' + (refresh ? '?refresh=1' : '')).then((r) => {
+      const els = r.elements || []
+      if (els.length) { setHfEls(els); try { localStorage.setItem('hfEls', JSON.stringify({ at: Date.now(), els })) } catch { /* noop */ } }
+      else setHfEls((cur) => (cur && cur.length ? cur : els))   // 빈 응답(플래키/타임아웃)이 기존 목록·캐시를 절대 지우지 않게
+    }).catch(() => setHfEls((cur) => cur || [])).finally(() => setHfElsBusy(false))
   }
   useEffect(() => { if (hfEls == null) loadHfEls(false) }, [])                     // 마운트 시 미리 로드 → 캐스트 피커가 refs 패널 안 열어도 뜬다
   useEffect(() => { if (libOpen && hfEls == null) loadHfEls(false) }, [libOpen])   // 패널 열 때(캐시 없으면) 로드
