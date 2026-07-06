@@ -10,7 +10,7 @@ import { extractProducts, identifyReel } from './extract.js'
 import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon.js'
 import { analyzeReel } from './analyze.js'
 import { matchProductByVision, simplerQuery } from './match.js'
-import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
+import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateShotSpec, renderShotSpec, generateMotionPrompt, generateVoText } from './produce.js'
 import { getPersonas, getPersona, getHooks, getVoStyles, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
 import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady, listHfElements, getHfElement, createHfElement, createHfElementMulti } from './higgsfield.js'
 import { buildPreview } from './preview.js'
@@ -935,7 +935,7 @@ app.post('/api/contents/:id/script', async (req, res) => {
 
 // 씬 저장(편집) — 생성 산출물(이미지/클립/VO)은 절대 덮어쓰지 않고 보존한다.
 // 프론트 state가 stale(서버 배치 후 미반영)이어도 저장이 클립/이미지를 지우지 않게.
-const SCENE_GEN_FIELDS = ['image', 'imageSrc', 'video', 'videoSrc', 'audio', 'voEn', 'elements']
+const SCENE_GEN_FIELDS = ['image', 'imageSrc', 'video', 'videoSrc', 'audio', 'voEn', 'elements', 'shotSpec']
 app.put('/api/contents/:id/scenes', (req, res) => {
   const incoming = (req.body && req.body.scenes) || []
   const c = db.prepare('SELECT scenes FROM contents WHERE id = ?').get(req.params.id)
@@ -1021,9 +1021,13 @@ async function genPromptForScene(c, scenes, i, guidance) {
   // 데메아너(표정 톤) = 페르소나 register, 없으면 릴스 분석의 voice.register
   let demeanor = (c.persona ? getPersona(c.persona)?.register : '') || ''
   if (!demeanor && c.analysis_id) { try { const a = db.prepare('SELECT analysis FROM analyses WHERE id = ?').get(c.analysis_id); demeanor = (((jparse(a?.analysis) || {}).voice || {}).register) || '' } catch { /* ignore */ } }
-  const p = await generateImagePrompt({ scene: scenes[i], productName: product?.title, product, style: c.style, sceneIndex: i, sceneTotal: scenes.length, guidance, cosmetic, hasCharacterRef, elementNames, siblingTitles, demeanor, lang: genLang() })
+  // B1: 구조화 샷 스펙 → 기계 렌더 (LLM 이중 패러프레이즈 제거, 컴팩트해 잘리지 않음). 실패 시 기존 산문 경로 폴백.
+  const args = { scene: scenes[i], productName: product?.title, product, style: c.style, sceneIndex: i, sceneTotal: scenes.length, guidance, cosmetic, hasCharacterRef, elementNames, siblingTitles, demeanor }
+  let spec = null, p
+  try { spec = await generateShotSpec({ ...args, persona: c.persona || '', hook: c.hook || '' }); p = renderShotSpec(spec) }
+  catch { p = await generateImagePrompt({ ...args, lang: genLang() }) }
   if (!p) throw new Error('이미지 프롬프트 생성 실패')
-  scenes[i] = { ...scenes[i], imagePrompt: p }
+  scenes[i] = { ...scenes[i], imagePrompt: p, shotSpec: spec }
   saveScenes(c.id, scenes)
   return scenes[i]
 }
@@ -1087,7 +1091,8 @@ async function upgradeRefsToHf(c, refLib, refGroups) {
 }
 async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
   const product = jparse(c.product)
-  const scenePrompt = promptOverride || scenes[i].imagePrompt || buildImagePrompt(scenes[i], product)
+  const spec = !promptOverride && scenes[i].shotSpec ? scenes[i].shotSpec : null
+  const scenePrompt = spec ? renderShotSpec(spec, { frameRole }) : (promptOverride || scenes[i].imagePrompt || buildImagePrompt(scenes[i], product))
   // 프레임 역할 → 클립은 start 프레임에서 end 프레임으로 '움직임'을 렌더한다. 두 프레임은 같은 그림이면 안 되고, 이 씬 모션(motionPrompt)의 시작 상태 / 끝 상태를 각각 담아야 한다.
   const motion = (scenes[i].motionPrompt || '').trim()
   const frameDir = frameRole === 'end'
@@ -1095,10 +1100,10 @@ async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
     : `[FRAME = START KEYFRAME — the FIRST frame of the clip] Render the OPENING moment of this shot: the expression just BEGINNING (the first flicker), the product held naturally. Note which hand holds the product — the end frame will show a DIFFERENT posture but keep the product in that SAME hand.`
   const prompt = [
     scenePrompt,
-    frameDir,
+    spec ? (motion && frameRole ? `Clip motion between keyframes: ${motion}. The product stays in the SAME hand in both keyframes.` : '') : frameDir,
     c.style && c.style.trim() ? `Style direction: ${c.style.trim()}.` : '',
     product?.dimensions ? `The real product's actual dimensions are ${product.dimensions} — depict it at exactly that real-world size.` : '',
-    product?.features ? `Depict the product accurately per these real specs/mechanics: ${String(product.features).slice(0, 700)}` : '',
+    spec ? '' : (product?.features ? `Depict the product accurately per these real specs/mechanics: ${String(product.features).slice(0, 700)}` : ''),
   ].filter(Boolean).join(' ')
   // 노드 그래프 레퍼런스(refLib + 씬 graphRefs) → 실제 URL 해석. 없으면 기존 방식 폴백.
   let refLib = jparse(c.ref_lib)
@@ -1129,7 +1134,7 @@ async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
   else {
     const up = await upgradeRefsToHf(c, refLib, { refs, characterRef, envRef })   // 로컬 전용 ref → 첫 사용 시 HF 업로드(once)
     refs = up.refs; characterRef = up.characterRef; envRef = up.envRef
-    url = await genImageViaCLI({ prompt, productImageUrls: refs, characterRef, envRef, charElementIds: elIds, productName: product?.title, dimensions: product?.dimensions })
+    url = await genImageViaCLI({ prompt, verbatim: !!spec, productImageUrls: refs, characterRef, envRef, charElementIds: elIds, productName: product?.title, dimensions: product?.dimensions })
   }
   const rel = await saveAsset(c.id, i, url, false, frameRole === 'end' ? 'end' : '')   // start/end 별도 파일
   // end 프레임은 별도 슬롯(imageEnd)에 저장 → start(image)를 덮어쓰지 않음. 클립이 둘 다 키프레임으로 사용.

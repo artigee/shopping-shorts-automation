@@ -314,6 +314,63 @@ Output ONLY the prompt text (one paragraph). It must faithfully realize the REAL
   return stripFence(out).trim().replace(/^["']|["']$/g, '')
 }
 
+// ── B1: 구조화 샷 스펙 — 프롬프트 산문 대신 타입 필드로 비주얼을 지정 (LLM 이중 패러프레이즈 제거) ──
+// generateShotSpec: 씬 비트 → JSON 스펙 (누가/무엇을/표정/제품배치/카메라/세팅).
+// renderShotSpec: 스펙 → 최종 이미지 프롬프트를 "기계적으로" 조립 (LLM 없음 → 드리프트 0, 항상 컴팩트해 잘리지 않음).
+export async function generateShotSpec({ scene = {}, productName, product, style, sceneIndex = 0, sceneTotal = 1, guidance, cosmetic = false, hasCharacterRef = false, elementNames = [], siblingTitles = null, demeanor = '', persona = '', hook = '' }) {
+  const named = (Array.isArray(elementNames) ? elementNames : []).filter(Boolean)
+  const isFirst = sceneIndex === 0, isLast = sceneTotal > 1 && sceneIndex === sceneTotal - 1
+  const role = isLast ? 'CTA — she holds the product in ONE hand, the OTHER hand points one finger DOWN toward the lower frame; warm genuine welcoming smile. No phone in scene.'
+    : isFirst ? 'HOOK — scroll-stopping tension/doubt/curiosity of the hook line; NOT the resolved happy end-state; no CTA gesture.'
+    : `beat ${sceneIndex + 1}/${sceneTotal} — a framing DISTINCT from the other shots; no CTA gesture.`
+  const castRule = named.length
+    ? `The cast is ${named.join(' and ')} (reference elements define their look). subject must call them BY NAME and NEVER describe face/hair/skin/age/body/clothing.${named.length > 1 ? ' Compose them INTERACTING — who does what to whom.' : ''}`
+    : hasCharacterRef
+      ? 'A reference photo defines her identity. Call her "the creator" and NEVER describe face/hair/skin/age/body/clothing — appearance words break the identity lock.'
+      : 'No reference: do NOT specify age/ethnicity/appearance; keep the same person across scenes.'
+  const prompt = `Design ONE camera shot for one scene of a vertical shopping short. Output a compact JSON SHOT SPEC — fields only, no prose paragraph.
+
+[Scene Title] ${scene.onScreenText || ''}
+[Scene VO] ${scene.vo || ''}
+${scene.emotion ? '[Facial expression for this beat] ' + scene.emotion : ''}
+${scene.purpose ? '[Role in flow] ' + scene.purpose : ''}
+${scene.shot ? '[Shot direction from the script] ' + scene.shot : ''}
+[Scene role] ${role}
+[Product] ${productLine(productName, product)}${product?.dimensions ? ' · real size ' + product.dimensions : ''}
+${style && style.trim() ? '[Style direction] ' + style.trim() : ''}
+${demeanor ? `[Persona tone "${persona || demeanor}"] voice-attitude only, a SUBTLE undertone — the face still visibly REACTS to the beat (understated ≠ expressionless).` : ''}
+${hook ? '[Hook archetype] ' + hook : ''}
+[Cast rule] ${castRule}
+[POV rule] "selfie" is the CAMERA'S viewpoint only — she is NEVER holding a phone or camera; no recording device exists in the scene. Describe her hands doing something natural (product, gesture, skin).
+${cosmetic ? '[Cosmetic UGC] the demo IS skin/application — favor close-ups of skin/lips, applying/patting motions, real skin texture.' : '[Motion rule] show ONE clear state; never folding/assembling/setup actions.'}
+${Array.isArray(siblingTitles) && siblingTitles.length > 1 ? '[Other shots — be visually DIFFERENT from all of these]\n' + siblingTitles.map((t, k) => `  ${k + 1}. ${t || '(untitled)'}${k === sceneIndex ? ' ← THIS' : ''}`).join('\n') : ''}
+${guidance && guidance.trim() ? '[CREATOR DIRECTION — honor above all] ' + guidance.trim() : ''}
+
+Output ONLY this JSON (each field ONE short concrete phrase, English):
+{"subject":"who is in frame (by name/the creator/hands only)","action":"the specific action of this beat","expression":"concrete facial expression — never blank/deadpan","product_placement":"how the product appears: held/being applied/on surface + angled away, secondary, label never readable","camera":{"pov":"selfie|third-person|over-shoulder|top-down|hands-only|mirror","distance":"extreme close-up|close-up|medium|wide","angle":"eye level|slightly low|slightly high|low|high"},"setting":"location + time of day","lighting":"light quality/source","notes":"optional extra detail or empty string"}`
+  return await runJson(prompt, {
+    timeout: 90000,
+    validate: (j) => {
+      if (!(j && j.subject && j.action && j.expression && j.camera && j.camera.distance)) return 'spec must include subject, action, expression and camera.distance'
+      const held = /\b(?:hold(?:ing|s)?|grip(?:ping|s)?|rais(?:ing|es)?|lift(?:ing|s)?|clutch(?:ing|es)?)\s+(?:a\s|the\s|her\s)?(?:phone|camera|smartphone)\b|\b(?:phone|camera|smartphone)\s+(?:in|at)\s+(?:her\s|one\s)?(?:hand|hands|chin|chest|face)/i
+      for (const f of ['subject', 'action', 'product_placement', 'notes']) if (held.test(String(j[f] || ''))) return `"${f}" puts a phone/camera in her hands — selfie is the camera POV, no device exists in the scene; rewrite the ${f} without any phone/camera`
+      return null
+    },
+  })
+}
+export function renderShotSpec(spec, { frameRole } = {}) {
+  const cam = spec.camera || {}
+  const camLine = [cam.pov, cam.distance, cam.angle].filter(Boolean).join(', ')
+  const frameLine = frameRole === 'end'
+    ? ' This is the END keyframe of the motion — the expression/pose at its RESOLVED, later moment.'
+    : frameRole === 'start' ? ' This is the START keyframe — the ONSET of the expression/motion, not its peak.' : ''
+  return `${spec.subject} — ${spec.action}. Expression: ${spec.expression}.` +
+    ` Product: ${spec.product_placement || 'visible but secondary, label angled away, never a readable hero shot'}.` +
+    ` Camera: ${camLine || 'natural UGC framing'}. Setting: ${spec.setting || 'natural home setting'}${spec.lighting ? ', ' + spec.lighting : ''}.` +
+    (spec.notes ? ` ${spec.notes}.` : '') + frameLine +
+    ' The product is recognizable but NEVER a readable hero shot. No phone or camera prop in frame. No text of any kind in the image. Warm, bright, clean, aspirational mood. vertical 9:16, photorealistic, no overlay captions'
+}
+
 // 씬의 캐릭터·제품 "동작/행동" 모션 (image→video 클립용). 카메라 무빙 아님 — 카메라는 clip의 cameraMove가 담당.
 export async function generateMotionPrompt({ scene = {}, product, guidance, lang = 'English (US)' }) {
   const gBlk = guidance && guidance.trim() ? `\n[INSTRUCTION — honor this above all] ${guidance.trim()}` : ''

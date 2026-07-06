@@ -187,7 +187,7 @@ Do EXACTLY these steps and then print ONLY the final media id — never print th
 
 // 씬 이미지 1장 생성. 레퍼런스 = 공개 URL(import) + 업로드 media_id(hfmedia:, 직접) 혼합.
 //  총 2장+: nano_banana_pro(다중) / 1장: marketing_studio_image / 0장: text-to-image.
-export async function genImageViaCLI({ prompt, productImageUrls = [], productImageUrl, characterRef, envRef, sceneRef, charElementId, charElementIds, productName, dimensions }) {
+export async function genImageViaCLI({ prompt, verbatim = false, productImageUrls = [], productImageUrl, characterRef, envRef, sceneRef, charElementId, charElementIds, productName, dimensions }) {
   const prod = (productImageUrls && productImageUrls.length ? productImageUrls : (productImageUrl ? [productImageUrl] : [])).filter(Boolean).slice(0, 4)
   // 역할 라벨된 레퍼런스 (씬앵커·캐릭터·제품·환경) — 순서대로 media로 전달, 프롬프트에 역할 명시
   // sceneRef(= 같은 클립의 start 프레임)가 있으면 최우선: 배경·의상·프레이밍·드는 손을 그대로 두고 포즈/표정만 바꾼다 (start↔end 일관성).
@@ -198,7 +198,7 @@ export async function genImageViaCLI({ prompt, productImageUrls = [], productIma
     ...(envRef ? [{ r: envRef, role: 'ENVIRONMENT — match this setting / space / mood / lighting' }] : []),
   ].filter((x) => x.r).slice(0, 6)
   const total = labeled.length
-  const safe = String(prompt || 'product lifestyle shot').replace(/"/g, "'").slice(0, 700)
+  const safe = String(prompt || 'product lifestyle shot').replace(/"/g, "'").slice(0, verbatim ? 1400 : 700)
   const scaleFix = `SCALE CORRECTION (do this first, silently): The product is "${(productName || 'the product').replace(/"/g, "'")}"${dimensions ? ` with real-world dimensions ${dimensions}` : ''}. Rewrite the scene prompt below so the product appears at its TRUE real-world size. If the prompt frames a physically large product (bed, furniture, large item) as a small handheld "compact pouch/bag" in a hand close-up, FIX the framing: widen the shot and add a human/room/furniture scale anchor so the real size reads correctly. Keep the user's scene intent and setting. Keep vertical 9:16, photorealistic. CRITICAL RULES: (1) Reproduce the PRODUCT's real design/shape from the reference so it's recognizable, but it is NEVER a readable hero shot — do NOT hold it up centered facing camera with the label legible; keep it secondary, angled, partially cropped, or at a natural distance so the full label is NOT readable. The person/skin/reaction is the subject. NO overlay captions/subtitles/added on-screen text, and NO garbled signage/paragraph text on other objects. (2) Keep the mood warm, bright, clean and aspirational — even a problem/"before" beat stays light and relatable, NEVER genuinely distressing (no crying/upset child, no exhausted despair, no bleak or messy-despair framing, no dark grime). (3) "Arm's-length" / "front camera" / "selfie" / "relaxed arm's-length perspective" describe only the CAMERA DISTANCE and POV — they do NOT mean her arm is extended toward the lens. NEVER render an arm stretched out reaching toward the camera, and NEVER use the arm as a distance measurement or selfie-stick pose. Her arms stay natural: ONE hand holds the product, the OTHER hand is free to gesture (and on a CTA, points a finger down). No phone or camera in frame.`
   // 캐릭터 element(<<<id>>>)가 있으면 element를 지원하는 모델(nano_banana_flash)로 생성하고, 프롬프트 맨 앞에 토큰을 심어 정체성을 주입한다 (로컬 캐릭터 ref 대체).
   const elIds = (Array.isArray(charElementIds) && charElementIds.length ? charElementIds : (charElementId ? [charElementId] : [])).filter(Boolean)
@@ -217,13 +217,17 @@ export async function genImageViaCLI({ prompt, productImageUrls = [], productIma
     const refBlk = total >= 1 ? `Reference photos — set up media (keep each media_id, IN THIS ORDER):\n${importLines}${directLines ? '\n' + directLines : ''}\nReference roles:\n${roleList}\n` : ''
     const roleUse = total >= 1 ? ` Use the references by ROLE: ${characterRef ? 'IDENTITY LOCK — the person in the shot is EXACTLY the CHARACTER reference (same face, hair, skin, age, build); this overrides any appearance wording in the prompt. ' : ''}reproduce the PRODUCT exactly; if an ENVIRONMENT reference is provided, match its setting, space and mood. Only the camera angle / action change.` : ''
     const medias = total >= 1 ? ',"medias":[ one {"value":"<media_id>","role":"image"} for EACH reference above, in order ]' : ''
-    genStep = `${refBlk}Then call generate_image {"model":"${model}","prompt":"${elTok}<your scale-corrected prompt>.${roleUse}","aspect_ratio":"9:16"${medias}}.`
+    genStep = verbatim
+      ? `${refBlk}Then call generate_image {"model":"${model}","prompt":"${elTok}<the SCENE PROMPT below, VERBATIM — do NOT rewrite, shorten, or paraphrase it>.${roleUse}","aspect_ratio":"9:16"${medias}}.`
+      : `${refBlk}Then call generate_image {"model":"${model}","prompt":"${elTok}<your scale-corrected prompt>.${roleUse}","aspect_ratio":"9:16"${medias}}.`
       + (hasEl ? `\nCRITICAL: the generate_image prompt MUST begin with these exact token(s) ${elTok.trim()} unchanged — ${elIds.length > 1 ? 'each injects a DIFFERENT character element; render ALL of them together in the scene as the prompt describes (e.g. two people meeting). Keep the prompt naming who does what.' : 'it injects the CHARACTER element (locks her identity: face, hair, look).'} Do NOT remove/alter the token(s), and do NOT describe the character's appearance in words; the element(s) define it.` : '')
   } else {
-    genStep = `Call generate_image {"model":"marketing_studio_image","prompt":"<your scale-corrected prompt>","aspect_ratio":"9:16","count":1}.`
+    genStep = verbatim
+      ? `Call generate_image {"model":"marketing_studio_image","prompt":"<the SCENE PROMPT below, VERBATIM>","aspect_ratio":"9:16","count":1}.`
+      : `Call generate_image {"model":"marketing_studio_image","prompt":"<your scale-corrected prompt>","aspect_ratio":"9:16","count":1}.`
   }
   const instr = `You have Higgsfield MCP tools.
-${scaleFix}
+${verbatim ? `The SCENE PROMPT below is FINAL — assembled from a validated shot spec. Use it EXACTLY as written (prepend only the element token(s) if instructed). Do NOT rewrite, expand, shorten or re-order it.` : scaleFix}
 
 SCENE PROMPT: "${safe}"
 
