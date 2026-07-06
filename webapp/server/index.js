@@ -1095,7 +1095,7 @@ async function genSceneScriptForScene(c, scenes, i, guidance) {
   if (!overall) throw new Error('먼저 Script Engine으로 전체 스크립트를 생성하세요.')
   const product = jparse(c.product)
   const a = c.analysis_id ? db.prepare('SELECT title FROM analyses WHERE id = ?').get(c.analysis_id) : null
-  const r = await generateSceneScript({ overall, product, productName: product?.title || a?.title, scenes, sceneIndex: i, sceneTotal: scenes.length, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', guidance, durationSec: scenes[i].durationSec, lang: genLang() })
+  const r = await generateSceneScript({ overall, product, productName: product?.title || a?.title, scenes, sceneIndex: i, sceneTotal: Math.max(scenes.length, Number(c.shot_count) || 0), persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', guidance, durationSec: scenes[i].durationSec, lang: genLang() })
   scenes[i] = { ...scenes[i], onScreenText: r.onScreenText, vo: r.vo, ...(r.emotion ? { emotion: r.emotion } : {}), ...(r.purpose ? { purpose: r.purpose } : {}) }
   saveScenes(c.id, scenes)
   return scenes[i]
@@ -1316,7 +1316,9 @@ app.post('/api/contents/:id/scene/:index/script', async (req, res) => {
   const i = Number(req.params.index)
   if (!Number.isInteger(i) || i < 0 || i >= 12) return res.status(400).json({ error: '잘못된 씬 index (1-12)' })
   if (i >= scenes.length) {
-    while (scenes.length <= i) scenes.push({ id: scenes.length + 1, makeVideo: false })
+    // 의도된 샷 수(Script Engine 계획)까지 확장 — 요청 index까지만 채우면 그 씬이 '마지막'으로 오인돼 CTA가 돼버린다
+    const planned = Math.min(12, Math.max(i + 1, Number(c.shot_count) || Number(jparse(c.overall)?.shotCount) || 0))
+    while (scenes.length < planned) scenes.push({ id: scenes.length + 1, makeVideo: false })
     saveScenes(c.id, scenes)
   }
   startSceneGen(res, c, `script#${i}`, '씬 스크립트 생성 중…', async (progress) => {

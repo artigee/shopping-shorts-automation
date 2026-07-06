@@ -242,14 +242,17 @@ export async function generateSceneScript({ overall, product, productName, scene
     ? 'This is the CTA scene (last): onScreenText = the comment-keyword caption (e.g. "Comment WANT IT 👇"); vo = the spoken casual ask to comment the keyword for the link (not a hard sell, and NOT just a sign-off).'
     : isFirst ? 'This is the HOOK scene (scene 1): apply the hook shape — a scroll-stopping cold open that lands in ~1.5s.'
       : 'A middle beat — select and sharpen the single strongest beat for this position in the arc.'
-  const others = scenes.map((s, i) => i === sceneIndex ? `[${i + 1}] ← THIS scene (the one you rewrite)` : `[${i + 1}] title:"${s.onScreenText || ''}" vo:"${s.vo || ''}"`).join('\n')
+  const others = scenes.map((s, i) => i === sceneIndex ? `[${i + 1}] ← THIS scene (the one you rewrite)` : (s.onScreenText || s.vo) ? `[${i + 1}] title:"${s.onScreenText || ''}" vo:"${s.vo || ''}"` : `[${i + 1}] (not written yet)`).join('\n')
+  // 비트 맵 — 단독 재생성(형제 씬이 비어 있어도) 이 씬이 어느 비트를 맡는지 알게 한다
+  const beats = Array.isArray(overall?.beats) ? overall.beats : []
+  const beatMap = beats.length ? `\n[BEAT MAP — the overall's beats in order. Scene ${sceneIndex + 1} of ${sceneTotal} carries the beat at its position in this arc — write THAT beat, not a random one]\n${beats.map((b, k) => `  ${k + 1}. ${b}`).join('\n')}` : ''
   const prompt = `You are crafting ONE scene of a ${lang}-market shopping short. Rewrite ONLY scene ${sceneIndex + 1} of ${sceneTotal} — its on-screen Title and spoken VO — distilled from the overall story, keeping the arc and NOT duplicating the other scenes. ALL text natively in ${lang}.
 ${roleRule}
 [VO vs TITLE — the key rule] onScreenText = a SHORT punchy claim/spec (<= ~5 words) that carries the FACT. vo = a FRESH tight spoken line in the PERSONA that REACTS / reveals the mechanism — it must NEVER restate the title. Delete-test: if the title alone conveys the vo, rewrite the vo.
 ${personaBlock(persona)}${voStyleBlock(voStyle, voStyleNote)}${hookBlock(hook)}${banBlock()}${rulesBlock()}${contentSafetyBlock(contentMode, { hasFootage })}${durRule}
 ${guidance && guidance.trim() ? '[INSTRUCTION — honor this above all] ' + guidance.trim() : ''}
 [Overall story]
-${JSON.stringify(overall).slice(0, 2600)}
+${JSON.stringify(overall).slice(0, 2600)}${beatMap}
 [My product] ${productLine(productName, product)}
 [All scenes — context, keep THIS one distinct]
 ${others}
