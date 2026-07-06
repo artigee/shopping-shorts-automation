@@ -1,6 +1,7 @@
 // 릴스 영상 분석 파이프라인:
 //   다운로드(CDP) → 키프레임(ffmpeg) → 비전 분석(claude CLI) → 훅/구조/씬스크립트/에셋
 import { spawn } from 'node:child_process'
+import { runClaude as cliRunClaude } from './cli.js'
 import { mkdirSync, rmSync, existsSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -134,7 +135,7 @@ Output ONLY JSON (no explanation). Ground every field in the keyframes + caption
   let obj, lastErr
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const out = await run('claude', ['-p', prompt, '--model', CLI_MODEL], { timeout: 240000 })
+      const out = await cliRunClaude(prompt, { model: CLI_MODEL, timeout: 240000 })
       obj = JSON.parse(stripFence(out))
       if (obj && typeof obj === 'object') break
     } catch (e) { lastErr = e /* 타임아웃 또는 파싱 실패 → 재시도 */ }

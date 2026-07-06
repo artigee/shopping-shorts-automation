@@ -3,27 +3,16 @@
 // 비교해 같은 디자인을 고른다. 같은 기능(블루투스+무선충전+조명)이라도 디자인이 다르면 다른 제품.
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { amazonSearch, amazonProduct, affiliateUrl } from './amazon.js'
+import { runClaude as cliRunClaude, stripFence } from './cli.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA = path.resolve(__dirname, '../data')
 const CLI_MODEL = process.env.MATCH_CLI_MODEL || 'sonnet'
 
-function stripFence(t = '') { const m = t.match(/```(?:json)?\s*([\s\S]*?)```/); return (m ? m[1] : t).trim() }
-
-function runClaudeVision(prompt, { timeout = 240000 } = {}) {
-  return new Promise((res, rej) => {
-    const child = spawn('claude', ['-p', prompt, '--allowedTools', 'Read', '--model', CLI_MODEL], { stdio: ['ignore', 'pipe', 'pipe'] })
-    let out = '', err = ''
-    const t = setTimeout(() => { child.kill('SIGKILL'); rej(new Error('claude vision timeout')) }, timeout)
-    child.stdout.on('data', (d) => (out += d))
-    child.stderr.on('data', (d) => (err += d))
-    child.on('error', (e) => { clearTimeout(t); rej(e) })
-    child.on('close', (c) => { clearTimeout(t); c === 0 ? res(out) : rej(new Error(`claude exit ${c}: ${err.slice(-200)}`)) })
-  })
-}
+// 비전 = 공용 래퍼 + Read 툴 (프레임/후보 이미지를 CLI가 읽는다)
+const runClaudeVision = (prompt, opts = {}) => cliRunClaude(prompt, { tools: ['Read'], model: CLI_MODEL, timeout: 240000, timeoutMsg: 'claude vision timeout', ...opts })
 
 async function downloadImg(url, outPath) {
   const r = await fetch(url)

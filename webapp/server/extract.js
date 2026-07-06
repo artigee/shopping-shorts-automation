@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { runClaude as cliRunClaude } from './cli.js'
 // 릴스 → 제품 후보 추출. LLM 보조(Claude Haiku) + 키 없을 때 키워드 휴리스틱 폴백.
 // 결정사항: "모음은 광산, 제작은 단일" → 모음 릴스는 여러 제품 후보로 분해.
 // 캡션은 펀널로 제품명을 숨기는 경우가 많아, 추출 목표는 정확한 SKU가 아니라
@@ -114,19 +114,9 @@ The amazonQuery must be a SHORT keyword search of 2–3 core product words only 
 Output a single JSON object (no prose):
 {"nameKo":"짧은 한국어 제품명","category":"패션|뷰티|주방|수납정리|조명|가전|문구|여행|생활|기타","amazonQuery":"best ENGLISH Amazon search query — 2-3 core keywords, English words only","confidence":0.0,"note":"short Korean note; if the caption truly hides the product, say so"}`
 
-// 로컬 claude CLI 호출 — Max 구독 인증, API 키·추가 과금 없음.
+// 로컬 claude CLI 호출 — Max 구독 인증, API 키·추가 과금 없음. (공용 래퍼 cli.js + 이 모듈 기본값)
 const CLI_MODEL = process.env.EXTRACT_CLI_MODEL || 'haiku'
-function runClaude(prompt, { timeout = 45000, model = CLI_MODEL } = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('claude', ['-p', prompt, '--model', model], { stdio: ['ignore', 'pipe', 'pipe'] })
-    let out = '', err = ''
-    const t = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('claude CLI timeout')) }, timeout)
-    child.stdout.on('data', (d) => (out += d))
-    child.stderr.on('data', (d) => (err += d))
-    child.on('error', (e) => { clearTimeout(t); reject(e) }) // ENOENT = CLI 없음
-    child.on('close', (code) => { clearTimeout(t); code === 0 ? resolve(out) : reject(new Error(`claude exit ${code}: ${err.slice(0, 200)}`)) })
-  })
-}
+const runClaude = (prompt, opts = {}) => cliRunClaude(prompt, { model: CLI_MODEL, timeout: 45000, ...opts })
 
 async function cliIdentify(reel) {
   const prompt = `${ID_SYSTEM}\n\nCaption (@${reel.username || ''}): ${(reel.caption || '').replace(/\s+/g, ' ')}`

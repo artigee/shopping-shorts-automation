@@ -52,23 +52,15 @@ export function buildImagePrompt(scene, product) {
 const HF_TOOLS = ['mcp__higgsfield__media_import_url', 'mcp__higgsfield__generate_image', 'mcp__higgsfield__job_status']
 export function cliReady() { return true } // claude CLI(Higgsfield MCP 연결) 경로는 항상 사용 가능
 
-function runClaude(prompt, extraArgs = [], timeout = 240000) {
-  return new Promise((res, rej) => {
-    const child = spawn('claude', ['-p', prompt, ...extraArgs], { stdio: ['ignore', 'pipe', 'pipe'] })
-    let out = '', err = ''
-    const t = setTimeout(() => { child.kill('SIGKILL'); rej(new Error('claude CLI timeout')) }, timeout)
-    child.stdout.on('data', (d) => (out += d))
-    child.stderr.on('data', (d) => (err += d))
-    child.on('error', (e) => { clearTimeout(t); rej(e) })
-    child.on('close', (code) => { clearTimeout(t); code === 0 ? res(out) : rej(new Error(`claude exit ${code}: ${err.slice(-200)}`)) })
-  })
-}
+// 공용 래퍼(cli.js) 사용 — 기존 (prompt, extraArgs, timeout) 포지셔널 시그니처를 옵션형으로 통일
+import { runClaude as cliRunClaude } from './cli.js'
+const runClaude = (prompt, { tools = [], model = 'sonnet', timeout = 240000 } = {}) => cliRunClaude(prompt, { tools, model, timeout })
 
 // 히긱스필드에 등록된 재사용 element(캐릭터/환경/제품) 목록 — claude CLI로 MCP 조회 후 JSON만 파싱해서 반환.
 const HF_ELEMENTS_TOOLS = ['mcp__higgsfield__show_reference_elements']
 export async function listHfElements() {
   const prompt = 'Call the tool mcp__higgsfield__show_reference_elements with exactly {"action":"list","size":60}. From the result, output ONLY a single compact JSON array (no prose, no explanation, no markdown code fences). Each array item must be {"id":<id>,"name":<name>,"category":<category>,"thumb":<url of the first media, or null>}. Output nothing except that JSON array.'
-  const out = await runClaude(prompt, ['--allowedTools', ...HF_ELEMENTS_TOOLS, '--model', 'haiku'], 120000)
+  const out = await runClaude(prompt, { tools: HF_ELEMENTS_TOOLS, model: 'haiku', timeout: 120000 })
   const m = out.match(/\[[\s\S]*\]/)   // 출력에서 JSON 배열만 추출
   if (!m) throw new Error('element 목록 파싱 실패 (CLI 출력에 JSON 배열 없음)')
   const arr = JSON.parse(m[0])
@@ -81,7 +73,7 @@ export async function listHfElements() {
 export async function getHfElement(id) {
   const prompt = `Call the tool mcp__higgsfield__show_reference_elements with exactly {"action":"get","element_id":"${id}"}. The result's element has a "medias" array — it can hold MANY images. Output ONLY a compact JSON object {"id":..,"name":..,"category":..,"medias":[<the https url of EVERY SINGLE media in that array, ALL of them, in order — do NOT stop at one, do NOT truncate>]} — no prose, no code fences. If there are 10 medias, output 10 urls.`
   const run1 = async () => {
-    const out = await runClaude(prompt, ['--allowedTools', ...HF_ELEMENTS_TOOLS, '--model', 'sonnet'], 120000)
+    const out = await runClaude(prompt, { tools: HF_ELEMENTS_TOOLS, timeout: 120000 })
     const m = out.match(/\{[\s\S]*\}/); if (!m) throw new Error('element 상세 파싱 실패')
     const e = JSON.parse(m[0])
     return { id: e.id, name: e.name, category: e.category || 'character', medias: Array.isArray(e.medias) ? e.medias.filter(Boolean) : [] }
@@ -98,7 +90,7 @@ export async function createHfElement({ name, category = 'character', imageUrl }
   if (!/^https?:\/\//i.test(imageUrl || '')) throw new Error('https 이미지 URL이 필요합니다')
   const cat = ['character', 'environment', 'prop'].includes(category) ? category : 'character'
   const prompt = `Step 1: call mcp__higgsfield__media_import_url with {"url":"${imageUrl}"} and take the returned media_id. Step 2: call mcp__higgsfield__show_reference_elements with {"action":"create","name":"${safeName}","category":"${cat}","medias":[{"id":"<media_id from step 1>","url":"${imageUrl}","type":"media_input"}]}. Then output ONLY the created element as JSON {"id":..,"name":..,"category":..} and nothing else.`
-  const out = await runClaude(prompt, ['--allowedTools', 'mcp__higgsfield__media_import_url', 'mcp__higgsfield__show_reference_elements', '--model', 'sonnet'], 180000)
+  const out = await runClaude(prompt, { tools: ['mcp__higgsfield__media_import_url', 'mcp__higgsfield__show_reference_elements'], timeout: 180000 })
   const m = out.match(/\{[\s\S]*\}/)
   if (!m) throw new Error('element 생성 결과 파싱 실패')
   const el = JSON.parse(m[0])
@@ -126,7 +118,7 @@ For EACH file above, in order, do:
   Keep the pair {"id":"<media_id>","url":"<upload_url>","type":"media_input"}.
 After ALL files are uploaded and confirmed, call mcp__higgsfield__show_reference_elements with {"action":"create","name":"${safeName}","category":"${cat}","medias":[ <every kept pair> ]}.
 Finally print ONLY the created element as compact JSON {"id":..,"name":..,"category":..} — nothing else.`
-  const out = await runClaude(prompt, ['--allowedTools', 'mcp__higgsfield__media_upload', 'mcp__higgsfield__media_confirm', 'mcp__higgsfield__show_reference_elements', 'Bash', '--model', 'sonnet'], 420000)
+  const out = await runClaude(prompt, { tools: ['mcp__higgsfield__media_upload', 'mcp__higgsfield__media_confirm', 'mcp__higgsfield__show_reference_elements', 'Bash'], timeout: 420000 })
   const m = out.match(/\{[\s\S]*\}/)
   if (!m) throw new Error('element 생성 결과 파싱 실패: ' + out.slice(-160))
   const el = JSON.parse(m[0])
@@ -145,7 +137,7 @@ export async function genAudioViaCLI({ text, voiceId = DEFAULT_VOICE }) {
 1) Call generate_audio {"model":"text2speech_v2_minimax","prompt":"${safe}","voice_id":"${voiceId}","voice_type":"preset"}.
 2) Call job_status {"jobId":"<id>","sync":true} until status is "completed".
 3) Print ONLY the final result rawUrl (https URL, .mp3). No other words, no markdown.`
-  const out = await runClaude(instr, ['--allowedTools', ...HF_AUDIO_TOOLS, '--model', 'sonnet'], 240000)
+  const out = await runClaude(instr, { tools: HF_AUDIO_TOOLS, timeout: 240000 })
   const m = out.match(/https?:\/\/\S+?\.(?:mp3|wav|m4a|ogg)/i) || out.match(/https?:\/\/\S+/i)
   if (!m) throw new Error('CLI 출력에서 오디오 URL을 찾지 못함: ' + out.slice(-160))
   return m[0]
@@ -165,7 +157,7 @@ export async function genVideoViaCLI({ imageUrl, endImageUrl, prompt, duration =
    IMPORTANT: if the response is a preset_recommendation (not a job), call generate_video AGAIN with the SAME params plus "declined_preset_id":"<the recommended preset id>" to generate literally.
 3) Call job_status {"jobId":"<id>","sync":true} repeatedly until status is "completed" (video takes ~1-3 min; keep polling; do NOT give up early).
 4) On success print ONLY the final result rawUrl (https URL ending in .mp4). If it failed, print exactly: ERROR: <reason> (e.g. ERROR: not enough credits / ERROR: nsfw / ERROR: failed). No other text.`
-  const out = await runClaude(instr, ['--allowedTools', ...HF_VID_TOOLS, '--model', 'sonnet'], 420000)
+  const out = await runClaude(instr, { tools: HF_VID_TOOLS, timeout: 420000 })
   const m = out.match(/https?:\/\/\S+?\.mp4/i)
   if (m) return m[0]
   const o = out.toLowerCase()
@@ -193,7 +185,7 @@ Do EXACTLY these steps and then print ONLY the final media id — never print th
    The output should be 200 or 204. If not, retry once.
 3) Call media_confirm {"media_id":"<media_id>","type":"image"}.
 4) Print ONLY this exact line: MEDIA_ID=<media_id>`
-    const out = await runClaude(prompt, ['--allowedTools', 'mcp__higgsfield__media_upload', 'mcp__higgsfield__media_confirm', 'Bash', '--model', 'sonnet'], 240000)
+    const out = await runClaude(prompt, { tools: ['mcp__higgsfield__media_upload', 'mcp__higgsfield__media_confirm', 'Bash'], timeout: 240000 })
     const m = out.match(/MEDIA_ID=([0-9a-fA-F\-]{8,})/)
     if (!m) throw new Error('레퍼런스 업로드 실패 (CLI가 거부했을 수 있음) — 다시 시도하세요: ' + out.slice(-160))
     return 'hfmedia:' + m[1]
@@ -245,7 +237,7 @@ SCENE PROMPT: "${safe}"
 ${genStep}
 Then call job_status {"jobId":"<id>","sync":true} until status "completed".
 Finally print ONLY the final result rawUrl (https URL ending in .png). No other words, no markdown.`
-  const out = await runClaude(instr, ['--allowedTools', ...HF_TOOLS, '--model', 'sonnet'], 300000)
+  const out = await runClaude(instr, { tools: HF_TOOLS, timeout: 300000 })
   const m = out.match(/https?:\/\/\S+?\.(?:png|jpe?g|webp)/i)
   if (!m) throw new Error('CLI 출력에서 이미지 URL을 찾지 못함: ' + out.slice(-160))
   return m[0]

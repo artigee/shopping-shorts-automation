@@ -1,25 +1,16 @@
 // 콘텐츠 제작 — 릴스 분석(설계도) + 선택 제품 → ① 전체 스크립트 → ② 씬 스크립트 (Claude CLI).
 // 핵심: 원본 릴스의 "구조"만 이해해 빌리고, 카피는 선택 제품으로 "새로" 작성 (복붙 금지).
-import { spawn } from 'node:child_process'
+import { runClaude as cliRunClaude, stripFence } from './cli.js'
 import { personaBlock, voStyleBlock, hookBlock, banBlock, rulesBlock, contentSafetyBlock, imageRulesBlock, getBanlist, getPersona } from './playbook.js'
 
 const CLI_MODEL = process.env.PRODUCE_CLI_MODEL || 'sonnet' // 스크립트 품질 → sonnet
 
-function runClaude(prompt, { timeout = 240000, model = CLI_MODEL } = {}) {
-  return new Promise((res, rej) => {
-    const child = spawn('claude', ['-p', prompt, '--model', model], { stdio: ['ignore', 'pipe', 'pipe'] })
-    let out = '', err = ''
-    const t = setTimeout(() => { child.kill('SIGKILL'); rej(new Error('claude CLI 응답 시간 초과 — 다시 [씬 분해] 눌러주세요 (스크립트 프롬프트가 길어 가끔 느립니다).')) }, timeout)
-    child.stdout.on('data', (d) => (out += d))
-    child.stderr.on('data', (d) => (err += d))
-    child.on('error', (e) => { clearTimeout(t); rej(e) })
-    child.on('close', (code) => { clearTimeout(t); code === 0 ? res(out) : rej(new Error(`claude exit ${code}: ${err.slice(-200)}`)) })
-  })
-}
-function stripFence(t = '') {
-  const m = t.match(/```(?:json)?\s*([\s\S]*?)```/)
-  return (m ? m[1] : t).trim()
-}
+// 공용 래퍼(cli.js)에 이 모듈의 기본값(sonnet, 240s, 한국어 타임아웃 안내)만 입힌 별칭
+const runClaude = (prompt, opts = {}) => cliRunClaude(prompt, {
+  model: CLI_MODEL, timeout: 240000,
+  timeoutMsg: 'claude CLI 응답 시간 초과 — 다시 [씬 분해] 눌러주세요 (스크립트 프롬프트가 길어 가끔 느립니다).',
+  ...opts,
+})
 // ── 스킬 검증 (check_vo.py의 규칙을 JS로: ban-list + VO가 Title을 재진술하지 않기) ──
 const VO_STOP = new Set(['a', 'an', 'the', 'and', 'or', 'but', 'so', 'to', 'of', 'in', 'on', 'it', 'is', 'this', 'that', 'your', 'you', 'with', 'for', 'into', 'just', 'one', 'no', 'i', 'my', 'me', 'at', 'its', 'then', 'now', 'up'])
 function contentWords(t = '') { return (String(t).toLowerCase().match(/[a-z0-9']+/g) || []).filter((w) => !VO_STOP.has(w) && w.length > 1) }
