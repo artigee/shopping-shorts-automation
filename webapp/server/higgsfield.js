@@ -79,12 +79,16 @@ export async function listHfElements() {
 
 // element 하나의 전체 이미지(medias) 조회 — 뷰어용. list는 대표 1장만 주므로 get으로 전부 가져온다.
 export async function getHfElement(id) {
-  const prompt = `Call the tool mcp__higgsfield__show_reference_elements with exactly {"action":"get","element_id":"${id}"}. From the result output ONLY a compact JSON object {"id":..,"name":..,"category":..,"medias":[<EVERY media url in the element>]} — no prose, no code fences.`
-  const out = await runClaude(prompt, ['--allowedTools', ...HF_ELEMENTS_TOOLS, '--model', 'haiku'], 120000)
-  const m = out.match(/\{[\s\S]*\}/)
-  if (!m) throw new Error('element 상세 파싱 실패')
-  const e = JSON.parse(m[0])
-  return { id: e.id, name: e.name, category: e.category || 'character', medias: Array.isArray(e.medias) ? e.medias.filter(Boolean) : [] }
+  const prompt = `Call the tool mcp__higgsfield__show_reference_elements with exactly {"action":"get","element_id":"${id}"}. The result's element has a "medias" array — it can hold MANY images. Output ONLY a compact JSON object {"id":..,"name":..,"category":..,"medias":[<the https url of EVERY SINGLE media in that array, ALL of them, in order — do NOT stop at one, do NOT truncate>]} — no prose, no code fences. If there are 10 medias, output 10 urls.`
+  const run1 = async () => {
+    const out = await runClaude(prompt, ['--allowedTools', ...HF_ELEMENTS_TOOLS, '--model', 'sonnet'], 120000)
+    const m = out.match(/\{[\s\S]*\}/); if (!m) throw new Error('element 상세 파싱 실패')
+    const e = JSON.parse(m[0])
+    return { id: e.id, name: e.name, category: e.category || 'character', medias: Array.isArray(e.medias) ? e.medias.filter(Boolean) : [] }
+  }
+  let el = await run1()
+  if ((el.medias || []).length <= 1) { try { const el2 = await run1(); if ((el2.medias || []).length > el.medias.length) el = el2 } catch { /* keep first */ } }   // 1장만 나오면 한 번 더 (추출 누락 대비)
+  return el
 }
 
 // 이미지 URL로 새 명명 element(캐릭터/환경/제품)를 히긱스필드에 등록. import → create 순서로 claude가 오케스트레이션.
