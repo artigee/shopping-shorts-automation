@@ -36,7 +36,7 @@ const KIND = {
   overall: { out: { t: 'text', n: 'scene[] · N ordered', array: true }, editor: { field: 'vo', label: 'overall VO — the through-line' },
     config: [{ f: 'shotCount', label: 'shots', ph: 'set by Script Engine (3-9) · edit to override · re-run reinitiates' }, { f: 'durationSec', label: 'total (s)', ph: 'default = reel length' }, { f: 'direction', ph: 'hook·shot direction' }, { f: 'angle' }, { f: 'hookLine' }, { f: 'cta' }, { f: 'beats' }, { f: 'guidance', ph: 'steer re-run' }] },
   script: { out: { t: 'text', n: 'Title + VO' }, editor: { field: 'vo', label: 'scene VO' }, config: [{ f: 'title', ph: 'on-screen title' }, { f: 'guidance', ph: 'steer re-run' }] },
-  prompt: { out: { t: 'text', n: 'prompt text' }, editor: { field: 'prompt', label: 'output prompt (generated · feeds downstream)', readOnly: true }, config: [{ f: 'guidance', label: 'input prompt', multiline: true, ph: 'instruction to the LLM — e.g. closer shot · warmer tone · punchier' }] },
+  prompt: { out: { t: 'text', n: 'prompt text' }, editor: { field: 'prompt', label: 'output prompt (generated)', readOnly: true }, config: [{ f: 'guidance', label: 'input prompt', multiline: true, ph: 'instruction to the LLM — e.g. closer shot · warmer tone · punchier' }] },
   image: { out: { t: 'image', n: 'scene .png' }, config: [{ f: 'frameRole', choices: ['start', 'end'] }, { f: 'aspect', choices: ['9:16', '4:5', '1:1', '16:9'] }, { f: 'model', choices: ['auto', 'nano_banana_pro', 'marketing_studio_image'] }, { f: 'style', ph: 'all-scene style' }, { f: 'seed', ph: 'random' }, { f: 'guidance', ph: 'steer re-run' }] },
   clip: { out: { t: 'video', n: 'clip .mp4' }, config: [{ f: 'makeVideo', choices: ['animate', 'still'] }, { f: 'cameraMove', cameraLib: true }, { f: 'duration' }, { f: 'model', choices: ['kling3_0', 'seedance', 'hailuo', 'wan', 'kling3_0_turbo'] }] },
   vo: { out: { t: 'audio', n: '.mp3' }, config: [{ f: 'voiceId' }, { f: 'lang', fixed: 'US EN' }] },
@@ -1363,8 +1363,11 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
           <div className="ng-prop"><label>title</label><input value={d.title || ''} placeholder="on-screen title" onChange={(e) => onField('title', e.target.value)} onBlur={onCommit} /></div>
           <div className="ng-slot-h" style={{ marginTop: 8 }}><span>VO</span></div>
           <textarea className="ng-big" style={{ minHeight: 90 }} value={d.vo || ''} placeholder="spoken line" onChange={(e) => onField('vo', e.target.value)} onBlur={onCommit} />
-          <div className="ng-sh top">→ feeds</div>
-          <div className="ng-wired">{outgoing && outgoing.length ? outgoing.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>) : <span className="ng-none">— not connected —</span>}</div>
+          <div className="ng-sh top">connections</div>
+          <div className="ng-connlabel">← input <em>from · click to open</em></div>
+          <div className="ng-wired">{incoming && incoming.length ? incoming.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="open this node">◦ {s.hd}</span>) : <span className="ng-none">— not connected —</span>}</div>
+          <div className="ng-connlabel">→ output <em>to · click to open</em></div>
+          <div className="ng-wired">{outgoing && outgoing.length ? outgoing.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="open this node">◦ {s.hd}</span>) : <span className="ng-none">— not connected —</span>}</div>
         </div>
       </div>
     )
@@ -1387,10 +1390,13 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
           <textarea className="ng-instruct" value={d.guidance || ''} placeholder="e.g. tighter close-up · warmer tone · slower motion — then ▶ re-run" onChange={(e) => onField('guidance', e.target.value)} onBlur={onCommit} />
         </div>
         <div className="ng-col right">
-          <div className="ng-sh">③ output prompt <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· {outLabel} · read-only, feeds downstream</em></div>
+          <div className="ng-sh">③ output prompt <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· {outLabel} · read-only → output</em></div>
           <textarea className="ng-big ro" value={d.prompt || ''} readOnly placeholder="— run to generate —" />
-          <div className="ng-sh top">→ feeds</div>
-          <div className="ng-wired">{outgoing && outgoing.length ? outgoing.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>) : <span className="ng-none">— not connected —</span>}</div>
+          <div className="ng-sh top">connections</div>
+          <div className="ng-connlabel">← input <em>from · click to open</em></div>
+          <div className="ng-wired">{incoming && incoming.length ? incoming.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="open this node">◦ {s.hd}</span>) : <span className="ng-none">— not connected —</span>}</div>
+          <div className="ng-connlabel">→ output <em>to · click to open</em></div>
+          <div className="ng-wired">{outgoing && outgoing.length ? outgoing.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="open this node">◦ {s.hd}</span>) : <span className="ng-none">— not connected —</span>}</div>
           <div className="ng-ctxrow" style={{ marginTop: 10 }}>persona <b>{ctx.persona}</b> · hook <b>{ctx.hook}</b></div>
         </div>
       </div>
@@ -1444,10 +1450,10 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
           {fromArray && <div className="ng-prop"><label>index</label><select value={n.scene ?? ''} onChange={(e) => onScene(parseInt(e.target.value, 10))} style={{ color: '#c9b3ea', maxWidth: 110 }}>{n.scene == null && <option value="">— pick —</option>}{Array.from({ length: 100 }, (_, i) => i + 1).map((v) => <option key={v} value={v}>{v}</option>)}</select></div>}
           {cfg.length ? cfg.map((cc) => <div key={cc.f} className="ng-prop"><label>{cc.label || cc.f}</label><Field c={cc} d={d} onField={onField} onCommit={onCommit} /></div>) : <div className="ng-prop"><span className="ng-fixed">— none —</span></div>}
           <div className="ng-sh top">connections</div>
-          <div className="ng-connlabel">← inputs <em>from</em></div>
+          <div className="ng-connlabel">← input <em>from · click to open</em></div>
           {(k.inputs && k.inputs.length) ? k.inputs.map((slot) => {
             const listS = slot.frame ? incoming.filter((s) => outTypeOf(s) === 'image' && ((s.data && s.data.frameRole) || 'start') === slot.frame) : incoming.filter((s) => outTypeOf(s) === slot.type)
-            return <div key={slot.key} className="ng-slot"><div className="ng-slot-h"><span>{slot.label || slot.key}</span><em>{slot.type}{slot.multi ? '[]' : ''}</em></div><div className="ng-wired">{listS.length ? listS.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>) : <span className="ng-none">— none —</span>}</div></div>
+            return <div key={slot.key} className="ng-slot"><div className="ng-slot-h"><span>{slot.label || slot.key}</span><em>{slot.type}{slot.multi ? '[]' : ''}</em></div><div className="ng-wired">{listS.length ? listS.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="open this node">◦ {s.hd}</span>) : <span className="ng-none">— none —</span>}</div></div>
           }) : <div className="ng-wired"><span className="ng-none">— no inputs —</span></div>}
           <div className="ng-connlabel">→ output <em>{k.out.n} · {k.out.t}</em></div>
           <div className="ng-wired">{outgoing && outgoing.length ? outgoing.map((s) => <span key={s.id} className="ng-chip src" onClick={() => onFrame(s.id)} title="jump to node">◦ {s.hd}</span>) : <span className="ng-none">— not connected —</span>}</div>
