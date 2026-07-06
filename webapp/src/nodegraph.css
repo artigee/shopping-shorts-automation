@@ -119,6 +119,11 @@
 .ng-libitem { position: relative; transition: transform .12s ease; transform-origin: center; }
 .ng-libitem:hover { transform: scale(1.06); z-index: 6; }
 .ng-libitem img { width: 100%; aspect-ratio: 9/16; object-fit: cover; border-radius: 7px; background: #20262e; display: block; }
+.ng-libitem.selecting { cursor: pointer; }
+.ng-libitem.selecting img { opacity: .5; outline: 1px solid #3a3a42; outline-offset: -1px; border-radius: 7px; }
+.ng-libitem.selecting.elon img { opacity: 1; outline: 2px solid #5DCAA5; }
+.ng-elcheck { position: absolute; top: 4px; left: 4px; width: 17px; height: 17px; border-radius: 50%; background: #5DCAA5; color: #17171a; font-size: 11px; font-weight: 700; line-height: 17px; text-align: center; }
+.ng-refhint { font-family: ui-monospace, monospace; font-size: 10px; color: #7fb8a0; margin-bottom: 5px; }
 .ng-libdel { position: absolute; top: 4px; right: 4px; width: 17px; height: 17px; border-radius: 50%; background: rgba(0,0,0,.6); color: #e8e6dd; font-size: 12px; line-height: 17px; text-align: center; cursor: pointer; }
 .ng-libdel:hover { background: #e0655e; }
 .ng-libitem .nm { font-family: ui-monospace, monospace; font-size: 9px; color: #9c9a92; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

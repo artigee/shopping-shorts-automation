@@ -220,7 +220,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     setCharEl(next)
     try { await postJSON(`/api/contents/${cid}/character-element`, { element: next }) } catch (e) { setErr('캐릭터 지정 실패: ' + (e.message || e)) }
   }
-  const [refInput, setRefInput] = useState(null)   // 인라인 입력 폼 {role, mode:'ref'|'element', url, name} — window.prompt이 VSCode 웹뷰에서 안 떠서 대체
+  const [refInput, setRefInput] = useState(null)   // 인라인 입력 폼 {role, mode:'ref'|'element'|'makeEl', url, name} — window.prompt이 VSCode 웹뷰에서 안 떠서 대체
+  const [elSel, setElSel] = useState(() => new Set())   // makeEl: element로 넣을 선택 이미지 id들
   const roleCat = { product: 'prop', character: 'character', environment: 'environment' }   // 패널 role → HF element category
   const [brokeThumb, setBrokeThumb] = useState({})   // 로딩 실패(403 등)한 element 썸네일 id → 플레이스홀더
   const loadHfEls = (refresh) => {   // localStorage 캐시 → 즉시 표시 후 백그라운드 새로고침 (목록 CLI 조회가 ~25s라)
@@ -242,8 +243,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   // 로컬 ref 여러 장 → 멀티포토 Higgsfield element 등록
   async function makeElement(role, name) {
     const nm = (name || '').trim(); if (!nm) { setErr('element 이름을 입력하세요'); return }
-    const refs = (graph.refLib[role] || []).map((a) => a.thumb).filter(Boolean)
-    if (!refs.length) { setErr('먼저 이미지를 이 섹션에 추가하세요'); return }
+    const refs = (graph.refLib[role] || []).filter((a) => elSel.has(a.id)).map((a) => a.thumb).filter(Boolean)
+    if (!refs.length) { setErr('element에 넣을 이미지를 선택하세요'); return }
     setHfElsBusy(true)
     try { await postJSON('/api/hf/elements/multi', { name: nm, category: roleCat[role], refs }); setRefInput(null); await loadHfEls(true) }
     catch (e) { setErr('element 등록 실패: ' + (e.message || e)) } finally { setHfElsBusy(false) }
@@ -899,12 +900,13 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag') }}
                 onDrop={(e) => dropRefs(e, role)}>
                 <h4><span className="d" style={{ background: COLOR[role] }} />{role}
-                  <span className="add" title={'make Higgsfield element from these ' + ((graph.refLib[role] || []).length) + ' images'} onClick={() => setRefInput({ role, mode: 'makeEl', name: '' })} style={{ marginLeft: 'auto' }}>⬡</span>
+                  <span className="add" title="make Higgsfield element from SELECTED images" onClick={() => { setElSel(new Set((graph.refLib[role] || []).map((a) => a.id))); setRefInput({ role, mode: 'makeEl', name: '' }) }} style={{ marginLeft: 'auto' }}>⬡</span>
                   <span className="add" title="add local reference by URL" onClick={() => setRefInput({ role, mode: 'ref', url: '', name: '' })} style={{ marginLeft: 8 }}>＋</span></h4>
                 {refInput && refInput.role === role && refInput.mode === 'makeEl' && (
                   <div className="ng-refform">
-                    <input className="ng-refin" placeholder={'element name (e.g. ' + (role === 'character' ? 'Yuna' : role) + ') — from ' + ((graph.refLib[role] || []).length) + ' images'} value={refInput.name} autoFocus onChange={(e) => setRefInput({ ...refInput, name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') makeElement(role, refInput.name); if (e.key === 'Escape') setRefInput(null) }} />
-                    <div className="ng-refbtns"><button onClick={() => makeElement(role, refInput.name)} disabled={hfElsBusy}>{hfElsBusy ? 'creating…' : '⬡ create element'}</button><button className="ghost" onClick={() => setRefInput(null)}>cancel</button></div>
+                    <div className="ng-refhint">tap images to select · {elSel.size} chosen</div>
+                    <input className="ng-refin" placeholder={'element name (e.g. ' + (role === 'character' ? 'Yuna' : role) + ')'} value={refInput.name} autoFocus onChange={(e) => setRefInput({ ...refInput, name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') makeElement(role, refInput.name); if (e.key === 'Escape') setRefInput(null) }} />
+                    <div className="ng-refbtns"><button onClick={() => makeElement(role, refInput.name)} disabled={hfElsBusy || !elSel.size}>{hfElsBusy ? 'creating…' : '⬡ create from ' + elSel.size}</button><button className="ghost" onClick={() => setRefInput(null)}>cancel</button></div>
                   </div>
                 )}
                 {refInput && refInput.role === role && refInput.mode === 'ref' && (
@@ -918,12 +920,18 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                     {Array.from({ length: upBusy[role] || 0 }, (_, i) => (
                       <div key={'up' + i} className="ng-libitem"><div className="ng-upimg"><span className="ng-upspin" />saving…</div></div>
                     ))}
-                    {items.map((a) => (
-                    <div key={a.id} className="ng-libitem">
-                      <img src={media(a.thumb)} onError={(e) => { e.target.style.opacity = .2 }} {...hoverPreview} />
-                      <span className="ng-libdel" title="delete" onClick={() => deleteRefAsset(role, a.id)}>×</span>
-                      <div className="nm">{a.name}</div>
-                    </div>))}</div>
+                    {items.map((a) => {
+                      const selecting = refInput && refInput.role === role && refInput.mode === 'makeEl'
+                      const on = elSel.has(a.id)
+                      return (
+                        <div key={a.id} className={'ng-libitem' + (selecting ? ' selecting' : '') + (selecting && on ? ' elon' : '')}
+                          onClick={selecting ? () => setElSel((s) => { const n = new Set(s); n.has(a.id) ? n.delete(a.id) : n.add(a.id); return n }) : undefined}>
+                          <img src={media(a.thumb)} onError={(e) => { e.target.style.opacity = .2 }} {...(selecting ? {} : hoverPreview)} />
+                          {selecting ? (on && <span className="ng-elcheck">✓</span>) : <span className="ng-libdel" title="delete" onClick={() => deleteRefAsset(role, a.id)}>×</span>}
+                          <div className="nm">{a.name}</div>
+                        </div>
+                      )
+                    })}</div>
                   : <div className="ng-empty">drop image here · or ＋ URL{'\n'}(uploads to Higgsfield on first use)</div>}
               </div>
             )
