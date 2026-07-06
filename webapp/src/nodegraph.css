@@ -142,8 +142,8 @@
 .ng-elview-h .x:hover { color: #fff; }
 .ng-elview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .ng-elmedia { position: relative; aspect-ratio: 9/16; border-radius: 8px; background: #20262e; overflow: hidden; }
-.ng-elmedia::after { content: '⬡ no preview'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #5a6470; font-family: ui-monospace, monospace; font-size: 9px; }
-.ng-elmedia img { position: relative; width: 100%; height: 100%; object-fit: cover; display: block; }
+.ng-elmedia::after { content: '⬡ no preview'; position: absolute; inset: 0; z-index: 0; display: flex; align-items: center; justify-content: center; color: #5a6470; font-family: ui-monospace, monospace; font-size: 9px; }
+.ng-elmedia img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; display: block; }
 .ng-refform { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 8px; padding: 7px; border: 1px solid #2f2f36; border-radius: 8px; background: #1b1b1f; }
 .ng-refin { font-family: ui-monospace, monospace; font-size: 11px; color: #d8d6cc; background: #131316; border: 1px solid #34343c; border-radius: 6px; padding: 5px 7px; outline: none; }
 .ng-refin:focus { border-color: #5DCAA5; }
