@@ -672,18 +672,12 @@ app.post('/api/contents/:id/character-ref', async (req, res) => {
 })
 
 // 씬 환경/무드(공간) 레퍼런스 — 씬별
-app.post('/api/contents/:id/scene/:index/env-ref', async (req, res) => {
-  const c = getContent(req.params.id)
-  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
-  const scenes = getScenes(c); const i = Number(req.params.index)
-  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
-  try {
-    if (req.body && req.body.remove) { delete scenes[i].envRef }
-    else { const ref = await processRefInput(c.id, req.body || {}); if (!ref) return res.status(400).json({ error: '공개 https URL 또는 파일이 필요합니다.' }); scenes[i] = { ...scenes[i], envRef: ref } }
-    saveScenes(c.id, scenes)
-    res.json({ scene: scenes[i] })
-  } catch (e) { res.status(500).json({ error: e.message || String(e) }) }
-})
+app.post('/api/contents/:id/scene/:index/env-ref', withScene(async (req, res, { c, scenes, i }) => {
+  if (req.body && req.body.remove) { delete scenes[i].envRef }
+  else { const ref = await processRefInput(c.id, req.body || {}); if (!ref) return res.status(400).json({ error: '공개 https URL 또는 파일이 필요합니다.' }); scenes[i] = { ...scenes[i], envRef: ref } }
+  saveScenes(c.id, scenes)
+  res.json({ scene: scenes[i] })
+}))
 
 // 연출 지시 (훅·샷 스타일) — 전체/씬 스크립트 생성에 반영
 app.post('/api/contents/:id/direction', (req, res) => {
@@ -978,6 +972,18 @@ async function saveAsset(contentId, index, url, isClip, suffix = '') {
   return `/output/content-${contentId}/${fname}`
 }
 function getScenes(c) { return jparse(c?.scenes, []) }
+// 씬 라우트 공용 프렐류드 — 콘텐츠 조회→404, 씬 파싱, index 검증, 오류 500 통일 (9개 라우트의 복붙 제거)
+function withScene(handler) {
+  return async (req, res) => {
+    const c = getContent(req.params.id)
+    if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
+    const scenes = getScenes(c)
+    const i = Number(req.params.index)
+    if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
+    try { await handler(req, res, { c, scenes, i }) }
+    catch (e) { if (!res.headersSent) res.status(500).json({ error: e.message || String(e) }) }
+  }
+}
 // ✨ Auto 카메라 무빙 — 씬 역할에 맞춰 하나 선택 (한 컷 한 동작 원칙)
 function autoCameraMove(i, total) {
   if (i === 0) return 'push_in'                              // 훅 = 긴장감 push in
@@ -1230,61 +1236,36 @@ app.post('/api/contents/:id/scene-image', async (req, res) => {
 // 씬 이미지 생성 (버튼, 씬 1개씩 = iterative/순차).
 //  기본: claude CLI → Higgsfield MCP (제품 이미지 레퍼런스). HF_CREDENTIALS 있으면 SDK 직접.
 // 씬 이미지 프롬프트(영어 설명) 생성 — 이미지 생성과 분리. 검수/수정 후 이미지 생성.
-app.post('/api/contents/:id/scene/:index/prompt', async (req, res) => {
-  const c = getContent(req.params.id)
-  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
-  const scenes = getScenes(c)
-  const i = Number(req.params.index)
-  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
-  try { const scene = await genPromptForScene(c, scenes, i, req.body && req.body.guidance); res.json({ ok: true, scene }) }
-  catch (e) { res.status(500).json({ error: e.message || String(e) }) }
-})
+app.post('/api/contents/:id/scene/:index/prompt', withScene(async (req, res, { c, scenes, i }) => {
+  const scene = await genPromptForScene(c, scenes, i, req.body && req.body.guidance)
+  res.json({ ok: true, scene })
+}))
 
 // 씬 스크립트(Title+VO) 재생성 — overall + guidance(instruction) 기반
-app.post('/api/contents/:id/scene/:index/script', async (req, res) => {
-  const c = getContent(req.params.id)
-  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
-  const scenes = getScenes(c)
-  const i = Number(req.params.index)
-  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
-  try { const scene = await genSceneScriptForScene(c, scenes, i, req.body && req.body.guidance); res.json({ ok: true, scene }) }
-  catch (e) { res.status(500).json({ error: e.message || String(e) }) }
-})
+app.post('/api/contents/:id/scene/:index/script', withScene(async (req, res, { c, scenes, i }) => {
+  const scene = await genSceneScriptForScene(c, scenes, i, req.body && req.body.guidance)
+  res.json({ ok: true, scene })
+}))
 
 // 씬 모션 프롬프트 생성 (캐릭터·제품 동작 — 씬 스크립트 기반)
-app.post('/api/contents/:id/scene/:index/motion', async (req, res) => {
-  const c = getContent(req.params.id)
-  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
-  const scenes = getScenes(c)
-  const i = Number(req.params.index)
-  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
-  try { const scene = await genMotionForScene(c, scenes, i, req.body && req.body.guidance); res.json({ ok: true, scene }) }
-  catch (e) { res.status(500).json({ error: e.message || String(e) }) }
-})
+app.post('/api/contents/:id/scene/:index/motion', withScene(async (req, res, { c, scenes, i }) => {
+  const scene = await genMotionForScene(c, scenes, i, req.body && req.body.guidance)
+  res.json({ ok: true, scene })
+}))
 
 // 씬 VO 텍스트(voEn) 생성 (씬 VO → 음성용 영어 텍스트)
-app.post('/api/contents/:id/scene/:index/votext', async (req, res) => {
-  const c = getContent(req.params.id)
-  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
-  const scenes = getScenes(c)
-  const i = Number(req.params.index)
-  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
-  try { const scene = await genVoTextForScene(c, scenes, i, req.body && req.body.guidance); res.json({ ok: true, scene }) }
-  catch (e) { res.status(500).json({ error: e.message || String(e) }) }
-})
+app.post('/api/contents/:id/scene/:index/votext', withScene(async (req, res, { c, scenes, i }) => {
+  const scene = await genVoTextForScene(c, scenes, i, req.body && req.body.guidance)
+  res.json({ ok: true, scene })
+}))
 
 // 씬별 캐릭터 element(들) 지정 — "Yuna meets Sofia" 같은 멀티 캐스트. body.elements = [{id,name}]
-app.post('/api/contents/:id/scene/:index/elements', (req, res) => {
-  const c = getContent(req.params.id)
-  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
-  const scenes = getScenes(c)
-  const i = Number(req.params.index)
-  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
+app.post('/api/contents/:id/scene/:index/elements', withScene((req, res, { c, scenes, i }) => {
   const els = Array.isArray(req.body && req.body.elements) ? req.body.elements.filter((e) => e && e.id).map((e) => ({ id: String(e.id), name: e.name || '' })) : []
   scenes[i] = { ...scenes[i], elements: els }
   saveScenes(c.id, scenes)
   res.json({ ok: true, scene: scenes[i] })
-})
+}))
 
 // 씬 미디어 생성(이미지/클립/VO)을 '잡'으로 실행 — 페이지 이동/새로고침 후에도 서버에서 계속 돌고, 돌아오면 노드가 재접속(재부착)한다.
 // agent 키에 씬 index(+ 이미지 frameRole)를 인코딩 → 노드별 활성 잡을 찾아 붙는다: img#3 / img#3e / clip#3 / vo#3.
@@ -1301,45 +1282,30 @@ function startSceneGen(res, c, agent, message, fn) {
   })
   res.json({ jobId: job.id, agent })
 }
-app.post('/api/contents/:id/scene/:index/image', async (req, res) => {
-  const c = getContent(req.params.id)
-  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
-  const scenes = getScenes(c)
-  const i = Number(req.params.index)
-  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
+app.post('/api/contents/:id/scene/:index/image', withScene(async (req, res, { c, scenes, i }) => {
   const frameRole = req.body && req.body.frameRole === 'end' ? 'end' : 'start'
   startSceneGen(res, c, `img#${i}${frameRole === 'end' ? 'e' : ''}`, '이미지 생성 중…', async (progress) => {
     progress('이미지 생성 중… (~1분)', 30)
     return await genImageForScene(c, scenes, i, req.body && req.body.prompt, frameRole)
   })
-})
+}))
 
 // 씬 클립 생성 (image→video, 풀무비). 씬 이미지가 먼저 있어야 함.
-app.post('/api/contents/:id/scene/:index/clip', async (req, res) => {
-  const c = getContent(req.params.id)
-  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
-  const scenes = getScenes(c)
-  const i = Number(req.params.index)
-  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
+app.post('/api/contents/:id/scene/:index/clip', withScene(async (req, res, { c, scenes, i }) => {
   if (!scenes[i].imageSrc) return res.status(400).json({ error: '먼저 이 씬의 이미지를 생성하세요 (클립은 이미지 기반).', needImage: true })
   startSceneGen(res, c, `clip#${i}`, '클립 생성 중…', async (progress) => {
     progress('클립 렌더링 중… (~1-2분)', 30)
     return await genClipForScene(c, scenes, i, req.body && req.body.prompt)
   })
-})
+}))
 
 // 씬 VO 생성 (영어). 한국어 vo → 영어 번역 → 음성 → mp3 저장. scene.voEn + scene.audio.
-app.post('/api/contents/:id/scene/:index/vo', async (req, res) => {
-  const c = getContent(req.params.id)
-  if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
-  const scenes = getScenes(c)
-  const i = Number(req.params.index)
-  if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
+app.post('/api/contents/:id/scene/:index/vo', withScene(async (req, res, { c, scenes, i }) => {
   startSceneGen(res, c, `vo#${i}`, 'VO 생성 중…', async (progress) => {
     progress('음성 생성 중…', 40)
     return await genVoForScene(c, scenes, i, req.body && req.body.text)
   })
-})
+}))
 
 // 임시 프리뷰 무비 합성 (ffmpeg) — 현재 씬들의 클립/이미지 + VO를 이어붙임
 app.post('/api/contents/:id/movie', async (req, res) => {
