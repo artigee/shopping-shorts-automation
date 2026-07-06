@@ -900,7 +900,7 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag') }}
                 onDrop={(e) => dropRefs(e, role)}>
                 <h4><span className="d" style={{ background: COLOR[role] }} />{role}
-                  <span className="add" title="make Higgsfield element from SELECTED images" onClick={() => { setElSel(new Set((graph.refLib[role] || []).map((a) => a.id))); setRefInput({ role, mode: 'makeEl', name: '' }) }} style={{ marginLeft: 'auto' }}>⬡</span>
+                  <span className="ng-mkel" title="create a Higgsfield element from selected images" onClick={() => { setElSel(new Set((graph.refLib[role] || []).map((a) => a.id))); setRefInput({ role, mode: 'makeEl', name: '' }) }}>⬡ make element</span>
                   <span className="add" title="add local reference by URL" onClick={() => setRefInput({ role, mode: 'ref', url: '', name: '' })} style={{ marginLeft: 8 }}>＋</span></h4>
                 {refInput && refInput.role === role && refInput.mode === 'makeEl' && (
                   <div className="ng-refform">

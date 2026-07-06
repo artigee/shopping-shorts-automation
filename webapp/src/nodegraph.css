@@ -124,6 +124,8 @@
 .ng-libitem.selecting.elon img { opacity: 1; outline: 2px solid #5DCAA5; }
 .ng-elcheck { position: absolute; top: 4px; left: 4px; width: 17px; height: 17px; border-radius: 50%; background: #5DCAA5; color: #17171a; font-size: 11px; font-weight: 700; line-height: 17px; text-align: center; }
 .ng-refhint { font-family: ui-monospace, monospace; font-size: 10px; color: #7fb8a0; margin-bottom: 5px; }
+.ng-mkel { margin-left: auto; font-family: ui-monospace, monospace; font-size: 10px; color: #7fb8a0; border: 1px solid rgba(93,202,165,.4); border-radius: 6px; padding: 2px 8px; cursor: pointer; white-space: nowrap; }
+.ng-mkel:hover { border-color: #5DCAA5; color: #b6f0dd; background: rgba(93,202,165,.08); }
 .ng-libdel { position: absolute; top: 4px; right: 4px; width: 17px; height: 17px; border-radius: 50%; background: rgba(0,0,0,.6); color: #e8e6dd; font-size: 12px; line-height: 17px; text-align: center; cursor: pointer; }
 .ng-libdel:hover { background: #e0655e; }
 .ng-libitem .nm { font-family: ui-monospace, monospace; font-size: 9px; color: #9c9a92; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
