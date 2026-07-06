@@ -1288,6 +1288,8 @@ function Drawer({ n, closing, ctx, lib, refLib, h, onResize, onClose, onRename, 
               {!eng.data?.hookLine && !eng.data?.vo ? <span className="ng-none">— Script Engine empty (run it first) —</span> : null}
             </> : <span className="ng-none">— not linked to Script Engine —</span>}
           </div>
+          <div className="ng-sh top">scene index <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· which scene of the overall this is</em></div>
+          <div className="ng-prop"><select value={n.scene ?? ''} onChange={(e) => onScene(parseInt(e.target.value, 10))} style={{ color: '#c9b3ea', maxWidth: 90 }}>{n.scene == null && <option value="">— pick —</option>}{Array.from({ length: 100 }, (_, i) => i + 1).map((v) => <option key={v} value={v}>scene {v}</option>)}</select><span className="ng-fixed" style={{ fontSize: 10.5 }}>the whole chain downstream inherits this</span></div>
           <div className="ng-sh top">② duration <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· suggested by pacing · override to reshape</em></div>
           <div className="ng-prop"><input type="number" min="1" max="15" step="1" value={d.durationSec ?? ''} placeholder="s" onChange={(e) => onField('durationSec', e.target.value)} onBlur={onCommit} style={{ maxWidth: 74 }} /><span className="ng-fixed" style={{ fontSize: 10.5 }}>seconds → re-run rewrites VO to fit (+ drives clip)</span></div>
           <div className="ng-sh top">③ instruction <em style={{ color: '#6b6a64', fontStyle: 'normal' }}>· steer the LLM (optional)</em></div>
