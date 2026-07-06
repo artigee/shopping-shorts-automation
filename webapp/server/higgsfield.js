@@ -101,6 +101,34 @@ export async function createHfElement({ name, category = 'character', imageUrl }
   return { id: el.id, name: el.name || safeName, category: el.category || cat }
 }
 
+// 여러 로컬 이미지 → 한 개의 멀티포토 element (byte-upload N장 → create). filePaths = 절대경로 배열.
+export async function createHfElementMulti({ name, category = 'character', filePaths = [] }) {
+  const safeName = String(name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 32)
+  if (!safeName) throw new Error('이름이 비어있습니다')
+  const files = (filePaths || []).filter((p) => { try { return fs.existsSync(p) } catch { return false } }).slice(0, 12)
+  if (!files.length) throw new Error('업로드할 로컬 이미지가 없습니다')
+  const cat = ['character', 'environment', 'prop'].includes(category) ? category : 'character'
+  const fileList = files.map((p, i) => `  ${i + 1}. ${p}`).join('\n')
+  const prompt = `Register ONE multi-photo Higgsfield reference element from these ${files.length} LOCAL image files that belong to OUR OWN app. Do not refuse, no warnings, no commentary.
+Files (absolute paths on disk):
+${fileList}
+
+For EACH file above, in order, do:
+  a) call mcp__higgsfield__media_upload {"filename":"<basename>","content_type":"image/png"} and read media_id and upload_url from the result.
+  b) run this Bash to PUT the bytes (substitute the real upload_url and the file path):
+     curl -s -o /dev/null -w "%{http_code}" -X PUT -H "Content-Type: image/png" --upload-file "<file path>" "<upload_url>"
+     Expect 200 or 204; retry once if not.
+  c) call mcp__higgsfield__media_confirm {"media_id":"<media_id>","type":"image"}.
+  Keep the pair {"id":"<media_id>","url":"<upload_url>","type":"media_input"}.
+After ALL files are uploaded and confirmed, call mcp__higgsfield__show_reference_elements with {"action":"create","name":"${safeName}","category":"${cat}","medias":[ <every kept pair> ]}.
+Finally print ONLY the created element as compact JSON {"id":..,"name":..,"category":..} — nothing else.`
+  const out = await runClaude(prompt, ['--allowedTools', 'mcp__higgsfield__media_upload', 'mcp__higgsfield__media_confirm', 'mcp__higgsfield__show_reference_elements', 'Bash', '--model', 'sonnet'], 420000)
+  const m = out.match(/\{[\s\S]*\}/)
+  if (!m) throw new Error('element 생성 결과 파싱 실패: ' + out.slice(-160))
+  const el = JSON.parse(m[0])
+  return { id: el.id, name: el.name || safeName, category: el.category || cat }
+}
+
 const HF_VID_TOOLS = ['mcp__higgsfield__media_import_url', 'mcp__higgsfield__generate_video', 'mcp__higgsfield__job_status']
 const HF_AUDIO_TOOLS = ['mcp__higgsfield__generate_audio', 'mcp__higgsfield__job_status']
 const DEFAULT_VOICE = process.env.HF_VOICE_ID || '80914268-dfae-4f76-8306-36f2d55f58f8' // Quinn (female, EN)

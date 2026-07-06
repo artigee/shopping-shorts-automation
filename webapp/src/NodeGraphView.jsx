@@ -239,6 +239,15 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       catch (e) { setErr('element 등록 실패: ' + (e.message || e)) } finally { setHfElsBusy(false) }
     } else { addRefAsset(f.role, url, (f.name || '').trim() || f.role); setRefInput(null) }
   }
+  // 로컬 ref 여러 장 → 멀티포토 Higgsfield element 등록
+  async function makeElement(role, name) {
+    const nm = (name || '').trim(); if (!nm) { setErr('element 이름을 입력하세요'); return }
+    const refs = (graph.refLib[role] || []).map((a) => a.thumb).filter(Boolean)
+    if (!refs.length) { setErr('먼저 이미지를 이 섹션에 추가하세요'); return }
+    setHfElsBusy(true)
+    try { await postJSON('/api/hf/elements/multi', { name: nm, category: roleCat[role], refs }); setRefInput(null); await loadHfEls(true) }
+    catch (e) { setErr('element 등록 실패: ' + (e.message || e)) } finally { setHfElsBusy(false) }
+  }
   const [preview, setPreview] = useState(null)
   const [wireEnd, setWireEnd] = useState(null)
   const [locked, setLocked] = useState(false)
@@ -889,7 +898,15 @@ function NodeGraphInner({ openId, onOpenHandled }) {
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); try { e.dataTransfer.dropEffect = 'copy' } catch { /* noop */ } e.currentTarget.classList.add('drag') }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag') }}
                 onDrop={(e) => dropRefs(e, role)}>
-                <h4><span className="d" style={{ background: COLOR[role] }} />{role}<span className="add" title="add local reference by URL" onClick={() => setRefInput({ role, mode: 'ref', url: '', name: '' })}>＋</span></h4>
+                <h4><span className="d" style={{ background: COLOR[role] }} />{role}
+                  <span className="add" title={'make Higgsfield element from these ' + ((graph.refLib[role] || []).length) + ' images'} onClick={() => setRefInput({ role, mode: 'makeEl', name: '' })} style={{ marginLeft: 'auto' }}>⬡</span>
+                  <span className="add" title="add local reference by URL" onClick={() => setRefInput({ role, mode: 'ref', url: '', name: '' })} style={{ marginLeft: 8 }}>＋</span></h4>
+                {refInput && refInput.role === role && refInput.mode === 'makeEl' && (
+                  <div className="ng-refform">
+                    <input className="ng-refin" placeholder={'element name (e.g. ' + (role === 'character' ? 'Yuna' : role) + ') — from ' + ((graph.refLib[role] || []).length) + ' images'} value={refInput.name} autoFocus onChange={(e) => setRefInput({ ...refInput, name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') makeElement(role, refInput.name); if (e.key === 'Escape') setRefInput(null) }} />
+                    <div className="ng-refbtns"><button onClick={() => makeElement(role, refInput.name)} disabled={hfElsBusy}>{hfElsBusy ? 'creating…' : '⬡ create element'}</button><button className="ghost" onClick={() => setRefInput(null)}>cancel</button></div>
+                  </div>
+                )}
                 {refInput && refInput.role === role && refInput.mode === 'ref' && (
                   <div className="ng-refform">
                     <input className="ng-refin" placeholder="image URL (https://…)" value={refInput.url} autoFocus onChange={(e) => setRefInput({ ...refInput, url: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') submitRefInput(); if (e.key === 'Escape') setRefInput(null) }} />

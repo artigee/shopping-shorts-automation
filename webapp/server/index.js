@@ -12,7 +12,7 @@ import { analyzeReel } from './analyze.js'
 import { matchProductByVision, simplerQuery } from './match.js'
 import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateMotionPrompt, generateVoText } from './produce.js'
 import { getPersonas, getPersona, getHooks, getVoStyles, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
-import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady, listHfElements, getHfElement, createHfElement } from './higgsfield.js'
+import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady, listHfElements, getHfElement, createHfElement, createHfElementMulti } from './higgsfield.js'
 import { buildPreview } from './preview.js'
 import { renderShort, probeDuration, FPS } from './remotion-render.js'
 
@@ -853,6 +853,25 @@ app.post('/api/hf/elements', async (req, res) => {
   try {
     const el = await createHfElement({ name, category, imageUrl })
     hfElementsCache = { at: 0, data: null }   // 캐시 무효화 → 다음 목록 조회 시 새로고침
+    res.json({ element: el })
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }) }
+})
+// 로컬 ref 여러 장 → 멀티포토 element 등록 (refs = 로컬 썸네일 문자열 배열)
+app.post('/api/hf/elements/multi', async (req, res) => {
+  const { name, category, refs } = req.body || {}
+  if (!name || !Array.isArray(refs) || !refs.length) return res.status(400).json({ error: 'name과 refs가 필요합니다' })
+  const toPath = (r) => {
+    let s = String(r || '')
+    if (s.includes('|')) s = s.split('|')[1]              // "hfmedia:..|/output/.." → "/output/.."
+    s = s.replace(/^https?:\/\/[^/]+/, '')                // 호스트 제거
+    const m = s.match(/\/output\/(.+)$/)
+    return m ? path.join(OUTPUT_DIR, decodeURIComponent(m[1])) : null
+  }
+  const paths = refs.map(toPath).filter(Boolean)
+  if (!paths.length) return res.status(400).json({ error: '로컬 이미지 경로를 찾지 못했습니다' })
+  try {
+    const el = await createHfElementMulti({ name, category, filePaths: paths })
+    hfElementsCache = { at: 0, data: null }
     res.json({ element: el })
   } catch (e) { res.status(500).json({ error: String(e.message || e) }) }
 })
