@@ -3,7 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import fs from 'node:fs'
 import path from 'node:path'
-import { db, dbStats, getSetting, setSetting, upsertHfElement, listHfElementsDb } from './db.js'
+import { db, dbStats, getSetting, setSetting, upsertHfElement, listHfElementsDb, jparse, getContent, saveScenes } from './db.js'
 import { startJob, getJob, activeJob, listJobs } from './jobs.js'
 import { collect } from './collect.js'
 import { extractProducts, identifyReel } from './extract.js'
@@ -465,9 +465,9 @@ app.post('/api/analyses/:id/analyze', (req, res) => {
     const result = await analyzeReel({ code: a.reel_code, url: a.reel_url, caption: a.reel_caption, productName: a.title, lang: genLang(), onProgress: (m, pct) => progress(m, pct) })
     // Analyze가 제품까지 한 번에: 식별 → 비전으로 "생김새" 매칭 (best-effort)
     progress('제품 매칭 중…', 70)
-    let product = a.product ? JSON.parse(a.product) : null   // 직접 입력으로 이미 제품이 있으면 그걸 사용
-    let candidates = a.candidates ? JSON.parse(a.candidates) : []
-    let matchMeta = a.match_meta ? JSON.parse(a.match_meta) : null
+    let product = jparse(a.product)   // 직접 입력으로 이미 제품이 있으면 그걸 사용
+    let candidates = jparse(a.candidates, [])
+    let matchMeta = jparse(a.match_meta)
     if (!product) {   // 수동 제품이 없을 때만 비전 매칭
       try {
         const id = await identifyReel({ code: a.reel_code, url: a.reel_url, username: a.reel_username, caption: a.reel_caption })
@@ -541,19 +541,19 @@ app.post('/api/contents', (req, res) => {
   let autoTitle = 'New content'
   if (a) {
     let prodTitle = null
-    try { prodTitle = a.product ? JSON.parse(a.product)?.title : null } catch {}
+    prodTitle = jparse(a.product)?.title || null
     autoTitle = (prodTitle || a.title || 'New content').slice(0, 80)
   }
   const id = Number(db.prepare('INSERT INTO contents (analysis_id, title) VALUES (?, ?)')
     .run(analysisId || null, title || autoTitle).lastInsertRowid)
-  res.json(db.prepare('SELECT * FROM contents WHERE id = ?').get(id))
+  res.json(getContent(id))
 })
 
 app.get('/api/contents/:id', (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const analysis = c.analysis_id ? db.prepare('SELECT * FROM analyses WHERE id = ?').get(c.analysis_id) : null
-  const product = c.product ? JSON.parse(c.product) : null
+  const product = jparse(c.product)
   res.json({ content: c, analysis, product })
 })
 
@@ -561,12 +561,12 @@ app.delete('/api/contents/:id', (req, res) => { db.prepare('DELETE FROM contents
 
 // 콘텐츠 복제 — 전체 파이프라인(분석·제품·씬·overall·레퍼런스 등) 복사해 변형 버전 시작
 app.post('/api/contents/:id/duplicate', (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const cols = Object.keys(c).filter((k) => !['id', 'created_at', 'updated_at'].includes(k))
   const vals = cols.map((k) => k === 'title' ? ((c.title || 'untitled').slice(0, 72) + ' (copy)') : c[k])
   const id = Number(db.prepare(`INSERT INTO contents (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...vals).lastInsertRowid)
-  res.json(db.prepare('SELECT * FROM contents WHERE id = ?').get(id))
+  res.json(getContent(id))
 })
 
 app.post('/api/contents/:id/analysis', (req, res) => {
@@ -592,11 +592,11 @@ app.post('/api/contents/:id/style', (req, res) => {
 // 제품 레퍼런스 이미지 추가/삭제 (공개 https URL). first=true면 맨 앞(첫 레퍼런스).
 app.post('/api/contents/:id/product-ref', (req, res) => {
   const { url, first, remove } = req.body || {}
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c || !c.product) return res.status(400).json({ error: '제품을 먼저 선택하세요.' })
   if (!url) return res.status(400).json({ error: 'url 필요' })
   if (!remove && !/^https?:\/\//i.test(url)) return res.status(400).json({ error: '공개 https 이미지 URL이 필요합니다.' })  // 추가만 https 필수 (삭제는 업로드 ref 포함 모두 가능)
-  const p = JSON.parse(c.product)
+  const p = jparse(c.product)
   p.images = (p.images || []).filter((u) => u !== url)
   if (!remove) { if (first) { p.images.unshift(url); p.image = url } else p.images.push(url) }
   if (remove && p.image === url) p.image = p.images[0] || null   // 대표 이미지 삭제 시 다음 것으로
@@ -624,7 +624,7 @@ app.post('/api/contents/:id/ref-save', (req, res) => {
 // 로컬 파일 레퍼런스 업로드 (base64) → Higgsfield 업로드 → product.images 맨 앞(첫 레퍼런스)
 app.post('/api/contents/:id/ref-upload', async (req, res) => {
   const { filename, contentType, dataB64 } = req.body || {}
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c || !c.product) return res.status(400).json({ error: '제품을 먼저 선택하세요.' })
   if (!dataB64) return res.status(400).json({ error: '파일 데이터 없음' })
   try {
@@ -636,7 +636,7 @@ app.post('/api/contents/:id/ref-upload', async (req, res) => {
     const fname = `uref-${Date.now().toString().slice(-7)}.${ext}`
     fs.writeFileSync(path.join(dir, fname), buffer)
     const ref = `${mediaRef}|/output/content-${c.id}/${fname}`
-    const p = JSON.parse(c.product)
+    const p = jparse(c.product)
     p.images = [ref, ...(p.images || [])]
     db.prepare(`UPDATE contents SET product = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(p), c.id)
     res.json(p)
@@ -673,14 +673,14 @@ app.post('/api/contents/:id/character-ref', async (req, res) => {
 
 // 씬 환경/무드(공간) 레퍼런스 — 씬별
 app.post('/api/contents/:id/scene/:index/env-ref', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c); const i = Number(req.params.index)
   if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
   try {
     if (req.body && req.body.remove) { delete scenes[i].envRef }
     else { const ref = await processRefInput(c.id, req.body || {}); if (!ref) return res.status(400).json({ error: '공개 https URL 또는 파일이 필요합니다.' }); scenes[i] = { ...scenes[i], envRef: ref } }
-    db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+    saveScenes(c.id, scenes)
     res.json({ scene: scenes[i] })
   } catch (e) { res.status(500).json({ error: e.message || String(e) }) }
 })
@@ -718,11 +718,11 @@ app.post('/api/contents/:id/vo-style', (req, res) => {
 
 // 추천 — 제품 + 릴스 분석을 보고 가장 잘 맞는 persona + hook 제안 (이유 포함)
 app.post('/api/contents/:id/recommend', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const a = c.analysis_id ? db.prepare('SELECT * FROM analyses WHERE id = ?').get(c.analysis_id) : null
-  const product = c.product ? JSON.parse(c.product) : null
-  const analysis = a?.analysis ? JSON.parse(a.analysis) : null
+  const product = jparse(c.product)
+  const analysis = jparse(a?.analysis)
   try {
     const rec = await recommendPersonaHook({ productName: product?.title || a?.title, product, analysis, personas: getPersonas(), hooks: getHooks() })
     res.json(rec)
@@ -730,20 +730,20 @@ app.post('/api/contents/:id/recommend', async (req, res) => {
 })
 // 페르소나만 추천 (persona 노드 re-run)
 app.post('/api/contents/:id/recommend-persona', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const a = c.analysis_id ? db.prepare('SELECT * FROM analyses WHERE id = ?').get(c.analysis_id) : null
-  const product = c.product ? JSON.parse(c.product) : null
-  const analysis = a?.analysis ? JSON.parse(a.analysis) : null
+  const product = jparse(c.product)
+  const analysis = jparse(a?.analysis)
   try { res.json(await recommendPersona({ productName: product?.title || a?.title, product, analysis, personas: getPersonas(), voStyles: getVoStyles(), guidance: req.body && req.body.guidance })) }
   catch (e) { res.status(500).json({ error: e.message || String(e) }) }
 })
 // 훅만 추천 (hook 노드 re-run)
 app.post('/api/contents/:id/recommend-hook', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const a = c.analysis_id ? db.prepare('SELECT * FROM analyses WHERE id = ?').get(c.analysis_id) : null
-  const analysis = a?.analysis ? JSON.parse(a.analysis) : null
+  const analysis = jparse(a?.analysis)
   try { res.json(await recommendHook({ analysis, hooks: getHooks(), guidance: req.body && req.body.guidance })) }
   catch (e) { res.status(500).json({ error: e.message || String(e) }) }
 })
@@ -778,24 +778,24 @@ app.post('/api/contents/:id/product', async (req, res) => {
 
 // 기본 제품 추천 — 분석된 릴스에서 원본 제품의 영어 검색어 (기본값=원본)
 app.post('/api/contents/:id/suggest', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c || !c.analysis_id) return res.json({ product: null, candidates: [], match: null })
   const a = db.prepare('SELECT * FROM analyses WHERE id = ?').get(c.analysis_id)
   // ② 분석 단계에서 비전으로 매칭해둔 제품/후보를 그대로 사용 (재검색 X)
   res.json({
-    product: a?.product ? JSON.parse(a.product) : null,
-    candidates: a?.candidates ? JSON.parse(a.candidates) : [],
-    match: a?.match_meta ? JSON.parse(a.match_meta) : null,
+    product: jparse(a?.product),
+    candidates: jparse(a?.candidates, []),
+    match: jparse(a?.match_meta),
   })
 })
 
 // 콘텐츠 + 분석/제품을 모아오는 헬퍼 (분석 완료 검증)
 function loadForGen(id) {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(id)
+  const c = getContent(id)
   if (!c) return { err: '없는 콘텐츠' }
   const a = c.analysis_id ? db.prepare('SELECT * FROM analyses WHERE id = ?').get(c.analysis_id) : null
   if (!a || !a.analysis) return { err: '먼저 ② 릴스 분석에서 🎬 영상 분석을 실행하세요.' }
-  return { c, a, p: c.product ? JSON.parse(c.product) : null }
+  return { c, a, p: jparse(c.product) }
 }
 
 // ③ 전체 스크립트 생성 (구조만 빌려 선택 제품으로 새로 작성). body.guidance 있으면 현재 버전을 그 지시대로 수정.
@@ -806,10 +806,10 @@ app.post('/api/contents/:id/overall', (req, res) => {
   const existing = activeJob('contents', c.id, 'overall')
   if (existing) return res.json({ jobId: existing.id, already: true })
   const guidance = (req.body && req.body.guidance || '').trim()
-  const base = guidance && c.overall ? JSON.parse(c.overall) : null
+  const base = guidance ? jparse(c.overall) : null
   const job = startJob({ agent: 'overall', refType: 'contents', refId: c.id, message: 'writing overall…' }, async (progress) => {
     progress('스토리 스크립트 작성 중… (~1분)', 30)
-    const overall = await generateOverall({ analysis: JSON.parse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', lang: genLang() })
+    const overall = await generateOverall({ analysis: jparse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', lang: genLang() })
     progress('저장 중…', 90)
     // Script Engine 실행 = 샷 수 추천값을 편집 가능한 값으로 재시드(re-initiate). 이후 사용자가 편집 가능, 다시 실행하면 다시 시드.
     const rec = Number(overall.shotCount)
@@ -912,7 +912,7 @@ app.post('/api/contents/:id/script', async (req, res) => {
   const { c, a, p, err } = loadForGen(req.params.id)
   if (err) return res.status(c ? 400 : 404).json({ error: err })
   const guidance = (req.body && req.body.guidance || '').trim()
-  const base = guidance && c.scenes ? JSON.parse(c.scenes) : null
+  const base = guidance ? jparse(c.scenes) : null
   // 샷 개수: 프론트가 보내면(빈값=자동) 그 값으로 저장, 안 보내면 저장값 사용
   let shotCount = c.shot_count || null
   if (req.body && 'shotCount' in req.body) {
@@ -924,8 +924,8 @@ app.post('/api/contents/:id/script', async (req, res) => {
   const existing = activeJob('contents', c.id, 'scenes')
   if (existing) return res.json({ jobId: existing.id, already: true })
   const job = startJob({ agent: 'scenes', refType: 'contents', refId: c.id, message: 'decomposing into scenes…' }, async (progress) => {
-    const analysis = JSON.parse(a.analysis)
-    let overall = c.overall ? JSON.parse(c.overall) : null
+    const analysis = jparse(a.analysis)
+    let overall = jparse(c.overall)
     const hasFootage = c.content_mode === 'direct_review'
     if (!overall) { progress('writing the overall story… (~1min)', 20); overall = await generateOverall({ analysis, productName: p?.title || a.title, product: p, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage, lang: genLang() }); db.prepare(`UPDATE contents SET overall = ? WHERE id = ?`).run(JSON.stringify(overall), c.id) }
     progress('writing scene scripts… (~1-2min)', 55)
@@ -946,7 +946,7 @@ app.put('/api/contents/:id/scenes', (req, res) => {
   const incoming = (req.body && req.body.scenes) || []
   const c = db.prepare('SELECT scenes FROM contents WHERE id = ?').get(req.params.id)
   let existing = []
-  try { existing = c?.scenes ? JSON.parse(c.scenes) : [] } catch {}
+  existing = jparse(c?.scenes, [])
   const exById = new Map(existing.filter((e) => e && e.id != null).map((e) => [e.id, e]))
   const merged = incoming.map((s, i) => {
     const ex = (s && s.id != null && exById.get(s.id)) || existing[i] || {}
@@ -977,7 +977,7 @@ async function saveAsset(contentId, index, url, isClip, suffix = '') {
   fs.writeFileSync(path.join(dir, fname), Buffer.from(await r.arrayBuffer()))
   return `/output/content-${contentId}/${fname}`
 }
-function getScenes(c) { try { return c.scenes ? JSON.parse(c.scenes) : [] } catch { return [] } }
+function getScenes(c) { return jparse(c?.scenes, []) }
 // ✨ Auto 카메라 무빙 — 씬 역할에 맞춰 하나 선택 (한 컷 한 동작 원칙)
 function autoCameraMove(i, total) {
   if (i === 0) return 'push_in'                              // 훅 = 긴장감 push in
@@ -997,47 +997,47 @@ function isCosmeticContent(c, product) {
 function sceneHasCharacterRef(c, scenes, i) {
   if (c.character_ref) return true
   try {
-    const rl = c.ref_lib ? JSON.parse(c.ref_lib) : null, gr = scenes[i]?.graphRefs
+    const rl = jparse(c.ref_lib), gr = scenes[i]?.graphRefs
     if (rl && gr) { const cmap = {}; (rl.character || []).forEach((a) => { if (a && a.id) cmap[a.id] = a.thumb }); if ((gr.character || []).some((id) => cmap[id])) return true }
   } catch { /* ignore */ }
   return false
 }
 async function genPromptForScene(c, scenes, i, guidance) {
-  const product = c.product ? JSON.parse(c.product) : null
+  const product = jparse(c.product)
   const cosmetic = isCosmeticContent(c, product)
   const hasCharacterRef = sceneHasCharacterRef(c, scenes, i)
   // 씬 캐릭터 element 이름(들) → 프롬프트에서 이름으로 부르고 외모 서술 금지. 씬 지정 없으면 콘텐츠 기본 캐릭터.
-  let charElC = null; try { charElC = c.character_element ? JSON.parse(c.character_element) : null } catch { charElC = null }
+  let charElC = jparse(c.character_element)
   const sceneElsC = Array.isArray(scenes[i].elements) ? scenes[i].elements.filter((e) => e && e.name) : []
   let elementNames = sceneElsC.map((e) => e.name)
   if (!elementNames.length && charElC && charElC.name) elementNames = [charElC.name]
   const siblingTitles = scenes.map((s) => s.onScreenText || '')
   // 데메아너(표정 톤) = 페르소나 register, 없으면 릴스 분석의 voice.register
   let demeanor = (c.persona ? getPersona(c.persona)?.register : '') || ''
-  if (!demeanor && c.analysis_id) { try { const a = db.prepare('SELECT analysis FROM analyses WHERE id = ?').get(c.analysis_id); demeanor = (a?.analysis ? (JSON.parse(a.analysis).voice || {}).register : '') || '' } catch { /* ignore */ } }
+  if (!demeanor && c.analysis_id) { try { const a = db.prepare('SELECT analysis FROM analyses WHERE id = ?').get(c.analysis_id); demeanor = (((jparse(a?.analysis) || {}).voice || {}).register) || '' } catch { /* ignore */ } }
   const p = await generateImagePrompt({ scene: scenes[i], productName: product?.title, product, style: c.style, sceneIndex: i, sceneTotal: scenes.length, guidance, cosmetic, hasCharacterRef, elementNames, siblingTitles, demeanor, lang: genLang() })
   if (!p) throw new Error('이미지 프롬프트 생성 실패')
   scenes[i] = { ...scenes[i], imagePrompt: p }
-  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  saveScenes(c.id, scenes)
   return scenes[i]
 }
 // 한 씬의 스크립트(Title + VO) 재생성 — overall + guidance 기반
 async function genSceneScriptForScene(c, scenes, i, guidance) {
-  const overall = c.overall ? JSON.parse(c.overall) : null
+  const overall = jparse(c.overall)
   if (!overall) throw new Error('먼저 Script Engine으로 전체 스크립트를 생성하세요.')
-  const product = c.product ? JSON.parse(c.product) : null
+  const product = jparse(c.product)
   const a = c.analysis_id ? db.prepare('SELECT title FROM analyses WHERE id = ?').get(c.analysis_id) : null
   const r = await generateSceneScript({ overall, product, productName: product?.title || a?.title, scenes, sceneIndex: i, sceneTotal: scenes.length, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', guidance, durationSec: scenes[i].durationSec, lang: genLang() })
   scenes[i] = { ...scenes[i], onScreenText: r.onScreenText, vo: r.vo, ...(r.emotion ? { emotion: r.emotion } : {}), ...(r.purpose ? { purpose: r.purpose } : {}) }
-  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  saveScenes(c.id, scenes)
   return scenes[i]
 }
 // 씬 스크립트 기반 모션 프롬프트(캐릭터·제품 동작) 생성 — guidance(input prompt)로 조정
 async function genMotionForScene(c, scenes, i, guidance) {
-  const product = c.product ? JSON.parse(c.product) : null
+  const product = jparse(c.product)
   const motionPrompt = await generateMotionPrompt({ scene: scenes[i], product, guidance, lang: genLang() })
   scenes[i] = { ...scenes[i], motionPrompt }
-  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  saveScenes(c.id, scenes)
   return scenes[i]
 }
 // VO 텍스트(voEn) — 씬 VO → 음성용 영어. guidance 있으면 LLM으로 조정, 없으면 번역/복사
@@ -1047,7 +1047,7 @@ async function genVoTextForScene(c, scenes, i, guidance) {
     ? await generateVoText({ vo, guidance, lang: genLang() })
     : (/english/i.test(genLang()) ? vo : (await translateVO(vo)) || vo)
   scenes[i] = { ...scenes[i], voEn }
-  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  saveScenes(c.id, scenes)
   return scenes[i]
 }
 // lazy 업로드: 로컬 전용 ref(/output/…, hfmedia: 없음)를 첫 사용 시 HF에 업로드하고
@@ -1080,7 +1080,7 @@ async function upgradeRefsToHf(c, refLib, refGroups) {
   return out
 }
 async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
-  const product = c.product ? JSON.parse(c.product) : null
+  const product = jparse(c.product)
   const scenePrompt = promptOverride || scenes[i].imagePrompt || buildImagePrompt(scenes[i], product)
   // 프레임 역할 → 클립은 start 프레임에서 end 프레임으로 '움직임'을 렌더한다. 두 프레임은 같은 그림이면 안 되고, 이 씬 모션(motionPrompt)의 시작 상태 / 끝 상태를 각각 담아야 한다.
   const motion = (scenes[i].motionPrompt || '').trim()
@@ -1095,7 +1095,7 @@ async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
     product?.features ? `Depict the product accurately per these real specs/mechanics: ${String(product.features).slice(0, 700)}` : '',
   ].filter(Boolean).join(' ')
   // 노드 그래프 레퍼런스(refLib + 씬 graphRefs) → 실제 URL 해석. 없으면 기존 방식 폴백.
-  let refLib = null; try { refLib = c.ref_lib ? JSON.parse(c.ref_lib) : null } catch { refLib = null }
+  let refLib = jparse(c.ref_lib)
   const gr = scenes[i].graphRefs
   let gProduct = null, gChar = null, gEnv = null
   if (refLib) {
@@ -1112,7 +1112,7 @@ async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
   }
   let refs = (gProduct && gProduct.length) ? gProduct : (Array.isArray(scenes[i].refs) && scenes[i].refs.length) ? scenes[i].refs : [product?.image || (product?.images || [])[0]].filter(Boolean)
   // 씬별 캐릭터 element(들) → 정체성 고정 (<<<id>>> 프롬프트 주입). 씬 지정 없으면 콘텐츠 기본 캐릭터. 있으면 로컬 캐릭터 ref 생략.
-  let charEl = null; try { charEl = c.character_element ? JSON.parse(c.character_element) : null } catch { charEl = null }
+  let charEl = jparse(c.character_element)
   const sceneEls = Array.isArray(scenes[i].elements) ? scenes[i].elements.filter((e) => e && e.id) : []
   let elIds = sceneEls.map((e) => e.id)
   if (!elIds.length && charEl && charEl.id) elIds = [charEl.id]
@@ -1129,7 +1129,7 @@ async function genImageForScene(c, scenes, i, promptOverride, frameRole) {
   // end 프레임은 별도 슬롯(imageEnd)에 저장 → start(image)를 덮어쓰지 않음. 클립이 둘 다 키프레임으로 사용.
   const imgFields = frameRole === 'end' ? { imageEnd: rel, imageSrcEnd: url } : { image: rel, imageSrc: url }
   scenes[i] = { ...scenes[i], ...(promptOverride ? { imagePrompt: promptOverride } : {}), ...imgFields }
-  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  saveScenes(c.id, scenes)
   return scenes[i]
 }
 async function genClipForScene(c, scenes, i, promptOverride) {
@@ -1148,7 +1148,7 @@ async function genClipForScene(c, scenes, i, promptOverride) {
   const url = await genVideoViaCLI({ imageUrl, endImageUrl, prompt: motion, duration: dur, model: scenes[i].model })
   const rel = await saveAsset(c.id, i, url, true)
   scenes[i] = { ...scenes[i], ...(promptOverride ? { motionPrompt: promptOverride } : {}), video: rel, videoSrc: url }
-  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  saveScenes(c.id, scenes)
   return scenes[i]
 }
 async function genVoForScene(c, scenes, i, textOverride) {
@@ -1159,7 +1159,7 @@ async function genVoForScene(c, scenes, i, textOverride) {
   const fname = `vo-${i + 1}.mp3`
   const r = await fetch(url); fs.writeFileSync(path.join(dir, fname), Buffer.from(await r.arrayBuffer()))
   scenes[i] = { ...scenes[i], voEn, audio: `/output/content-${c.id}/${fname}` }
-  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  saveScenes(c.id, scenes)
   return scenes[i]
 }
 
@@ -1171,7 +1171,7 @@ async function runBatch(id, kind, idx) {
     if (!job) return
     job.current = i
     try {
-      const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(id)
+      const c = getContent(id)
       const scenes = getScenes(c)
       if (kind === 'clips') await genClipForScene(c, scenes, i)
       else if (kind === 'vo') await genVoForScene(c, scenes, i)
@@ -1185,7 +1185,7 @@ async function runBatch(id, kind, idx) {
 app.post('/api/contents/:id/batch', (req, res) => {
   const id = Number(req.params.id)
   const kind = (req.body && req.body.kind) || 'images'
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(id)
+  const c = getContent(id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const existing = batchJobs.get(id)
   if (existing && existing.status === 'running') return res.json({ ok: true, job: existing })
@@ -1213,7 +1213,7 @@ app.get('/api/hf/status', (req, res) => res.json({ ready: cliReady() || hfReady(
 // 씬 이미지 첨부 (옵션2: 에이전트가 Higgsfield MCP로 생성한 URL을 다운로드해 저장)
 app.post('/api/contents/:id/scene-image', async (req, res) => {
   const { index, url, clip } = req.body || {}
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   const i = Number(index)
@@ -1222,7 +1222,7 @@ app.post('/api/contents/:id/scene-image', async (req, res) => {
   try {
     const rel = await saveAsset(c.id, i, url, !!clip)
     scenes[i] = clip ? { ...scenes[i], video: rel, videoSrc: url } : { ...scenes[i], image: rel, imageSrc: url }
-    db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+    saveScenes(c.id, scenes)
     res.json({ ok: true, scene: scenes[i] })
   } catch (e) { res.status(500).json({ error: e.message || String(e) }) }
 })
@@ -1231,7 +1231,7 @@ app.post('/api/contents/:id/scene-image', async (req, res) => {
 //  기본: claude CLI → Higgsfield MCP (제품 이미지 레퍼런스). HF_CREDENTIALS 있으면 SDK 직접.
 // 씬 이미지 프롬프트(영어 설명) 생성 — 이미지 생성과 분리. 검수/수정 후 이미지 생성.
 app.post('/api/contents/:id/scene/:index/prompt', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   const i = Number(req.params.index)
@@ -1242,7 +1242,7 @@ app.post('/api/contents/:id/scene/:index/prompt', async (req, res) => {
 
 // 씬 스크립트(Title+VO) 재생성 — overall + guidance(instruction) 기반
 app.post('/api/contents/:id/scene/:index/script', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   const i = Number(req.params.index)
@@ -1253,7 +1253,7 @@ app.post('/api/contents/:id/scene/:index/script', async (req, res) => {
 
 // 씬 모션 프롬프트 생성 (캐릭터·제품 동작 — 씬 스크립트 기반)
 app.post('/api/contents/:id/scene/:index/motion', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   const i = Number(req.params.index)
@@ -1264,7 +1264,7 @@ app.post('/api/contents/:id/scene/:index/motion', async (req, res) => {
 
 // 씬 VO 텍스트(voEn) 생성 (씬 VO → 음성용 영어 텍스트)
 app.post('/api/contents/:id/scene/:index/votext', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   const i = Number(req.params.index)
@@ -1275,14 +1275,14 @@ app.post('/api/contents/:id/scene/:index/votext', async (req, res) => {
 
 // 씬별 캐릭터 element(들) 지정 — "Yuna meets Sofia" 같은 멀티 캐스트. body.elements = [{id,name}]
 app.post('/api/contents/:id/scene/:index/elements', (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   const i = Number(req.params.index)
   if (!Number.isInteger(i) || i < 0 || i >= scenes.length) return res.status(400).json({ error: '잘못된 씬 index' })
   const els = Array.isArray(req.body && req.body.elements) ? req.body.elements.filter((e) => e && e.id).map((e) => ({ id: String(e.id), name: e.name || '' })) : []
   scenes[i] = { ...scenes[i], elements: els }
-  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), c.id)
+  saveScenes(c.id, scenes)
   res.json({ ok: true, scene: scenes[i] })
 })
 
@@ -1302,7 +1302,7 @@ function startSceneGen(res, c, agent, message, fn) {
   res.json({ jobId: job.id, agent })
 }
 app.post('/api/contents/:id/scene/:index/image', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   const i = Number(req.params.index)
@@ -1316,7 +1316,7 @@ app.post('/api/contents/:id/scene/:index/image', async (req, res) => {
 
 // 씬 클립 생성 (image→video, 풀무비). 씬 이미지가 먼저 있어야 함.
 app.post('/api/contents/:id/scene/:index/clip', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   const i = Number(req.params.index)
@@ -1330,7 +1330,7 @@ app.post('/api/contents/:id/scene/:index/clip', async (req, res) => {
 
 // 씬 VO 생성 (영어). 한국어 vo → 영어 번역 → 음성 → mp3 저장. scene.voEn + scene.audio.
 app.post('/api/contents/:id/scene/:index/vo', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   const i = Number(req.params.index)
@@ -1343,7 +1343,7 @@ app.post('/api/contents/:id/scene/:index/vo', async (req, res) => {
 
 // 임시 프리뷰 무비 합성 (ffmpeg) — 현재 씬들의 클립/이미지 + VO를 이어붙임
 app.post('/api/contents/:id/movie', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   if (!scenes.length) return res.status(400).json({ error: '씬이 없습니다.' })
@@ -1359,7 +1359,7 @@ app.post('/api/contents/:id/movie', async (req, res) => {
 
 // Remotion 정식 익스포트 — scenes(클립/이미지 + 자막 + VO) → 9:16 mp4
 app.post('/api/contents/:id/remotion', async (req, res) => {
-  const c = db.prepare('SELECT * FROM contents WHERE id = ?').get(req.params.id)
+  const c = getContent(req.params.id)
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   if (!scenes.length) return res.status(400).json({ error: '씬이 없습니다.' })

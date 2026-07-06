@@ -210,6 +210,18 @@ export function upsertHfElement(e) {
 export function listHfElementsDb() { return db.prepare('SELECT id, name, category, thumb FROM hf_elements ORDER BY created_at DESC').all() }
 export function deleteHfElementDb(id) { db.prepare('DELETE FROM hf_elements WHERE id = ?').run(String(id)) }
 
+// ── 콘텐츠 행 공용 헬퍼 — 34곳의 ad-hoc JSON.parse(c.X) try/catch를 한 곳으로 ──
+// jparse: 직렬화 컬럼 안전 파싱 (null/빈문자열/파싱실패 → def, 이미 객체면 그대로)
+export function jparse(v, def = null) {
+  if (v == null || v === '') return def
+  if (typeof v !== 'string') return v
+  try { return JSON.parse(v) } catch { return def }
+}
+export function getContent(id) { return db.prepare('SELECT * FROM contents WHERE id = ?').get(id) }
+export function saveScenes(contentId, scenes) {
+  db.prepare(`UPDATE contents SET scenes = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(scenes), contentId)
+}
+
 db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`)
 export function getSetting(key, def = null) { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? r.value : def }
 export function setSetting(key, value) { db.prepare(`INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(key, value == null ? '' : String(value)) }
