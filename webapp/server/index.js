@@ -1237,26 +1237,34 @@ app.post('/api/contents/:id/scene-image', async (req, res) => {
 //  기본: claude CLI → Higgsfield MCP (제품 이미지 레퍼런스). HF_CREDENTIALS 있으면 SDK 직접.
 // 씬 이미지 프롬프트(영어 설명) 생성 — 이미지 생성과 분리. 검수/수정 후 이미지 생성.
 app.post('/api/contents/:id/scene/:index/prompt', withScene(async (req, res, { c, scenes, i }) => {
-  const scene = await genPromptForScene(c, scenes, i, req.body && req.body.guidance)
-  res.json({ ok: true, scene })
+  startSceneGen(res, c, `prompt#${i}`, '이미지 프롬프트 생성 중…', async (progress) => {
+    progress('프롬프트 작성 중… (~1분)', 40)
+    return await genPromptForScene(c, scenes, i, req.body && req.body.guidance)
+  })
 }))
 
 // 씬 스크립트(Title+VO) 재생성 — overall + guidance(instruction) 기반
 app.post('/api/contents/:id/scene/:index/script', withScene(async (req, res, { c, scenes, i }) => {
-  const scene = await genSceneScriptForScene(c, scenes, i, req.body && req.body.guidance)
-  res.json({ ok: true, scene })
+  startSceneGen(res, c, `script#${i}`, '씬 스크립트 생성 중…', async (progress) => {
+    progress('씬 스크립트 작성 중… (~1분)', 40)
+    return await genSceneScriptForScene(c, scenes, i, req.body && req.body.guidance)
+  })
 }))
 
 // 씬 모션 프롬프트 생성 (캐릭터·제품 동작 — 씬 스크립트 기반)
 app.post('/api/contents/:id/scene/:index/motion', withScene(async (req, res, { c, scenes, i }) => {
-  const scene = await genMotionForScene(c, scenes, i, req.body && req.body.guidance)
-  res.json({ ok: true, scene })
+  startSceneGen(res, c, `motion#${i}`, '모션 프롬프트 생성 중…', async (progress) => {
+    progress('모션 작성 중…', 40)
+    return await genMotionForScene(c, scenes, i, req.body && req.body.guidance)
+  })
 }))
 
 // 씬 VO 텍스트(voEn) 생성 (씬 VO → 음성용 영어 텍스트)
 app.post('/api/contents/:id/scene/:index/votext', withScene(async (req, res, { c, scenes, i }) => {
-  const scene = await genVoTextForScene(c, scenes, i, req.body && req.body.guidance)
-  res.json({ ok: true, scene })
+  startSceneGen(res, c, `votext#${i}`, 'VO 텍스트 생성 중…', async (progress) => {
+    progress('VO 텍스트 작성 중…', 40)
+    return await genVoTextForScene(c, scenes, i, req.body && req.body.guidance)
+  })
 }))
 
 // 씬별 캐릭터 element(들) 지정 — "Yuna meets Sofia" 같은 멀티 캐스트. body.elements = [{id,name}]
@@ -1313,14 +1321,14 @@ app.post('/api/contents/:id/movie', async (req, res) => {
   if (!c) return res.status(404).json({ error: '없는 콘텐츠' })
   const scenes = getScenes(c)
   if (!scenes.length) return res.status(400).json({ error: '씬이 없습니다.' })
-  try {
+  startSceneGen(res, c, 'movie', '프리뷰 합성 중…', async (progress) => {
+    progress('ffmpeg 합성 중… (씬 클립/이미지 + VO)', 40)
     const dir = path.join(OUTPUT_DIR, `content-${c.id}`); fs.mkdirSync(dir, { recursive: true })
     const outPath = path.join(dir, 'preview.mp4')
     await buildPreview(dir, scenes, outPath)
-    const rel = `/output/content-${c.id}/preview.mp4?t=${Date.now()}`
     db.prepare(`UPDATE contents SET preview = ?, updated_at = datetime('now') WHERE id = ?`).run(`/output/content-${c.id}/preview.mp4`, c.id)
-    res.json({ ok: true, preview: rel })
-  } catch (e) { res.status(500).json({ error: e.message || String(e) }) }
+    return { preview: `/output/content-${c.id}/preview.mp4?t=${Date.now()}` }
+  })
 })
 
 // Remotion 정식 익스포트 — scenes(클립/이미지 + 자막 + VO) → 9:16 mp4
@@ -1331,7 +1339,8 @@ app.post('/api/contents/:id/remotion', async (req, res) => {
   if (!scenes.length) return res.status(400).json({ error: '씬이 없습니다.' })
   const base = `http://localhost:${PORT}`
   const dir = path.join(OUTPUT_DIR, `content-${c.id}`)
-  try {
+  startSceneGen(res, c, 'remotion', 'Remotion 렌더 중…', async (progress) => {
+    progress('Remotion 번들·렌더 중… (~수분)', 30)
     const data = []
     for (let i = 0; i < scenes.length; i++) {
       const s = scenes[i]
@@ -1352,12 +1361,12 @@ app.post('/api/contents/:id/remotion', async (req, res) => {
         durationInFrames: Math.round(Math.min(sec, 15) * FPS),
       })
     }
-    if (!data.length) return res.status(400).json({ error: '렌더할 씬 없음 — 이미지/클립을 먼저 생성하세요.' })
+    if (!data.length) throw new Error('렌더할 씬 없음 — 이미지/클립을 먼저 생성하세요.')
     const outPath = path.join(dir, 'short.mp4')
     await renderShort({ scenes: data, outPath })
     db.prepare(`UPDATE contents SET export_mp4 = ?, updated_at = datetime('now') WHERE id = ?`).run(`/output/content-${c.id}/short.mp4`, c.id)
-    res.json({ ok: true, url: `/output/content-${c.id}/short.mp4?t=${Date.now()}` })
-  } catch (e) { res.status(500).json({ error: 'Remotion 렌더 실패: ' + (e.message || String(e)).slice(0, 300) }) }
+    return { url: `/output/content-${c.id}/short.mp4?t=${Date.now()}` }
+  })
 })
 
 const PORT = process.env.PORT || 5174

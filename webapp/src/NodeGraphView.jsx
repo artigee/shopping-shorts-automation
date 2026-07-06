@@ -310,7 +310,18 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   useEffect(() => {
     if (cid == null) return
     let alive = true
-    const parseAgent = (a) => { let m; if ((m = /^img#(\d+)(e?)$/.exec(a))) return { kind: 'image', scene: +m[1] + 1, end: m[2] === 'e' }; if ((m = /^clip#(\d+)$/.exec(a))) return { kind: 'clip', scene: +m[1] + 1 }; if ((m = /^vo#(\d+)$/.exec(a))) return { kind: 'vo', scene: +m[1] + 1 }; return null }
+    const parseAgent = (a) => {
+      let m
+      if ((m = /^img#(\d+)(e?)$/.exec(a))) return { kind: 'image', scene: +m[1] + 1, end: m[2] === 'e' }
+      if ((m = /^clip#(\d+)$/.exec(a))) return { kind: 'clip', scene: +m[1] + 1 }
+      if ((m = /^vo#(\d+)$/.exec(a))) return { kind: 'vo', scene: +m[1] + 1 }
+      if ((m = /^prompt#(\d+)$/.exec(a))) return { kind: 'prompt', scene: +m[1] + 1, idp: 'prompt-' }     // 텍스트 생성도 잡 — 재부착 지원
+      if ((m = /^motion#(\d+)$/.exec(a))) return { kind: 'prompt', scene: +m[1] + 1, idp: 'promptM-' }
+      if ((m = /^votext#(\d+)$/.exec(a))) return { kind: 'prompt', scene: +m[1] + 1, idp: 'promptV-' }
+      if ((m = /^script#(\d+)$/.exec(a))) return { kind: 'script', scene: +m[1] + 1, idp: 'script-' }
+      if (a === 'movie' || a === 'remotion') return { kind: 'movie', scene: null }
+      return null
+    }
     const check = async () => {
       try {
         const r = await api('/api/jobs?status=running'); const g = ngRef.current; if (!alive || !g) return
@@ -319,12 +330,29 @@ function NodeGraphInner({ openId, onOpenHandled }) {
         for (const jb of (r.jobs || [])) {
           if (jb.ref_type !== 'contents' || String(jb.ref_id) !== String(cid) || reattachedJobs.current.has(jb.id)) continue
           const info = parseAgent(jb.agent); if (!info) continue
-          const node = g.nodes.find((n) => n.kind === info.kind && sceneOf(n) === info.scene && (info.kind !== 'image' || ((n.data?.frameRole === 'end') === !!info.end)))
+          const node = g.nodes.find((n) => n.kind === info.kind && (info.scene == null || sceneOf(n) === info.scene) && (info.kind !== 'image' || ((n.data?.frameRole === 'end') === !!info.end)) && (!info.idp || String(n.id).startsWith(info.idp)))
           if (!node) continue
           reattachedJobs.current.add(jb.id)
           setRunning({ id: node.id, msg: jb.message || 'running…', t0: Date.now() })
           pollJob(jb.id, (j2) => { if (alive) setRunning({ id: node.id, msg: j2.message || 'running…', t0: Date.now() }) })
-            .then(async () => { if (!alive) return; const rr = await api(`/api/contents/${cid}`); const s = (parse(rr.content?.scenes) || [])[info.scene - 1] || {}; commitRun(node.id, (x) => (x.kind === 'image' ? { ...x, dirty: false, thumb: bust(media(x.data?.frameRole === 'end' ? s.imageEnd : s.image), Date.now()) } : x.kind === 'clip' ? { ...x, dirty: false, video: bust(media(s.video), Date.now()), image: bust(media(s.image), Date.now()) } : { ...x, dirty: false, audio: bust(media(s.audio), Date.now()) })) })
+            .then(async () => {
+              if (!alive) return
+              const rr = await api(`/api/contents/${cid}`)
+              const s = info.scene != null ? ((parse(rr.content?.scenes) || [])[info.scene - 1] || {}) : {}
+              commitRun(node.id, (x) => {
+                if (x.kind === 'image') return { ...x, dirty: false, thumb: bust(media(x.data?.frameRole === 'end' ? s.imageEnd : s.image), Date.now()) }
+                if (x.kind === 'clip') return { ...x, dirty: false, video: bust(media(s.video), Date.now()), image: bust(media(s.image), Date.now()) }
+                if (x.kind === 'vo') return { ...x, dirty: false, audio: bust(media(s.audio), Date.now()) }
+                if (x.kind === 'movie') { const url = jb.agent === 'remotion' ? rr.content?.export_mp4 : rr.content?.preview; return url ? { ...x, dirty: false, video: bust(media(url + '?t=' + Date.now()), Date.now()) } : { ...x, dirty: false } }
+                if (x.kind === 'script') return { ...x, dirty: false, t: s.onScreenText || '', data: { ...x.data, title: s.onScreenText || '', vo: s.vo || '' } }
+                if (x.kind === 'prompt') {   // prompt-/promptM-/promptV- 별 텍스트 필드
+                  const id = String(x.id)
+                  const val = id.startsWith('promptM-') ? (s.motionPrompt || '') : id.startsWith('promptV-') ? (s.voEn || '') : (s.imagePrompt || '')
+                  return { ...x, dirty: false, t: val.slice(0, 90), data: { ...x.data, prompt: val } }
+                }
+                return { ...x, dirty: false }
+              })
+            })
             .catch(() => {})
             .finally(() => { if (alive) setRunning((cur) => (cur && cur.id === node.id ? null : cur)) })
         }
@@ -424,7 +452,14 @@ function NodeGraphInner({ openId, onOpenHandled }) {
       setRunning({ id: n.id, msg: mode === 'remotion' ? 'remotion render… (~수분)' : 'ffmpeg preview + VO…', t0 })
       try {
         const r = await postJSON(`/api/contents/${cid}/${mode === 'remotion' ? 'remotion' : 'movie'}`, {})
-        const url = r.preview || r.url
+        let url = r.preview || r.url
+        if (r.jobId) {   // 잡으로 전환됨 — 완료까지 폴링 후 콘텐츠에서 결과 URL 회수
+          reattachedJobs.current.add(r.jobId)
+          await pollJob(r.jobId, (jb) => setRunning({ id: n.id, msg: jb.message || 'rendering…', t0 }))
+          const rr = await api(`/api/contents/${cid}`)
+          url = mode === 'remotion' ? rr.content?.export_mp4 : rr.content?.preview
+          if (url) url += '?t=' + Date.now()
+        }
         if (url) commitRun(n.id, (x) => ({ ...x, dirty: false, video: bust(media(url), Date.now()) }))
       } catch (e) { setErr(String(e.message || e)) } finally { setRunning(null) }
       return
@@ -607,20 +642,20 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   const refLibKey = JSON.stringify(ng.refLib)
   useEffect(() => {
     if (cid == null || !data || refLibKey === loadedRefKey.current) return
-    postJSON(`/api/contents/${cid}/ref-lib`, { refLib: ng.refLib }, 'PUT').catch(() => {})
+    postJSON(`/api/contents/${cid}/ref-lib`, { refLib: ng.refLib }, 'PUT').catch((e) => setErr('ref save failed — retrying on next change (' + (e.message || e) + ')'))
   }, [refLibKey])
   // 편집한 노드 이름 자동 저장 (디바운스) — 로드값과 다를 때만
   const nameKey = ng.nodes.map((n) => n.id + '=' + n.hd).join('|')
   useEffect(() => {
     if (cid == null || !data || nameKey === loadedNameKey.current) return
-    const t = setTimeout(() => { const meta = {}; ng.nodes.forEach((n) => { meta[n.id] = n.hd }); postJSON(`/api/contents/${cid}/node-meta`, { nodeMeta: meta }, 'PUT').catch(() => {}) }, 700)
+    const t = setTimeout(() => { const meta = {}; ng.nodes.forEach((n) => { meta[n.id] = n.hd }); postJSON(`/api/contents/${cid}/node-meta`, { nodeMeta: meta }, 'PUT').catch((e) => setErr('node-name save failed — retrying on next change (' + (e.message || e) + ')')) }, 700)
     return () => clearTimeout(t)
   }, [nameKey])
   // 그래프 레이아웃(위치·수동노드·연결·설정) 자동 저장 (디바운스) — 로드값과 다를 때만. 재빌드/보드왕복해도 유지.
   const graphKey = graphKeyOf(ng)
   useEffect(() => {
     if (cid == null || !data || graphKey === loadedGraphKey.current) return
-    const t = setTimeout(() => { postJSON(`/api/contents/${cid}/graph-state`, { state: graphStateOf(ng) }, 'PUT').catch(() => {}) }, 700)
+    const t = setTimeout(() => { postJSON(`/api/contents/${cid}/graph-state`, { state: graphStateOf(ng) }, 'PUT').catch((e) => setErr('graph layout save failed — your node positions may not persist (' + (e.message || e) + ')')) }, 700)
     return () => clearTimeout(t)
   }, [graphKey])
 
