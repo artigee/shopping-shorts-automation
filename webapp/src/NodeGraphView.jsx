@@ -726,7 +726,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   function toggleRef(id, role, refId) {
     commit((g) => ({ ...g, nodes: g.nodes.map((n) => { if (n.id !== id) return n; const refs = { product: [], character: [], environment: [], ...(n.data.refs || {}) }; const arr = refs[role] = [...(refs[role] || [])]; const i = arr.indexOf(refId); if (i >= 0) arr.splice(i, 1); else arr.push(refId); return { ...n, dirty: true, data: { ...n.data, refs } } }) }))
     const node = ngRef.current.nodes.find((n) => n.id === id)   // 이미지 노드의 ref 배정을 씬에 저장 (생성에 반영)
-    if (node && node.scene) persistSceneRefs(node.scene - 1, node.data.refs)
+    const rsc = node ? effScene(node) : null
+    if (rsc) persistSceneRefs(rsc - 1, node.data.refs)
   }
   async function persistSceneRefs(idx, refs) {
     if (cid == null) return
@@ -736,7 +737,8 @@ function NodeGraphInner({ openId, onOpenHandled }) {
   function toggleCast(id, el) {
     commit((g) => ({ ...g, nodes: g.nodes.map((n) => { if (n.id !== id) return n; const cur = Array.isArray(n.data.elements) ? n.data.elements : []; const has = cur.some((x) => x.id === el.id); const next = has ? cur.filter((x) => x.id !== el.id) : [...cur, { id: el.id, name: el.name }]; return { ...n, dirty: true, data: { ...n.data, elements: next } } }) }))
     const node = ngRef.current.nodes.find((n) => n.id === id)
-    if (node && node.scene && cid != null) postJSON(`/api/contents/${cid}/scene/${node.scene - 1}/elements`, { elements: node.data.elements || [] }).catch(() => {})
+    const sc = node ? effScene(node) : null                       // 수동 생성 노드는 node.scene 없음 → 연결에서 씬 해석
+    if (sc && cid != null) postJSON(`/api/contents/${cid}/scene/${sc - 1}/elements`, { elements: node.data.elements || [] }).catch(() => {})
   }
   let uidN = useRef(0)
   function createNode(kind, wx, wy) {
