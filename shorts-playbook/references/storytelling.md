@@ -13,6 +13,14 @@ A line must be SPEAKABLE in its scene. Calm pace ≈ 2.5 words/second. So a scen
 - ❌ (4s) "I did not believe a travel cot was going to be the thing I actually use every single trip — we have a graveyard of gear that sounded good at two in the morning." (~32 words — impossible in 4s)
 - ✅ (4s) "Swore I'd never use a travel cot. Four trips later." (~10 words)
 
+## 0.5 The COLD VIEWER spine — clarity beats cleverness (hard gate)
+A stranger with zero context is deciding whether to keep watching. By the END OF SCENE 2 they must be able to answer, in their own words: **what IS this product, and what does it do for ME?** If they can't, the script fails no matter how good it sounds.
+- **Say the dumb-simple promise ONCE, plainly.** One line somewhere early must just state it: "a calming moisturizer that doesn't ball up under sunscreen." Cleverness never replaces this line — it decorates it.
+- **The story is about the VIEWER's problem, not the creator's feed.** "The algorithm kept showing me X" / "I kept seeing it everywhere" is creator-navel-gazing — the viewer has no stake. Open on THEIR pain or desire ("your moisturizer pills under SPF") and let the creator's journey be the vehicle, not the subject.
+- **Punch lines are seasoning, not the meal.** Fragments ("Twice.", "Fine.") only land against a plain anchor sentence nearby. Every scene needs at least ONE full, plain sentence that simply says the thing. A script that is ALL winks is cryptic, not punchy.
+- **One pictureable moment per scene.** Each beat must name something the camera can SHOW (texture, gesture, place, before/after) — not an abstract idea ("no filler", "not a coincidence").
+- Delete-test: read the script to someone who's never heard of the product. If they ask "wait, what is it?" — rewrite.
+
 ## 1. Cold open — land the hook in 1.5 seconds
 The first VO line is a cold open. No throat-clearing ("So", "Okay so", "I want to talk about", "Let me tell you"). Start mid-action, mid-thought, or mid-confession. Lead with the most surprising, most specific, or most relatable thing — a number, a contradiction, a small shame.
 - ❌ "So I found this cool travel cot on Amazon."

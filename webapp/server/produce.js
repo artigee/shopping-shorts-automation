@@ -127,7 +127,7 @@ ${productLine(productName, product)}
 
 Rules (all text in English):
 - angle: one line for the new narrative angle (e.g. "problem→solution", "before/after", "you're doing it wrong").
-- hookLine: THE most important line — the 0-2s cold open that must be genuinely INTERESTING and impossible to scroll past. Use a bold claim, a sharp contradiction, a specific number, or a relatable pain that opens a loop the viewer NEEDS closed. Be concrete — name or evoke the real thing. BANNED weak openers: vague "I did not believe X was real / existed", "Everyone does X" generalities, anything a viewer can't picture in 1 second. If the hook wouldn't stop YOUR thumb, rewrite it.
+- hookLine: THE most important line — the 0-2s cold open that must be genuinely INTERESTING and impossible to scroll past. It hooks the VIEWER's own pain/desire ('your moisturizer pills under sunscreen') — NEVER the creator's feed ('my algorithm keeps showing me…' / 'I keep seeing this' = navel-gazing, fail). Use a bold claim, a sharp contradiction, a specific number, or a relatable pain that opens a loop the viewer NEEDS closed. Be concrete — name or evoke the real thing. BANNED weak openers: vague "I did not believe X was real / existed", "Everyone does X" generalities, anything a viewer can't picture in 1 second. If the hook wouldn't stop YOUR thumb, rewrite it.
 - beats: 4-7 items, one line each. CHOOSE the structure that makes THIS product's short most scroll-stopping and DM-driving — there's no fixed template (see rule 3b for proven shapes: demo arc, before/after, myth-bust, curiosity reveal, social proof, POV). Match it to the reel's own structure + the chosen hook. Non-negotiable: (1) open with a genuinely gripping hook, (2) don't dump the product or blow the payoff in the first beats — the product earns its entrance and the result is the reward, (3) last beat = CTA.
 - vo: the full voiceover as ONE continuous persona monologue (see [VO = the through-line] above) — the through-line that scenes will later slice. NOT a paragraph that explains the beats.
 - cta: the final call to action (comment keyword → link funnel).
@@ -412,7 +412,8 @@ export async function critiqueScript({ overall = null, scenes = null, hookOption
 ${target}${hookBlk}
 
 Self-check (judge EACH):
-1. HOOK: does line 1 stop the scroll in 1.5s — concrete, pictureable, opens a loop that NEEDS closing? (vague "I didn't believe X" = fail)
+0. COLD VIEWER (weight this HEAVIEST): a stranger with zero context — after scene 2, can they say what the product IS and what it does for THEM? Is the dumb-simple promise stated plainly ONCE? Is the story about the VIEWER's problem (not the creator's feed/algorithm)? Are there plain anchor sentences, or is it all cryptic fragments? Fail hard on incomprehensible cleverness.
+1. HOOK: does line 1 stop the scroll in 1.5s — concrete, pictureable, opens a loop that NEEDS closing? (vague "I didn't believe X" = fail) Does it name the VIEWER's pain/desire rather than the creator's feed?
 2. TURN: is there ONE clean turn (doubt→realization / problem→mechanism) — not a flat feature list?
 3. REACT: does the VO react and reveal (first-person, sensory, specific numbers) instead of narrating ad copy?
 4. RHYTHM: varied line lengths with at least TWO short 2-5 word punch fragments?
