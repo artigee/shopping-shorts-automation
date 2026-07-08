@@ -697,7 +697,11 @@ function NodeGraphInner({ openId, onOpenHandled }) {
     if (lastSel.current) { setClosing(true); const t = setTimeout(() => { setClosing(false); lastSel.current = null }, 220); return () => clearTimeout(t) }
   }, [selId])
 
-  useLayoutEffect(() => { const h = {}; graph.nodes.forEach((n) => { const el = nodeRefs.current[n.id]; if (el) h[n.id] = el.offsetHeight }); setHeights(h) }, [graph])
+  useLayoutEffect(() => {
+    const h = {}; graph.nodes.forEach((n) => { const el = nodeRefs.current[n.id]; if (el) h[n.id] = el.offsetHeight })
+    // 값이 같으면 이전 객체를 그대로 반환 → 재렌더 없음 (setState 루프 클래스 원천 차단: Maximum update depth 크래시 방지)
+    setHeights((prev) => { const hk = Object.keys(h); return (Object.keys(prev).length === hk.length && hk.every((k) => prev[k] === h[k])) ? prev : h })
+  }, [graph])
 
   const anchor = (n, side) => ({ x: n.x + (side === 'out' ? nodeW(n) : 0), y: n.y + (heights[n.id] || 90) / 2 })
   const paths = graph.edges.map((e, i) => { const a = nodeById[e.from], b = nodeById[e.to]; if (!a || !b) return null; const p1 = anchor(a, 'out'), p2 = anchor(b, 'in'), dx = Math.max(40, (p2.x - p1.x) * 0.5); return { key: i, i, d: `M${p1.x},${p1.y} C${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`, color: EDGE_COLOR[e.cls] || '#7d8590', dashed: e.cls === 'global', editable: true, label: (e.from === 'overall' && e.to.indexOf('script-') === 0 && b.scene != null) ? { x: p2.x - 34, y: p2.y - 5, t: b.scene } : null, from: e.from, to: e.to } }).filter(Boolean)
