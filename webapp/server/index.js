@@ -830,7 +830,7 @@ app.post('/api/contents/:id/overall', (req, res) => {
   const base = guidance ? jparse(c.overall) : null
   const job = startJob({ agent: 'overall', refType: 'contents', refId: c.id, message: 'writing overall…' }, async (progress) => {
     progress('스토리 스크립트 작성 중… (~1분)', 25)
-    const genArgs = { analysis: jparse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', lang: genLang() }
+    const genArgs = { analysis: jparse(a.analysis), productName: p?.title || a.title, product: p, base, guidance, persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', prevShotCount: Number(c.shot_count) || null, lang: genLang() }
     let overall = await generateOverall(genArgs)
     // B2: 크리틱 게이트 — 훅 후보 랭킹 + 7점 미만이면 지적사항으로 1회 재작성 (실패는 비차단)
     try {

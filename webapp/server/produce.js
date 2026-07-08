@@ -118,7 +118,7 @@ const directionBlock = (d) => (d && d.trim() ? `\n[DIRECTION — apply this crea
 const VO_ARC = 'disbelief → mechanism reveal → anti-climax/ease → earned payoff → casual close (each line a DIFFERENT energy)'
 
 // ③ 전체 스크립트 — 구조만 빌려 선택 제품으로 새로 작성 (복붙 금지). US 마켓 → 영어로 작성.
-export async function generateOverall({ analysis, productName, product, base, guidance, direction, persona, voStyle, voStyleNote, hook, contentMode, hasFootage = false, lang = 'English (US, American audience)' }) {
+export async function generateOverall({ analysis, productName, product, base, guidance, direction, persona, voStyle, voStyleNote, hook, contentMode, hasFootage = false, prevShotCount = null, lang = 'English (US, American audience)' }) {
   const prompt = `You are a top short-form (Instagram Reels/TikTok) ad copywriter for the ${lang} market.
 KEEP the original reel's STRUCTURE only — hook archetype, beat order, pacing, CTA mechanic. DISCARD the original's exact words (its captions and voiceover); never copy its sentences. On that skeleton write a COMPLETELY NEW shorts script that sells [My product], natively in ${lang} — idioms, rhythm, regional nuance native to that audience; do NOT translate from another language.
 This OVERALL script is the product's story/context. The single most important field is "vo".
@@ -139,7 +139,7 @@ Rules (all text in English):
 - vo: the full voiceover as ONE continuous persona monologue (see [VO = the through-line] above) — the through-line that scenes will later slice. NOT a paragraph that explains the beats.
 - cta: the final call to action (comment keyword → link funnel).
 - durationSec: total video length in seconds — DEFAULT to the reference reel's length${Number(analysis?._meta?.duration) > 0 ? ' (~' + Math.round(analysis._meta.duration) + 's)' : ''}; only deviate if the story clearly needs it, and keep it in the 12-40s range.
-- shotCount: the number of SHOTS this short should have, chosen for MAXIMUM impact — NOT a default. Decide it from THIS story: how many DISTINCT beats it truly needs, the reel's pacing (fast cuts → more shots; slow/lingering → fewer), and the durationSec above. Range 3-9: a simple/punchy story folds roles into as few as 3 (hook+product+CTA); a rich or fast-cut one expands up to 9. The last shot is always the CTA. Do NOT default to 5 — justify the number by the beats.
+- shotCount: the number of SHOTS this short should have, chosen for MAXIMUM impact — NOT a default.${prevShotCount ? ` STABILITY ANCHOR: the current plan uses ${prevShotCount} shots — KEEP ${prevShotCount} unless THIS story structurally demands a different count (a beat genuinely missing or genuinely redundant). Do not change it for stylistic preference; count-flapping between runs is a failure.` : ''} Decide it from THIS story: how many DISTINCT beats it truly needs, the reel's pacing (fast cuts → more shots; slow/lingering → fewer), and the durationSec above. Range 3-9: a simple/punchy story folds roles into as few as 3 (hook+product+CTA); a rich or fast-cut one expands up to 9. The last shot is always the CTA. Do NOT default to 5 — justify the number by the beats.
 - shotCountWhy: one short line — why that count fits this story.
 
 - hookOptions: THREE genuinely different hook lines (lean a different way each: bold claim / sharp contradiction / specific number / relatable pain). hookLine must be the strongest of the three.
