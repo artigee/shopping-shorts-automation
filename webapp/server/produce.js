@@ -91,6 +91,20 @@ export async function translateVO(koText) {
   return stripFence(out).trim().replace(/^["']|["']$/g, '')
 }
 
+// 바이럴 보이스 반영 — 원본 릴스가 "어떻게 들렸는지"(목소리·리듬·에너지)를 예시로 주입.
+// 구조만 빌리고 에너지를 버리던 갭을 메운다. 단어/제품명 복사는 금지 (사운드 예시일 뿐).
+function viralVoiceBlock(analysis) {
+  if (!analysis) return ''
+  const v = analysis.voice || {}, st = analysis.structure || {}
+  const lines = (Array.isArray(analysis.sceneScript) ? analysis.sceneScript : []).map((x) => x && (x.vo || x.voiceover || x.text)).filter(Boolean).slice(0, 5)
+  const parts = []
+  if (v.persona || v.register) parts.push(`voice: ${[v.persona, v.register].filter(Boolean).join(' · ')}`)
+  if (st.pacing) parts.push(`pacing/rhythm: ${st.pacing}`)
+  if (lines.length) parts.push(`how its VO actually SOUNDS (energy exemplars — match the RHYTHM, warmth and spoken-ness; NEVER reuse its words or its products):\n${lines.map((l) => `  "${String(l).replace(/"/g, "'").slice(0, 140)}"`).join('\n')}`)
+  if (!parts.length) return ''
+  return `\n[VIRAL VOICE — the reference reel went viral SOUNDING like this. Your script must carry the same energy and rhythm in the persona's own words. Sound exemplar only, not a content source:]\n${parts.join('\n')}\n`
+}
+
 const directionBlock = (d) => (d && d.trim() ? `\n[DIRECTION — apply this creative direction throughout]\n${d.trim()}\n` : '')
 
 // VO/타이틀 크래프트는 shorts-playbook 폴더에서 읽어온다 (personaBlock/hookBlock/banBlock/rulesBlock).
@@ -104,7 +118,7 @@ This OVERALL script is the product's story/context. The single most important fi
 [VO = the through-line] Write "vo" as ONE continuous spoken monologue in the PERSONA below — one person thinking out loud, moving through the energy ARC: ${VO_ARC}. REACT and reveal the mechanism; do NOT just explain or list features. Specific sensory detail and real numbers, never generic ad language.
 This is the FULL story / context — it may be richer and longer than the final short. Write it complete and good; the SCENE step will distill it down to fit the video length. Do NOT pre-truncate here.
 ${personaBlock(persona)}${voStyleBlock(voStyle, voStyleNote)}${hookBlock(hook)}${banBlock()}${rulesBlock()}${contentSafetyBlock(contentMode, { hasFootage })}
-${guideBlock(base, guidance, 'overall script')}
+${guideBlock(base, guidance, 'overall script')}${viralVoiceBlock(analysis)}
 [Reel analysis (structure reference only)]
 ${JSON.stringify(analysis).slice(0, 6500)}
 
@@ -122,6 +136,8 @@ Rules (all text in English):
 - shotCountWhy: one short line — why that count fits this story.
 
 - hookOptions: THREE genuinely different hook lines (lean a different way each: bold claim / sharp contradiction / specific number / relatable pain). hookLine must be the strongest of the three.
+
+[FINAL VOICE CHECK — do this before you output] Read every vo line OUT LOUD in your head. Each one must sound like the persona actually TALKING to a friend — contractions, breath, mid-thought energy. If any line reads like written description, a news anchor, or a fact sheet, rewrite it as speech at the same claim level. Vary line lengths; land at least two 2-5 word punches.
 
 Output ONLY JSON (no explanation):
 {"angle":"...","title":"...","hookLine":"...","hookOptions":["...","...","..."],"durationSec":25,"shotCount":5,"shotCountWhy":"...","beats":["...","..."],"vo":"...","cta":"..."}`
@@ -188,7 +204,7 @@ ${JSON.stringify(overall).slice(0, 3000)}
 [My product]
 ${productLine(productName, product)}
 
-[Structure reference]
+${viralVoiceBlock(analysis)}[Structure reference]
 ${JSON.stringify(analysis?.structure || analysis).slice(0, 2200)}
 
 [DURATION PLAN — you give a WEIGHT per shot; the app computes the seconds]
@@ -206,6 +222,8 @@ Rules:
   shot: the camera framing for this beat (angle · distance · movement), distinct from the other scenes (e.g. "tight UGC selfie, low angle", "over-the-shoulder at a desk", "hands-only macro on skin")
 
 - FTC disclosure (required, US affiliate): the LAST scene's onScreenText must carry a short clear disclosure — append " · #ad" (or "Commissions earned"). It is literal text, exempt from the persona voice and the ban-list.
+
+[FINAL VOICE CHECK — do this before you output] Read every vo line OUT LOUD in your head. Each one must sound like the persona actually TALKING to a friend — contractions, breath, mid-thought energy. If any line reads like written description, a news anchor, or a fact sheet, rewrite it as speech at the same claim level. Vary line lengths; land at least two 2-5 word punches.
 
 Output ONLY a JSON array (no explanation):
 [{"weight":1.0,"onScreenText":"...","vo":"...","emotion":"...","purpose":"...","shot":"..."}]`
@@ -257,6 +275,7 @@ ${JSON.stringify(overall).slice(0, 2600)}${beatMap}
 [All scenes — context, keep THIS one distinct]
 ${others}
 Also give this beat's "emotion" (the creator's concrete facial expression for this shot — specific to this line, different from the other scenes) and "purpose" (its role in the flow).
+[FINAL VOICE CHECK — do this before you output] Read every vo line OUT LOUD in your head. Each one must sound like the persona actually TALKING to a friend — contractions, breath, mid-thought energy. If any line reads like written description, a news anchor, or a fact sheet, rewrite it as speech at the same claim level. Vary line lengths; land at least two 2-5 word punches.
 Output ONLY JSON: {"onScreenText":"...","vo":"...","emotion":"...","purpose":"..."}`
   const banlistS = getBanlist().map((b) => b.toLowerCase())
   const pS = getPersona(persona), tellsS = pS ? [...(pS.idiom_markers || []), ...(pS.example_lines || [])] : []
