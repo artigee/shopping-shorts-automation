@@ -11,7 +11,7 @@ import { extractProducts, identifyReel } from './extract.js'
 import { amazonSearch, amazonProduct, extractAsin, affiliateUrl } from './amazon.js'
 import { analyzeReel } from './analyze.js'
 import { matchProductByVision, simplerQuery } from './match.js'
-import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateShotSpec, renderShotSpec, generateMotionPrompt, generateVoText, critiqueScript } from './produce.js'
+import { generateOverall, generateScenes, generateSceneScript, translateVO, recommendPersonaHook, recommendPersona, recommendHook, generateImagePrompt, generateShotSpec, renderShotSpec, generateMotionPrompt, generateVoText, critiqueScript, ensureFtcOnLast } from './produce.js'
 import { getPersonas, getPersona, getHooks, getVoStyles, getCameraMoves, getCameraMove, playbookReady, getContentModes } from './playbook.js'
 import { genImage, genImageViaCLI, genVideoViaCLI, genAudioViaCLI, uploadRefViaCLI, buildImagePrompt, hfReady, cliReady, listHfElements, getHfElement, createHfElement, createHfElementMulti } from './higgsfield.js'
 import { buildPreview } from './preview.js'
@@ -1097,6 +1097,7 @@ async function genSceneScriptForScene(c, scenes, i, guidance) {
   const a = c.analysis_id ? db.prepare('SELECT title FROM analyses WHERE id = ?').get(c.analysis_id) : null
   const r = await generateSceneScript({ overall, product, productName: product?.title || a?.title, scenes, sceneIndex: i, sceneTotal: Math.max(scenes.length, Number(c.shot_count) || 0), persona: c.persona, voStyle: c.vo_style, voStyleNote: c.vo_style_note, hook: c.hook, contentMode: c.content_mode, hasFootage: c.content_mode === 'direct_review', guidance, durationSec: scenes[i].durationSec, lang: genLang() })
   scenes[i] = { ...scenes[i], onScreenText: r.onScreenText, vo: r.vo, ...(r.emotion ? { emotion: r.emotion } : {}), ...(r.purpose ? { purpose: r.purpose } : {}) }
+  if (i === scenes.length - 1) ensureFtcOnLast(scenes)   // 단일 재생성으로 CTA를 다시 쓴 경우에도 #ad 보증
   saveScenes(c.id, scenes)
   return scenes[i]
 }

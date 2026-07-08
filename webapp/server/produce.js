@@ -240,11 +240,7 @@ Output ONLY a JSON array (no explanation):
     if (!fixed) break
     scenes = fixed
   }
-  // FTC 보증 — 마지막 씬(CTA)에 disclosure가 없으면 기계적으로 부착 (미국 제휴 콘텐츠 필수)
-  if (scenes.length) {
-    const last = scenes[scenes.length - 1]
-    if (!/#ad\b|commission|amazon associate|\bsponsored\b/i.test(last.onScreenText || '')) last.onScreenText = ((last.onScreenText || '').trim() + ' · #ad').trim()
-  }
+  ensureFtcOnLast(scenes)
   // 가중치 → 실제 초 분배 (총합 = totalSec) + 타임코드
   const durs = allocateDurations(scenes.map((s) => s.weight), totalSec, 2, 10)
   let acc = 0
@@ -430,6 +426,15 @@ Output ONLY JSON:
     timeout: 90000,
     validate: (j) => (j && typeof j.score === 'number' && Array.isArray(j.notes)) ? null : 'output must be {score:number, notes:[]}',
   })
+}
+
+// FTC 보증 — 마지막 씬(CTA)에 disclosure가 없으면 기계적으로 부착 (미국 제휴 콘텐츠 필수).
+// 풀 분해와 단일 씬 재생성 모두 이걸 거친다 (한쪽만 지키면 재생성에서 빠진다).
+export function ensureFtcOnLast(scenes) {
+  if (!Array.isArray(scenes) || !scenes.length) return scenes
+  const last = scenes[scenes.length - 1]
+  if (!/#ad\b|commission|amazon associate|\bsponsored\b/i.test(last.onScreenText || '')) last.onScreenText = ((last.onScreenText || '').trim() + ' · #ad').trim()
+  return scenes
 }
 
 // 씬의 캐릭터·제품 "동작/행동" 모션 (image→video 클립용). 카메라 무빙 아님 — 카메라는 clip의 cameraMove가 담당.
