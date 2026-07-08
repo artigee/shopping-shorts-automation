@@ -105,6 +105,13 @@ function viralVoiceBlock(analysis) {
   return `\n[VIRAL VOICE — the reference reel went viral SOUNDING like this. Your script must carry the same energy and rhythm in the persona's own words. Sound exemplar only, not a content source:]\n${parts.join('\n')}\n`
 }
 
+// 최종 보이스 체크 — 페르소나·스피킹 스타일을 "이름으로" 다시 세우고, 스타일이 케이던스를 소유하게 한다.
+// (예전 정적 버전의 "2-5단어 펀치" 지시가 모든 스타일을 같은 클립트 톤으로 수렴시키는 원인이었다)
+const voiceCheck = (persona, voStyle) => `[FINAL VOICE CHECK — do this before you output] Read every vo line OUT LOUD in your head — this is an ACTOR ON CAMERA talking to ONE viewer${persona ? ` as "${persona}"` : ''}${voStyle ? `, speaking in the "${voStyle}" style` : ''}.
+(1) TO THE VIEWER: it must sound said TO them — "you" appears naturally, anticipate what they're thinking, react to them. Inner-diary narration ("I looked into…", "I went and checked") without the viewer in the room fails.
+(2) THE STYLE OWNS THE CADENCE: rhythm, pace and sentence shapes come from the speaking style${voStyle ? ` ("${voStyle}")` : ''} — a flowing/story style keeps long warm connected sentences (zero forced fragments); a punchy/hype style leans into fragments. Do NOT default every script to the same clipped deadpan cadence.
+(3) If any line reads like written description, a news anchor, or a fact sheet, rewrite it as speech at the same claim level.`
+
 const directionBlock = (d) => (d && d.trim() ? `\n[DIRECTION — apply this creative direction throughout]\n${d.trim()}\n` : '')
 
 // VO/타이틀 크래프트는 shorts-playbook 폴더에서 읽어온다 (personaBlock/hookBlock/banBlock/rulesBlock).
@@ -137,7 +144,7 @@ Rules (all text in English):
 
 - hookOptions: THREE genuinely different hook lines (lean a different way each: bold claim / sharp contradiction / specific number / relatable pain). hookLine must be the strongest of the three.
 
-[FINAL VOICE CHECK — do this before you output] Read every vo line OUT LOUD in your head. Each one must sound like the persona actually TALKING to a friend — contractions, breath, mid-thought energy. If any line reads like written description, a news anchor, or a fact sheet, rewrite it as speech at the same claim level. Vary line lengths; land at least two 2-5 word punches.
+${voiceCheck(persona, voStyle)}
 
 Output ONLY JSON (no explanation):
 {"angle":"...","title":"...","hookLine":"...","hookOptions":["...","...","..."],"durationSec":25,"shotCount":5,"shotCountWhy":"...","beats":["...","..."],"vo":"...","cta":"..."}`
@@ -223,7 +230,7 @@ Rules:
 
 - FTC disclosure (required, US affiliate): the LAST scene's onScreenText must carry a short clear disclosure — append " · #ad" (or "Commissions earned"). It is literal text, exempt from the persona voice and the ban-list.
 
-[FINAL VOICE CHECK — do this before you output] Read every vo line OUT LOUD in your head. Each one must sound like the persona actually TALKING to a friend — contractions, breath, mid-thought energy. If any line reads like written description, a news anchor, or a fact sheet, rewrite it as speech at the same claim level. Vary line lengths; land at least two 2-5 word punches.
+${voiceCheck(persona, voStyle)}
 
 Output ONLY a JSON array (no explanation):
 [{"weight":1.0,"onScreenText":"...","vo":"...","emotion":"...","purpose":"...","shot":"..."}]`
@@ -271,7 +278,7 @@ ${JSON.stringify(overall).slice(0, 2600)}${beatMap}
 [All scenes — context, keep THIS one distinct]
 ${others}
 Also give this beat's "emotion" (the creator's concrete facial expression for this shot — specific to this line, different from the other scenes) and "purpose" (its role in the flow).
-[FINAL VOICE CHECK — do this before you output] Read every vo line OUT LOUD in your head. Each one must sound like the persona actually TALKING to a friend — contractions, breath, mid-thought energy. If any line reads like written description, a news anchor, or a fact sheet, rewrite it as speech at the same claim level. Vary line lengths; land at least two 2-5 word punches.
+${voiceCheck(persona, voStyle)}
 Output ONLY JSON: {"onScreenText":"...","vo":"...","emotion":"...","purpose":"..."}`
   const banlistS = getBanlist().map((b) => b.toLowerCase())
   const pS = getPersona(persona), tellsS = pS ? [...(pS.idiom_markers || []), ...(pS.example_lines || [])] : []
@@ -412,7 +419,7 @@ export async function critiqueScript({ overall = null, scenes = null, hookOption
 ${target}${hookBlk}
 
 Self-check (judge EACH):
-0. COLD VIEWER (weight this HEAVIEST): a stranger with zero context — after scene 2, can they say what the product IS and what it does for THEM? Is the dumb-simple promise stated plainly ONCE? Is the story about the VIEWER's problem (not the creator's feed/algorithm)? Are there plain anchor sentences, or is it all cryptic fragments? Fail hard on incomprehensible cleverness.
+0. COLD VIEWER (weight this HEAVIEST): a stranger with zero context — after scene 2, can they say what KIND of product this is (category) and what it does for THEM (benefit)? The BRAND NAME does not need to appear early — a teased reveal ("this cream…") that names the product at the turn is CORRECT loop-craft, judged by the hook shape; penalize an early "This is [brand]" info-dump that kills the loop, AND penalize a script where even the category/benefit stays unclear. Is the story about the VIEWER's problem (not the creator's feed/algorithm)? Are there plain anchor sentences, or is it all cryptic fragments?
 1. HOOK: does line 1 stop the scroll in 1.5s — concrete, pictureable, opens a loop that NEEDS closing? (vague "I didn't believe X" = fail) Does it name the VIEWER's pain/desire rather than the creator's feed?
 2. TURN: is there ONE clean turn (doubt→realization / problem→mechanism) — not a flat feature list?
 3. REACT: does the VO react and reveal (first-person, sensory, specific numbers) instead of narrating ad copy?

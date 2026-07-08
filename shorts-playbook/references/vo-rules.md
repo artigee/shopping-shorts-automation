@@ -11,6 +11,20 @@ The caption states the claim or spec. The VO must do something the caption *can'
 - ❌ Caption "Pour. Snap. One button." / VO "Pour in your cream base, snap the lid, and press one button." (narrates — adds nothing)
 - ✅ Caption "Pour. Snap. One button." / VO "Cream in, lid on, and… that's the part where I kept waiting for it to get hard." (reacts — adds the feeling)
 
+## Rule 1.5 — Spoken TO the viewer (actor → viewer, not a diary)
+The VO is an actor on camera talking to ONE person: the viewer. It is a conversation, not narration into the void.
+- "you/your" shows up naturally and early — the viewer's skin, their routine, their doubt.
+- Anticipate and react to what the viewer is thinking ("I know what you're thinking — another cream." / "You've done this too, right?").
+- Questions and small commands to the viewer are welcome ("look at the texture", "wait for it").
+- ❌ Inner-diary: "Every routine I looked into had it. I went and checked."  (talking to herself)
+- ✅ To-viewer: "You've seen this cream everywhere too, right? I finally checked why."
+
+## Rule 1.7 — The chosen SPEAKING STYLE owns the cadence
+말투·어감·pace의 다양성이 우선이다. The vo-style (punchy_short / flowing_conversational / story_driven / quickfire_hype / calm_authority / confiding_friend …) decides rhythm, sentence length, and energy — generic rhythm advice is only the fallback when no style is set.
+- story_driven or flowing_conversational may have ZERO clipped fragments — long, warm, connected sentences are correct for them.
+- quickfire_hype / punchy_short lean hard into fragments.
+- Two scripts with different styles must NOT sound like the same person. If every generation converges on the same clipped deadpan cadence, the style is being ignored — that is a failure.
+
 ## Rule 2 — Continuous monologue first, THEN split
 
 Write the full-duration VO as one person thinking out loud — a single flowing thought across the whole video. Use connective tissue ("but," "and then," "so," "this is where…") so it reads as continuous speech. Only after it sounds like one human talking do you split it onto the beats.
